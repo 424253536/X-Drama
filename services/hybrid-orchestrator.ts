@@ -1394,8 +1394,10 @@ export class HybridOrchestrator {
               this.genre = fixedPlan.genre || this.genre;
             }
             console.log('[Director] 修正完成');
+            this.qualityLedger.push({ shot: 0, kind: 'director-fix', detail: `${validation.issues.length}问题已修正` }); // v12.111
           } catch {
             console.warn('[Director] 修正失败，使用原始输出');
+            this.qualityLedger.push({ shot: 0, kind: 'director-fix', detail: `${validation.issues.length}问题修正失败,沿用首稿` }); // v12.111
           }
         }
 
@@ -1978,9 +1980,11 @@ ${raw.slice(0, 2000)}
             if (fixedScript.shots && fixedScript.shots.length >= (script.shots?.length || 0)) {
               script = fixedScript;
               console.log('[Writer] 修正完成');
+              this.qualityLedger.push({ shot: 0, kind: 'writer-fix', detail: `${validation.issues.length}问题已修正` }); // v12.111
             }
           } catch {
             console.warn('[Writer] 修正失败，使用原始输出');
+            this.qualityLedger.push({ shot: 0, kind: 'writer-fix', detail: `${validation.issues.length}问题修正失败,沿用首稿` }); // v12.111
           }
         }
 

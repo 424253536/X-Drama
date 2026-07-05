@@ -60,6 +60,9 @@ export function summarizeQualityLedger(events: QualityEvent[]): QualityReport {
     if (byKind['broll-fallback']) parts.push(`${byKind['broll-fallback']} 镜实拍素材兜底`);
     if (byKind['kenburns-fallback']) parts.push(`${byKind['kenburns-fallback']} 镜静图动画兜底`);
     if (byKind['compliance']) parts.push(`${byKind['compliance']} 处广告合规替换`);
+    // v12.111:导演/编剧首稿自检修正轮(全片级,shot 0)—— 自愈成功也要留痕
+    if (byKind['director-fix']) parts.push(`导演稿自检修正 ${byKind['director-fix']} 轮`);
+    if (byKind['writer-fix']) parts.push(`剧本自检修正 ${byKind['writer-fix']} 轮`);
   }
   return {
     totalEvents: total,
