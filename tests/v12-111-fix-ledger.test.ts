@@ -24,3 +24,15 @@ describe('v12.111 · director/writer 修正轮记账', () => {
     expect(r.summary).toMatch(/实拍素材兜底.*导演稿自检修正/);
   });
 });
+
+describe('v12.115 · 健康分色调', () => {
+  it('≥90 绿 / 70-89 琥珀 / <70 红', async () => {
+    const { healthTone } = await import('@/lib/quality-report');
+    expect(healthTone(100).tone).toBe('good');
+    expect(healthTone(90).tone).toBe('good');
+    expect(healthTone(89).tone).toBe('warn');
+    expect(healthTone(70).tone).toBe('warn');
+    expect(healthTone(69).tone).toBe('bad');
+    expect(healthTone(20).color).toBe('#e07a6a');
+  });
+});

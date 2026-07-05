@@ -73,3 +73,10 @@ export function summarizeQualityLedger(events: QualityEvent[]): QualityReport {
     summary: parts.join(';') || '全片零质量干预,一次成型',
   };
 }
+
+/** v12.115.0 健康分色调(纯函数,导演台 KPI 用):≥90 绿 / 70-89 琥珀 / <70 红。 */
+export function healthTone(score: number): { tone: 'good' | 'warn' | 'bad'; color: string } {
+  if (score >= 90) return { tone: 'good', color: '#7ed491' };
+  if (score >= 70) return { tone: 'warn', color: 'var(--cinema-amber)' };
+  return { tone: 'bad', color: '#e07a6a' };
+}

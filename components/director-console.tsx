@@ -16,6 +16,7 @@ import {
   derivePipelineStages, downstreamStages, pipelineProgress,
   PIPELINE_STAGES, type StageAsset, type StageId, type StageStatus,
 } from '@/lib/pipeline-stages';
+import { healthTone } from '@/lib/quality-report';
 
 const STAGE_ICON: Record<StageId, typeof FileText> = {
   script: FileText, assets: Users, storyboard: Clapperboard, final: Film,
@@ -51,12 +52,18 @@ export function DirectorConsole({
 
   // v12.44: 从 assets 按类型派生 KPI 概览
   const cnt = (t: string) => (assets as Array<{ type?: string }>).filter((a) => a?.type === t).length;
-  const kpis: Array<{ label: string; value: string; sub: string }> = [
+  const kpis: Array<{ label: string; value: string; sub: string; color?: string; tip?: string }> = [
     { label: 'PROGRESS', value: `${prog.pct}%`, sub: `${prog.produced}/${prog.total} 环节` },
     { label: 'SHOTS', value: String(cnt('storyboard')), sub: '分镜' },
     { label: 'CLIPS', value: String(cnt('video')), sub: '镜头视频' },
     { label: 'FILM', value: cnt('final_video') > 0 ? '✓' : '—', sub: '成片' },
   ];
+  // v12.115:质检健康分 KPI(quality_report 资产存在时)—— 悬停看一句话摘要
+  const qr = (assets as Array<{ type?: string; data?: { healthScore?: number; summary?: string } }>).find((a) => a?.type === 'quality_report');
+  const health = typeof qr?.data?.healthScore === 'number' ? qr.data.healthScore : null;
+  if (health !== null) {
+    kpis.push({ label: 'HEALTH', value: String(health), sub: '质检健康分', color: healthTone(health).color, tip: qr?.data?.summary });
+  }
   const nextStage = stages.find((s) => s.status === 'empty') || stages.find((s) => s.status === 'stale');
   const nextHint = nextStage
     ? (nextStage.status === 'empty' ? `下一步 · 生成「${nextStage.label}」` : `建议 · 重生「${nextStage.label}」`)
@@ -148,11 +155,11 @@ export function DirectorConsole({
       )}
 
       {/* KPI 概览 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <div className={`grid grid-cols-2 ${kpis.length >= 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2 mb-4`}>
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-[3px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] px-3 py-2.5">
+          <div key={k.label} title={k.tip} className="rounded-[3px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] px-3 py-2.5">
             <div className="cinema-eyebrow !text-[8px] opacity-50">{k.label}</div>
-            <div className="cinema-mono text-xl text-[var(--cinema-amber)] tabular-nums leading-tight mt-0.5">{k.value}</div>
+            <div className="cinema-mono text-xl tabular-nums leading-tight mt-0.5" style={{ color: k.color || 'var(--cinema-amber)' }}>{k.value}</div>
             <div className="cinema-mono text-[9px] opacity-45">{k.sub}</div>
           </div>
         ))}
