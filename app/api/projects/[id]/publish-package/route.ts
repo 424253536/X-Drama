@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getPlatformSpec, isPlatformId, type PlatformPack } from '@/lib/distribution';
-import { buildPublishPackage } from '@/lib/publish-package';
+import { buildPublishPackage, resolveCoverChain } from '@/lib/publish-package';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,14 +38,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const finalUrls = parse(finalRow?.media_urls) || [];
   const finalVideoUrl = finalRow?.persistent_url || finalUrls[0] || null;
 
-  // 封面:定版封面(v12.3.2)优先,否则封面候选首张
+  // 封面链(v12.114):定版 chosen-cover > AnyText 中文设计封面 > 候选首张
   const chosenRow = db.prepare(`SELECT persistent_url, media_urls FROM project_assets WHERE project_id = ? AND type = 'chosen-cover' ORDER BY version DESC LIMIT 1`).get(id) as any;
-  let coverUrl: string | null = chosenRow?.persistent_url || (parse(chosenRow?.media_urls) || [])[0] || null;
-  if (!coverUrl) {
-    const covRow = db.prepare(`SELECT data FROM project_assets WHERE project_id = ? AND type = 'cover-candidates' ORDER BY version DESC LIMIT 1`).get(id) as any;
-    const cands = parse(covRow?.data)?.candidates;
-    if (Array.isArray(cands) && cands.length) coverUrl = cands[0]?.imageUrl || cands[0]?.url || null;
-  }
+  const anytextRow = db.prepare(`SELECT persistent_url, media_urls FROM project_assets WHERE project_id = ? AND type = 'anytext_cover' ORDER BY version DESC LIMIT 1`).get(id) as any;
+  const covRow = db.prepare(`SELECT data FROM project_assets WHERE project_id = ? AND type = 'cover-candidates' ORDER BY version DESC LIMIT 1`).get(id) as any;
+  const cands = parse(covRow?.data)?.candidates;
+  const coverChain = resolveCoverChain({
+    chosen: chosenRow?.persistent_url || (parse(chosenRow?.media_urls) || [])[0] || null,
+    anytext: anytextRow?.persistent_url || (parse(anytextRow?.media_urls) || [])[0] || null,
+    candidateFirst: Array.isArray(cands) && cands.length ? (cands[0]?.imageUrl || cands[0]?.url || null) : null,
+  });
+  const coverUrl = coverChain.url;
 
   const bundle = buildPublishPackage(spec, pack, { finalVideoUrl, coverUrl });
 
@@ -72,6 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     preflight,                                       // v12.85 该平台硬指标核对(可能 null=未预检)
     qualityHealthScore: qualityReport?.healthScore ?? null, // v12.66 质检健康分
     abVariants,                                      // v12.69/88 变体清单 + 谁被选胜
+    coverSource: coverChain.source,                  // v12.114 封面来源(chosen/anytext/candidate)
     // 让前端一键导出该平台 aspect 成片(带平台字幕样式)
     exportHint: { endpoint: `/api/projects/${id}/export-platform`, method: 'POST', body: { aspect: spec.aspect, subtitlePlatform: 'default' } },
   });

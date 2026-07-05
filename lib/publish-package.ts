@@ -76,3 +76,18 @@ export function buildPublishPackage(
     warnings,
   };
 }
+
+/**
+ * v12.114.0 封面优先链(纯函数):定版 chosen-cover > AnyText 中文设计封面 > 候选首张。
+ * AnyText 封面自带「长在设计里」的中文标题,比裸候选帧/图更接近可直发,故插在中间。
+ */
+export function resolveCoverChain(opts: {
+  chosen?: string | null;
+  anytext?: string | null;
+  candidateFirst?: string | null;
+}): { url: string | null; source: 'chosen' | 'anytext' | 'candidate' | null } {
+  if (opts.chosen) return { url: opts.chosen, source: 'chosen' };
+  if (opts.anytext) return { url: opts.anytext, source: 'anytext' };
+  if (opts.candidateFirst) return { url: opts.candidateFirst, source: 'candidate' };
+  return { url: null, source: null };
+}
