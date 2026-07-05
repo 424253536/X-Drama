@@ -8,15 +8,19 @@
  * 纯函数,零依赖,可单测。词表按「绝对化 / 极限承诺 / 医疗化妆品红线」分组,替换词保语感。
  */
 
+export type ComplianceCategory = '绝对化用语' | '极限承诺' | '医疗功效红线' | '自定义' | (string & {});
+
 export interface ComplianceHit {
   word: string;
-  category: '绝对化用语' | '极限承诺' | '医疗功效红线';
+  category: ComplianceCategory;
   replacement: string;
   index: number;
 }
 
 /** 违禁词 → 安全替换(顺序即优先级,长词在前防子串误替)。 */
-const RULES: Array<{ re: RegExp; word: string; category: ComplianceHit['category']; replacement: string }> = [
+interface CompiledRule { re: RegExp; word: string; category: ComplianceCategory; replacement: string }
+
+const RULES: CompiledRule[] = [
   // ── 绝对化用语(广告法第九条)──
   { re: /最好用/g, word: '最好用', category: '绝对化用语', replacement: '很好用' },
   { re: /最强/g, word: '最强', category: '绝对化用语', replacement: '出色' },
@@ -47,11 +51,71 @@ const RULES: Array<{ re: RegExp; word: string; category: ComplianceHit['category
   { re: /抗癌|防癌/g, word: '抗癌', category: '医疗功效红线', replacement: '健康' },
 ];
 
+// ─── v12.112.0 词表可扩展 ───────────────────────────────────────────────────
+// 内置表覆盖通用红线,但行业各有私货(保健品/金融/教培)。两条扩展通道:
+//   1) env AD_COMPLIANCE_EXTRA="词=替换;词2=替换2"(快速)
+//   2) data/compliance-extra.json: [{"word":"秒杀全场","replacement":"限时优惠","category":"自定义"}]
+// 自定义词按字面匹配(regex 特殊字符自动转义),长词优先防子串误替。
+
+export interface CustomRuleSpec { word: string; replacement: string; category?: string }
+
+/** 纯函数:解析 env 速记 "词=替换;词2=替换2"。 */
+export function parseExtraRuleSpec(spec: string | undefined): CustomRuleSpec[] {
+  if (!spec) return [];
+  return spec.split(/[;；]/).map((seg) => {
+    const eq = seg.indexOf('=');
+    if (eq <= 0) return null;
+    const word = seg.slice(0, eq).trim();
+    const replacement = seg.slice(eq + 1).trim();
+    return word && replacement ? { word, replacement } : null;
+  }).filter((x): x is CustomRuleSpec => !!x);
+}
+
+/** 纯函数:编译自定义词(转义 + 去重 + 长词在前)。 */
+export function compileCustomRules(entries: CustomRuleSpec[]): CompiledRule[] {
+  const seen = new Set<string>();
+  const valid = (entries || []).filter((e) => e && typeof e.word === 'string' && e.word.trim() && typeof e.replacement === 'string' && e.replacement.trim() && !seen.has(e.word) && seen.add(e.word));
+  valid.sort((a, b) => b.word.length - a.word.length);
+  return valid.map((e) => ({
+    re: new RegExp(e.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+    word: e.word,
+    category: (e.category || '自定义') as ComplianceCategory,
+    replacement: e.replacement,
+  }));
+}
+
+let customCache: { at: number; key: string; rules: CompiledRule[] } | null = null;
+
+function loadCustomRules(env: NodeJS.ProcessEnv): CompiledRule[] {
+  const key = env.AD_COMPLIANCE_EXTRA || '';
+  if (customCache && customCache.key === key && Date.now() - customCache.at < 30_000) return customCache.rules;
+  const specs = [...parseExtraRuleSpec(key)];
+  try {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const p = path.join(process.cwd(), 'data', 'compliance-extra.json');
+    if (fs.existsSync(p)) {
+      const j = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (Array.isArray(j)) specs.push(...j);
+    }
+  } catch (e) {
+    console.warn('[Compliance] 扩展词表读取失败(忽略):', e instanceof Error ? e.message.slice(0, 60) : e);
+  }
+  const rules = compileCustomRules(specs);
+  if (rules.length > 0 && (!customCache || customCache.key !== key)) console.log(`[Compliance] v12.112 扩展词表生效: ${rules.length} 条`);
+  customCache = { at: Date.now(), key, rules };
+  return rules;
+}
+
+function activeRules(env: NodeJS.ProcessEnv): CompiledRule[] {
+  return [...RULES, ...loadCustomRules(env)];
+}
+
 /** 检测:返回全部命中(不修改文本)。 */
-export function checkAdCompliance(text: string): ComplianceHit[] {
+export function checkAdCompliance(text: string, env: NodeJS.ProcessEnv = process.env): ComplianceHit[] {
   const hits: ComplianceHit[] = [];
   if (!text) return hits;
-  for (const r of RULES) {
+  for (const r of activeRules(env)) {
     r.re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = r.re.exec(text)) !== null) {
@@ -63,11 +127,11 @@ export function checkAdCompliance(text: string): ComplianceHit[] {
 }
 
 /** 净化:违禁词替换为安全表达。返回 {text, hits}。 */
-export function sanitizeAdCopy(text: string): { text: string; hits: ComplianceHit[] } {
-  const hits = checkAdCompliance(text);
+export function sanitizeAdCopy(text: string, env: NodeJS.ProcessEnv = process.env): { text: string; hits: ComplianceHit[] } {
+  const hits = checkAdCompliance(text, env);
   if (hits.length === 0) return { text, hits };
   let out = text;
-  for (const r of RULES) {
+  for (const r of activeRules(env)) {
     r.re.lastIndex = 0;
     out = out.replace(r.re, r.replacement);
   }
