@@ -49,6 +49,13 @@ export function DirectorConsole({
   // v12.100:一键广告包装车间(hook 弹药→变体+双卡→文案→并包)
   const [workshopBusy, setWorkshopBusy] = useState(false);
   const [workshopMsg, setWorkshopMsg] = useState('');
+  // v12.116:包装结果结构化面板(变体可点/健康分/文案标题),不再只有一行文本
+  const [workshopResult, setWorkshopResult] = useState<{
+    finalVideoUrl?: string | null;
+    variants: Array<{ variant: number; hookTitle?: string; url: string | null; chosen?: boolean }>;
+    title?: string;
+    healthScore?: number | null;
+  } | null>(null);
 
   // v12.44: 从 assets 按类型派生 KPI 概览
   const cnt = (t: string) => (assets as Array<{ type?: string }>).filter((a) => a?.type === t).length;
@@ -87,6 +94,12 @@ export function DirectorConsole({
         `${st.publishCopy?.ok ? ' · 文案✓' : ' · 文案✗'}` +
         `${st.package?.ok ? ' · 并包✓' : ' · 并包✗'}`,
       );
+      setWorkshopResult({
+        finalVideoUrl: st.recompose?.finalVideoUrl || null,
+        variants: Array.isArray(st.package?.abVariants) ? st.package.abVariants : [],
+        title: st.publishCopy?.copy?.titles?.[0] || '',
+        healthScore: st.package?.qualityHealthScore ?? null,
+      });
       onReran?.();
     } catch (e: unknown) {
       setWorkshopMsg(e instanceof Error ? e.message : '包装失败');
@@ -152,6 +165,32 @@ export function DirectorConsole({
 
       {workshopMsg && (
         <div className="mb-3 text-xs cinema-subhead px-3 py-2 rounded-lg bg-white/5 border border-white/10">{workshopMsg}</div>
+      )}
+
+      {/* v12.116:包装结果面板 —— 成片/变体直接可点,健康分着色,首选标题预览 */}
+      {workshopResult && (
+        <div className="mb-4 rounded-[3px] bg-[var(--cinema-surface-2)] border border-[var(--cinema-border)] p-3 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {workshopResult.finalVideoUrl && (
+              <a href={workshopResult.finalVideoUrl} target="_blank" rel="noreferrer" className="cinema-chip cinema-chip-green hover:brightness-110">▶ 主成片</a>
+            )}
+            {workshopResult.variants.filter((v) => v.url).map((v) => (
+              <a key={v.variant} href={v.url as string} target="_blank" rel="noreferrer"
+                 className={`cinema-chip hover:brightness-110 ${v.chosen ? 'cinema-chip-amber' : ''}`}
+                 title={v.hookTitle || ''}>
+                {v.chosen ? '★' : '▶'} 变体{v.variant}{v.hookTitle ? ` · ${v.hookTitle.slice(0, 10)}` : ''}
+              </a>
+            ))}
+            {typeof workshopResult.healthScore === 'number' && (
+              <span className="cinema-mono text-[11px] tabular-nums" style={{ color: healthTone(workshopResult.healthScore).color }}>
+                HEALTH {workshopResult.healthScore}
+              </span>
+            )}
+          </div>
+          {workshopResult.title && (
+            <p className="cinema-mono text-[11px] opacity-70">首选标题:{workshopResult.title}</p>
+          )}
+        </div>
       )}
 
       {/* KPI 概览 */}
