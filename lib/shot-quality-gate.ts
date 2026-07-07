@@ -122,7 +122,9 @@ export function resolveVisionFallbacks(env: NodeJS.ProcessEnv = process.env): Ar
     });
   }
   if (env.MINIMAX_API_KEY) {
-    out.push({ baseURL: 'https://api.minimaxi.com/v1', apiKey: env.MINIMAX_API_KEY, model: 'abab7-chat-preview' });
+    // v12.119:尊重 VISION_FALLBACK_MODEL 覆盖(v12.83 语义;v12.101 数组化时误丢,
+    // 只设 MODEL 无 BASE/KEY 的用户意图就是「兜底用这个模型」)
+    out.push({ baseURL: 'https://api.minimaxi.com/v1', apiKey: env.MINIMAX_API_KEY, model: env.VISION_FALLBACK_MODEL || 'abab7-chat-preview' });
   }
   return out;
 }
