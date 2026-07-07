@@ -93,7 +93,10 @@ export interface LLMCallResult {
 
 /** 调 LLM, 主→MiniMax 兜底, 首个成功即返回; 内置超时 + <think> 剥离. */
 export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallResult> {
-  const attempts = buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast);
+  // v12.120:接入 llm-health 健康缓存(与 orchestrator 对齐)—— 网关拥堵时段
+  // 广告工具端点(hook-ideas/publish-copy 等)不再每次白撞已知超时/饱和的模型。
+  const { filterHealthyAttempts, markLLMDown, llmKey } = await import('@/lib/llm-health');
+  const attempts = filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast));
   if (attempts.length === 0) return { ok: false, error: 'LLM 未配置 (缺 DEEPSEEK_API_KEY / OPENAI_API_KEY)' };
   const timeoutMs = opts.timeoutMs ?? 150_000;
   const retries = Math.max(0, opts.retriesPerAttempt ?? 1);
@@ -135,6 +138,8 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
         lastErr = e?.name === 'AbortError' ? 'timeout' : (e?.message || String(e));
         console.warn(`[llm-client] ${tag} 异常: ${lastErr}`);
       }
+      // v12.120:瞬时错误/超时进健康缓存,同进程后续调用冷却期内跳过该端点
+      if (isTransientLLMError(lastErr) || lastErr === 'timeout') markLLMDown(llmKey(a));
       // 仅"瞬时错误 + 还有重试余量"才退避重试同端点; 否则跳出去打下一个端点 (兜底)
       if (attempt < retries && isTransientLLMError(lastErr)) {
         await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));

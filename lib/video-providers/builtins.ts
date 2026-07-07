@@ -362,4 +362,7 @@ registerVideoProvider({
   },
 });
 
-console.log('[VideoProviders] 7 built-ins registered (grok-imagine / seedance / veo / ltx / kling / minimax-video / vidu)');
+// v12.120:动态计数(v12.104 加 qyt-vidu 时这行忘了更新,监控日志误导排障)
+import { listVideoProviders } from './registry';
+const _ids = listVideoProviders().filter((p) => p.id !== 'mock-video').map((p) => p.id);
+console.log(`[VideoProviders] ${_ids.length} built-ins registered (${_ids.join(' / ')})`);
