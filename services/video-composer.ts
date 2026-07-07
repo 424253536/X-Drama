@@ -495,11 +495,16 @@ export async function attachTextCard(
     fs.mkdirSync(outputDir, { recursive: true });
     const outputPath = path.join(outputDir, `final-${position === 'start' ? 'hook' : 'endcard'}-${Date.now()}.mp4`);
     const [first, second] = position === 'start' ? [cardPath, mainVideoPath] : [mainVideoPath, cardPath];
+    // v12.123:concat 重编码会破坏主片响度归一(e2e 实测双卡拼完漂到 -12.7 LUFS/-0.68 dBTP)
+    // → 卡后音频补一遍 loudnorm(同 AUDIO_LOUDNORM_DISABLE 开关;目标值幂等,双卡串行拼两遍无害)
+    const { shouldLoudnorm, buildLoudnormFilter } = await import('@/lib/audio-ducking');
+    const renorm = shouldLoudnorm();
     const fc =
       `[0:v]fps=24,scale=${opts.w}:${opts.h},setsar=1[v0];[1:v]fps=24,scale=${opts.w}:${opts.h},setsar=1[v1];` +
       `[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo[a1];` +
-      `[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]`;
-    sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "[a]" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`);
+      `[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]` +
+      (renorm ? `;${buildLoudnormFilter('[a]', '[anorm]')}` : '');
+    sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "${renorm ? '[anorm]' : '[a]'}" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`);
     console.log(`[Card] ${position === 'start' ? 'Hook 片头卡' : '片尾卡'}已拼接 → ${outputPath}`);
     return { outputPath, appended: true };
   } finally {
