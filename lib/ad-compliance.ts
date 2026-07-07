@@ -49,6 +49,13 @@ const RULES: CompiledRule[] = [
   { re: /消炎/g, word: '消炎', category: '医疗功效红线', replacement: '舒缓' },
   { re: /杀菌/g, word: '杀菌', category: '医疗功效红线', replacement: '清洁' },
   { re: /抗癌|防癌/g, word: '抗癌', category: '医疗功效红线', replacement: '健康' },
+  // ── v12.118 英文红线(FTC/平台审核常拒:虚假疗效/绝对承诺)──
+  { re: /\bcures?\b/gi, word: 'cure', category: '英文红线', replacement: 'helps with' },
+  { re: /\bmiracle\b/gi, word: 'miracle', category: '英文红线', replacement: 'remarkable' },
+  { re: /\bguaranteed results?\b/gi, word: 'guaranteed results', category: '英文红线', replacement: 'real results' },
+  { re: /\b100% (effective|safe)\b/gi, word: '100% effective/safe', category: '英文红线', replacement: 'highly effective' },
+  { re: /(\bno\.?\s*1\b|#1)(?=\s|$)/gi, word: '#1', category: '英文红线', replacement: 'top-rated' },
+  { re: /\brisk-free\b/gi, word: 'risk-free', category: '英文红线', replacement: 'easy to try' },
 ];
 
 // ─── v12.112.0 词表可扩展 ───────────────────────────────────────────────────

@@ -30,19 +30,30 @@ export function isCommercialIdea(idea: string): boolean {
  */
 /** CTA 信号词(末镜台词有这些即认为已有号召)。 */
 const CTA_SIGNAL_RE = /点击|下单|入手|试试|别错过|抢|购|链接|评论区|关注|了解一下|来一|你吗[?？]|会是你|等什么|冲鸭?|安排/;
+// v12.118:英文 CTA 信号词(TikTok/Shorts 常用号召)
+const CTA_SIGNAL_EN_RE = /\b(tap|click|shop now|order now|grab (yours|it)|don'?t miss|try it|check (it |them )?out|get yours|link (in bio|below)|follow (us|for)|dm us)\b/i;
 
 /**
  * v12.72.0 商业片 CTA 收尾保障。末 2 镜台词都无 CTA 信号 → 给末镜补一句确定性 CTA
  * (有台词则追加、无台词则填入;广告法安全用语)。返回 added 供记账。纯函数可测。
  */
-export function ensureCtaEnding(shots: Array<{ dialogue?: string }>, productHint?: string): { added: boolean; cta?: string } {
+export function ensureCtaEnding(
+  shots: Array<{ dialogue?: string }>,
+  productHint?: string,
+  lang: 'zh' | 'en' = 'zh', // v12.118:英文片补英文 CTA(此前会被塞中文,硬伤)
+): { added: boolean; cta?: string } {
   if (!shots || shots.length === 0) return { added: false };
   const tail = shots.slice(-2);
-  if (tail.some((s) => s?.dialogue && CTA_SIGNAL_RE.test(s.dialogue))) return { added: false };
-  const hint = (productHint || '').trim().slice(0, 12);
-  const cta = hint ? `心动就试试${hint},下一个惊喜是你。` : '心动不如行动,来试试,下一个惊喜是你。';
+  if (tail.some((s) => s?.dialogue && (CTA_SIGNAL_RE.test(s.dialogue) || CTA_SIGNAL_EN_RE.test(s.dialogue)))) return { added: false };
+  const hint = (productHint || '').trim().slice(0, lang === 'en' ? 24 : 12);
+  const cta = lang === 'en'
+    ? (hint ? `Love it? Try ${hint} — your turn to be surprised.` : 'Love it? Tap the link and see for yourself.')
+    : (hint ? `心动就试试${hint},下一个惊喜是你。` : '心动不如行动,来试试,下一个惊喜是你。');
   const last = shots[shots.length - 1];
-  last.dialogue = last.dialogue && last.dialogue.trim() ? `${last.dialogue.trim().replace(/[。!!]?$/, '。')}${cta}` : cta;
+  const prev = (last.dialogue || '').trim();
+  last.dialogue = prev
+    ? (lang === 'en' ? `${prev.replace(/[.!]?$/, '.')} ${cta}` : `${prev.replace(/[。!!]?$/, '。')}${cta}`)
+    : cta;
   return { added: true, cta };
 }
 

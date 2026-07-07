@@ -427,7 +427,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
             send('status', { message: `⚖️ 广告合规:已替换 ${hits.length} 处违禁用语(${[...new Set(hits.map((h) => h.category))].join('/')})` });
           }
           // v12.72.0 CTA 收尾保障:末镜无号召则补确定性 CTA(片尾卡与口播都吃它)
-          const ctaFix = ensureCtaEnding((script as any).shots, (script as any).title || '');
+          // v12.118:按创意语种补对应语言的 CTA(英文片此前会被塞中文 CTA)
+          const { detectLanguage } = await import('@/lib/language-detect');
+          const ctaFix = ensureCtaEnding((script as any).shots, (script as any).title || '', detectLanguage(idea));
           if (ctaFix.added) {
             console.log(`[create] v12.72 CTA 收尾已补: ${ctaFix.cta}`);
             send('status', { message: `📣 已为广告补 CTA 收尾:「${ctaFix.cta}」` });
