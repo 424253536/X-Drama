@@ -520,7 +520,7 @@ export class MinimaxService {
         throw new Error(`Minimax: success but no video URL in response: ${JSON.stringify(data).slice(0, 300)}`);
       }
 
-      if (status === 'Failed' || status === 'failed') {
+      if (/^fail(ed)?$/i.test(status || '')) { // v12.122:实测网关返回 'Fail'(无 -ed),旧 ===Failed 永不命中
         throw new Error(`Minimax video generation failed: ${data.error || data.base_resp?.status_msg || 'unknown'}`);
       }
 
@@ -806,7 +806,7 @@ export class MinimaxService {
         throw new Error(`Minimax: success but no image URL in response: ${JSON.stringify(data).slice(0, 300)}`);
       }
 
-      if (status === 'Failed' || status === 'failed') {
+      if (/^fail(ed)?$/i.test(status || '')) { // v12.122:实测网关返回 'Fail'(无 -ed),旧 ===Failed 永不命中
         throw new Error(`Minimax image generation failed: ${data.error || data.base_resp?.status_msg || 'unknown'}`);
       }
     }
@@ -931,7 +931,7 @@ export class MinimaxService {
         throw new Error(`Minimax: music success but no audio URL`);
       }
 
-      if (status === 'Failed' || status === 'failed') {
+      if (/^fail(ed)?$/i.test(status || '')) { // v12.122:实测网关返回 'Fail'(无 -ed),旧 ===Failed 永不命中
         throw new Error(`Minimax music generation failed: ${data.error || 'unknown'}`);
       }
     }
@@ -1155,7 +1155,7 @@ export class MinimaxService {
         if (data.file_id) return await this.getFileUrl(data.file_id);
         throw new Error('TTS success but no audio URL');
       }
-      if (data.status === 'Failed' || data.status === 'failed') {
+      if (/^fail(ed)?$/i.test(data.status || '')) { // v12.122:同上,兼容 Fail/Failed
         throw new Error(`TTS failed: ${data.error || 'unknown'}`);
       }
     }
