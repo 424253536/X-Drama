@@ -59,22 +59,53 @@ export function tokenizeForKaraoke(text: string): string[] {
   return out;
 }
 
-/** 单行 → 带 `\kf` 的 ASS 文本(厘秒均摊,余数给末 token)。 */
-export function buildKaraokeLineText(text: string, durSec: number): string {
+/** v12.117:token 显示宽(以字号为单位):CJK≈1,ASCII/半角≈0.5。 */
+export function tokenDisplayWidth(t: string): number {
+  let w = 0;
+  for (const ch of t) w += ch.charCodeAt(0) <= 0xff ? 0.5 : 1;
+  return w;
+}
+
+/**
+ * v12.117 长行折行(纯函数):总宽超预算时在 token 边界断成 2 行(字幕惯例上限)。
+ * 断点选「两行最均衡」处,紧跟标点的断点加权优先(读感自然)。WrapStyle:2 下 libass
+ * 不自动折行 —— 竖屏 720 宽/96px 字号只装 ~6 个汉字,长台词此前直接溢出画面。
+ */
+export function wrapKaraokeTokens(tokens: string[], budget: number): string[][] {
+  const total = tokens.reduce((a, t) => a + tokenDisplayWidth(t), 0);
+  if (total <= budget || tokens.length < 2) return [tokens];
+  const half = total / 2;
+  const PUNCT = /[,。!?、;:,.!?;:…]\s*$/;
+  let acc = 0; let best = 0; let bestScore = Infinity;
+  for (let i = 0; i < tokens.length - 1; i++) {
+    acc += tokenDisplayWidth(tokens[i]);
+    const score = Math.abs(acc - half) - (PUNCT.test(tokens[i]) ? 1.5 : 0);
+    if (score < bestScore) { bestScore = score; best = i; }
+  }
+  return [tokens.slice(0, best + 1), tokens.slice(best + 1)];
+}
+
+/** 单行 → 带 `\kf` 的 ASS 文本(厘秒均摊,余数给末 token)。
+ *  v12.117:传 budget(字号单位宽)时超宽自动折 2 行(`\N`,扫光跨行连续)。 */
+export function buildKaraokeLineText(text: string, durSec: number, budget?: number): string {
   const tokens = tokenizeForKaraoke(text);
   if (tokens.length === 0) return '';
+  const rows = budget && budget > 0 ? wrapKaraokeTokens(tokens, budget) : [tokens];
+  const flat = rows.flat();
   const totalCs = Math.max(1, Math.round(durSec * 100));
-  const per = Math.floor(totalCs / tokens.length);
+  const per = Math.floor(totalCs / flat.length);
   let used = 0;
-  return tokens
-    .map((t, i) => {
-      const cs = i === tokens.length - 1 ? totalCs - used : per;
-      used += cs;
-      // 转义 ASS 花括号/反斜杠(token 里出现的话)
-      const safe = t.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
-      return `{\\kf${cs}}${safe}`;
-    })
-    .join('');
+  const renderTok = (t: string, isLast: boolean) => {
+    const cs = isLast ? totalCs - used : per;
+    used += cs;
+    // 转义 ASS 花括号/反斜杠(token 里出现的话)
+    const safe = t.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
+    return `{\\kf${cs}}${safe}`;
+  };
+  let idx = 0;
+  return rows
+    .map((row) => row.map((t) => renderTok(t, ++idx === flat.length)).join(''))
+    .join('\\N');
 }
 
 /** 生成完整 ASS 文件文本(卡拉OK扫光字幕)。 */
@@ -99,8 +130,14 @@ export function buildKaraokeAss(lines: KaraokeLine[], opts: KaraokeAssOptions): 
       const end = assTime(l.startSec + Math.max(0.2, l.durSec));
       // v12.68.0:扫光按 TTS 真实时长(clamp 到 [0.2, durSec]),显示仍到镜末
       const sweep = Math.max(0.2, Math.min(l.sweepSec ?? l.durSec, l.durSec));
-      const body = buildKaraokeLineText(l.text, sweep);
-      return `Dialogue: 0,${start},${end},Default,,0,0,0,,${body}`;
+      // v12.117:按画面宽/字号算行宽预算(扣左右 40px 边距),超宽折 2 行;
+      // 折完最长行仍超宽(超长台词)→ 行内 {\\fs} 缩字号恰好塞进画面(只缩该句)
+      const budget = (w - 80) / fontSize;
+      const body = buildKaraokeLineText(l.text, sweep, budget);
+      const rows = wrapKaraokeTokens(tokenizeForKaraoke(l.text), budget);
+      const maxRowW = Math.max(...rows.map((r) => r.reduce((a, t) => a + tokenDisplayWidth(t), 0)));
+      const fsTag = maxRowW > budget ? `{\\fs${Math.floor(fontSize * budget / maxRowW)}}` : '';
+      return `Dialogue: 0,${start},${end},Default,,0,0,0,,${fsTag}${body}`;
     });
 
   return [
