@@ -170,4 +170,4 @@ registerImageProvider({
   },
 });
 
-console.log('[ImageProviders] 4 built-ins registered (mj / minimax-multi / minimax-single / kontext)');
+if (process.env.NODE_ENV !== 'test') console.log('[ImageProviders] 4 built-ins registered (mj / minimax-multi / minimax-single / kontext)');

@@ -56,4 +56,4 @@ registerTTSProvider({
   },
 });
 
-console.log('[TTSProviders] 1 built-in registered (minimax-tts)');
+if (process.env.NODE_ENV !== 'test') console.log('[TTSProviders] 1 built-in registered (minimax-tts)');

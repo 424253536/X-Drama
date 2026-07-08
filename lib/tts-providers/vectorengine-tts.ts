@@ -63,4 +63,4 @@ registerTTSProvider({
   },
 });
 
-console.log('[TTSProviders] vectorengine-tts registered (gpt-4o-mini-tts, primary)');
+if (process.env.NODE_ENV !== 'test') console.log('[TTSProviders] vectorengine-tts registered (gpt-4o-mini-tts, primary)');

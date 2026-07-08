@@ -52,7 +52,7 @@ export function resolveFFmpegPath(): string {
 
 const resolvedFFmpegPath = resolveFFmpegPath();
 ffmpeg.setFfmpegPath(resolvedFFmpegPath);
-console.log(`[FFmpeg] Using binary: ${resolvedFFmpegPath}`);
+if (process.env.NODE_ENV !== 'test') console.log(`[FFmpeg] Using binary: ${resolvedFFmpegPath}`);
 
 // ═══ 设置 ffprobe 可执行文件路径(v12.129)═══
 // 病根:probeVideoIntegrity 走 fluent-ffmpeg 的 .ffprobe(),它需要**独立的 ffprobe 二进制**。
@@ -84,7 +84,7 @@ export function resolveFFprobePath(): string {
 
 const resolvedFFprobePath = resolveFFprobePath();
 ffmpeg.setFfprobePath(resolvedFFprobePath);
-console.log(`[FFprobe] Using binary: ${resolvedFFprobePath}`);
+if (process.env.NODE_ENV !== 'test') console.log(`[FFprobe] Using binary: ${resolvedFFprobePath}`);
 
 export interface ComposerClip {
   shotNumber: number;
