@@ -1054,6 +1054,9 @@ export class HybridOrchestrator {
       };
       const finalSize = size || sizeMap[model]?.[opts?.aspectRatio || '16:9'] || '1024x1024';
       const gateway = apiBase.includes('vectorengine') ? 'vectorengine' : 'qingyuntop';
+      // v12.128:配额感知 —— 该网关已破产则秒失败,别再撞 90s 超时/403
+      const { isGatewayOutOfCredits, markGatewayOutOfCredits, isOutOfCreditsError } = await import('@/lib/gateway-budget');
+      if (isGatewayOutOfCredits(apiBase)) throw new Error(`${gateway} 配额耗尽(跳过 ${model})`);
       console.log(`[ImageRouter] → ${gateway} ${model} (${finalSize}) for: ${label}`);
 
       const res = await fetch(`${apiBase}/v1/images/generations`, {
@@ -1065,6 +1068,7 @@ export class HybridOrchestrator {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
+        if (res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(apiBase);
         throw createError('ENGINE_FAILED', `${model} 图像生成失败 (${res.status})`, {
           stage: 'storyboard',
           retryable: true,
@@ -1090,6 +1094,9 @@ export class HybridOrchestrator {
     // flux.1-kontext-pro（参考图一致性最佳）
     const kontextImage = async (base: string, key: string): Promise<string> => {
       const gateway = base.includes('vectorengine') ? 'vectorengine' : 'qingyuntop';
+      // v12.128:配额感知 —— 破产网关秒失败,交下一档
+      const { isGatewayOutOfCredits, markGatewayOutOfCredits, isOutOfCreditsError } = await import('@/lib/gateway-budget');
+      if (isGatewayOutOfCredits(base)) throw new Error(`${gateway} 配额耗尽(跳过 kontext)`);
       console.log(`[ImageRouter] → ${gateway} flux.1-kontext-pro for: ${label}`);
       const refUrls: string[] = [...(opts?.referenceImages || [])];
       if (opts?.cref && !refUrls.includes(opts.cref)) refUrls.push(opts.cref);
@@ -1106,6 +1113,7 @@ export class HybridOrchestrator {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
+        if (res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(base);
         throw createError('ENGINE_FAILED', `flux.1-kontext-pro 失败 (${res.status})`, {
           stage: 'storyboard', retryable: true,
           details: { status: res.status, body: errBody.slice(0, 120), label },
