@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/ChrisChen667788/wind-comic/main/assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v10.0</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.130</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -26,6 +26,16 @@
 
 <p align="center">
   <b>English</b> · <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/README.zh-CN.md">简体中文</a> · <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/docs/MARKETING-en.md">🔥 Pitch</a> · <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/docs/llm-providers.md">🔌 BYO LLM</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ChrisChen667788/wind-comic/raw/main/assets/promo/wind-comic-promo-en.mp4">
+    <img src="https://raw.githubusercontent.com/ChrisChen667788/wind-comic/main/assets/promo/wind-comic-promo.gif" alt="Wind Comic — 39-second promo (click to watch with voiceover &amp; sound)" width="100%" />
+  </a>
+</p>
+<p align="center">
+  ▶ <a href="https://github.com/ChrisChen667788/wind-comic/raw/main/assets/promo/wind-comic-promo-en.mp4"><b>Watch the full 39-second promo — with voiceover &amp; sound</b></a><br/>
+  <sub>Real cinematic footage woven with motion-graphics · 8 distinct art styles · English narration · scored by the platform's own MiniMax music engine.</sub>
 </p>
 
 ---
@@ -112,6 +122,9 @@ Three views of the same engine. **Open on GitHub to watch them animate** — flo
 | **v8 · AI director station + premium design** | Per-shot **cinematography console** (景别/机位/镜头/运镜/焦点) + **continuity & seed lock** + emotion/rhythm curves + JSON↔visual **parameter linkage**, all converging into an **11-tab director station** · **Taste design pass**: Plus Jakarta Sans + Phosphor icons, gold machined-bezel cards, spring motion, an asymmetric **bento dashboard**, 60 AI-rendered **style thumbnails**, and AI **gold-neon genre icons** (18 templates + 5 modes + 8 looks). |
 | **v9 · Postgres platform + monetization** | Full SQLite↔Postgres **dual-driver** cutover — **17 core tables/clusters** migrated to async repos, verified end-to-end on Postgres with **transaction commit + rollback** atomicity (default stays SQLite, same file, **zero split-brain**; `DB_DRIVER=pg` is opt-in) · multi-platform **distribution-pack** generator (抖音 / 快手 / 视频号 / 小红书 / YouTube Shorts / B站) · **real binary AAF export** (MS-CFB container, for Avid) alongside EDL / FCPXML · plus **quality & consistency depth** (publish-readiness gate, rebirth loop, consistency report) and the **Kling-style multi-reference + one-click film** fusion. |
 | **v10 · Lip-sync delivery · template market · cost** *(Stage 16)* | **Voice & lip-sync end-to-end** — per-character voice routing (auto + manual audition), viseme keyframe track, measured **mouth-vs-audio alignment** + **drift auto-correct**, pluggable engine render (wav2lip/SadTalker/MuseTalk) **plus a zero-config built-in 2D engine that works out of the box (no BYO key)**, written **back into the timeline**, one-click whole-film with a Vision **QC self-heal** loop · **Template market** — save→rate/favorite→one-click remix (carries voices), preview clips, quality score · **Cost observability** — per-project stage attribution + **budget guard**, and a **four-dimension publish gate** (picture · consistency · lip-sync · measured alignment). **2135 tests** green on both drivers. |
+
+| **v12.49–v12.80 · Commercial Ad Factory** *(Stage 22)* | **电商/品牌广告工厂全链** — 一句 brief(或**贴商品 URL 自动出 brief**)→ 竖屏成片:现代写实+photoreal **双硬锚**(Director 跑偏古装/3D 的实测病根双修 + plan 确定性净化保险)· **结构化 Hook/CTA 文字卡**(ffmpeg drawtext 零乱码,Hook 公式化选句:问句>感叹,**批量 Hook 变体 A/B**,品牌色可配)· **karaoke 词级扫光字幕**(对齐 TTS 真实时长,抖音/小红书**安全区避让**)· **BGM sidechain 自动闪避** · **《广告法》合规净化**(绝对化用语/医疗红线,全入口覆盖)· **质量三防线+账本**(逐镜 VLM 门禁 photoreal/烤字/畸变→定向重生 · 视频瞬时错误同引擎重试 · 坏 mp4 完整性拦截 · **失败镜 Ken Burns 兜底保时长** · quality_report 健康分)· **发布预检**(三平台硬指标)· rembg 商用安全抠图(产品跨镜一致)+ Kling Elements 打通 · LLM 网关 429/503 **健康感知自动降级**。**2712 tests** green。 |
+| **v12.82–v12.120 · Ad Factory 深化 + 供给链扩容** | **视频通道扩容**(qyt-vidu(Vidu Q3 via 网关 `/ent/v2`)入链 pri=75 · minimax 轮询超时可调 · Seedream 4.5 图像尾梯队(720x1280 原生竖屏,实测 14s/张))· **素材质量闭环**(Pexels B-roll 双层兜底 + 人设感知检索 + 烤字/字幕 VLM 抽查(B-roll 与 AI 镜双向)+ 结果缓存 LRU)· **响度归一 -14 LUFS**(实测 -13.62/-1.42 dBTP 命中平台标准)· **成片抽帧封面精选**(VLM 打分,零 T2I 额度)+ 发布包封面链(chosen>AnyText>候选)· **karaoke 长台词折行+行内缩字**(libass 实渲验证)· **英文广告链**(语言感知 CTA + 6 条英文合规红线)· 合规词表可扩展(env+JSON)· 导演/编剧自检修正轮入账 + 导演台 HEALTH KPI + 包装车间结构化结果面板 · LLM 健康缓存全端点对齐(拥堵实测:fable-5 断粮 403 → opus→sonnet→OpenRouter→MiniMax 五级无感降级)。**2780 tests** green。 |
 
 ### 📂 More modules — earlier (v6–v8) captures
 
@@ -209,24 +222,24 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 
 ## 🥊 vs. competitors
 
-> 阵容核验 2026-06-16:Artificial Analysis arena 榜首易主 —— **Seedance 2.0(字节)+ HappyHorse-1.0(阿里)现占前二**,Veo 3.1 第三(唯一原生 48kHz 对白音轨)。**Kling 3.0** 仍盘踞 top 10 四席(原生 4K/60fps/15s + 多语唇形)。**Runway Gen-4.5** 已跌出 top 10(控制面仍最强:motion brush + GWM-1 世界模型,故保留对比)。Sora 2 已宣布年内停服,移出对比。五家均为生产可用第一梯队 + 公开 BYO API。
+> 阵容核验 2026-07-06:Artificial Analysis 盲投竞技场(**带音频文生视频榜**,口径与上轮无音频榜不同)—— **Dreamina Seedance 2.0 720p 榜首(Elo 1223)**;**阿里双线爆发:Wan2.7-260612 次席(1161,新入榜)**、HappyHorse-1.1 第三(1154);**SkyReels V4(Skywork,1109)首次入榜**,与 Kling 3.0 1080p Pro(1109)并列;Wan 2.7 / Kling 3.0 Omni 紧随(1104/1100)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 被多家评为「性价比冠军」(多语对白+lip sync);**Runway Gen-4.5** 控制面最强;**Sora 2** 关停时间线再确认(App 2026-04-26 已下线、API 2026-09-24 关停,勿作依赖)。**广告垂直层新对标**:Creatify(商品 URL→批量变体+ROAS 分析,$33/mo 起)与 Arcads(拟真 AI 演员 UGC)双雄互补 —— Wind Comic 广告工厂对位:brief/URL→成片→Hook A/B 变体→发布包全链自托管+BYO,正是这两家闭源 SaaS 的开源合体路线。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
-| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | HappyHorse-1.0 | **Wind Comic** |
-|---|---|---|---|---|---|---|
-| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native | ⚠️ | ⚠️ (one clip) | **✅ 8-agent script→edit pipeline** |
-| Character consistency across shots | ✅ | ✅ | ✅ | ✅ reference | ✅ | **✅ cref + sref + 8-dim DNA + vision retry** |
-| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ⚠️ | **✅ Style Bible Frame** |
-| Native dialogue + SFX audio | ✅ | ✅ | ✅ | ⚠️ | ✅ | **✅ per-character TTS + lip-sync** |
-| Real CJK subtitles (burned-in) | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang burn** |
-| Vertical drama tropes | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 templates + 9:16 default** |
-| Real-time multiplayer timeline | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map locks + cursors** |
-| Self-hostable | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
-| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12+ providers via .env** |
-| Open source | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MIT** |
-| Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ⚠️ | **✅ + reference image upload** |
-| Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
-| Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
+| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
+|---|---|---|---|---|---|---|---|
+| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native | ⚠️ | ⚠️ (one clip) | ⚠️ (one clip) | **✅ 8-agent script→edit pipeline** |
+| Character consistency across shots | ✅ | ✅ | ✅ | ✅ reference | ✅ | ✅ reference-to-video | **✅ cref + sref + 8-dim DNA + vision retry** |
+| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | **✅ Style Bible Frame** |
+| Native dialogue + SFX audio | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 单次生成即带音频 | **✅ per-character TTS + lip-sync** |
+| Real CJK subtitles (burned-in) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang burn** |
+| Vertical drama tropes | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 templates + 9:16 default** |
+| Real-time multiplayer timeline | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map locks + cursors** |
+| Self-hostable | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
+| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12+ providers via .env** |
+| Open source | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | **✅ MIT** |
+| Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ⚠️ | ✅ video-edit 端点 | **✅ + reference image upload** |
+| Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
+| Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
 
@@ -242,6 +255,7 @@ Real puppeteer captures of the running app (`node scripts/capture-v12.mjs`). 核
 - **钩子审计三指标(v10.6.2)**:开场 3 秒钩子 / 集尾悬念 / BGM 卡点对齐率。
 - **阶段二十 A 智能剪辑(v12.0.x,五刀全交付)**:卡点剪辑(切点吸附音乐拍点)· 情绪节奏曲线(峰值镜 breathe / 动作镜快切)· 侧重强调(关键镜不压 + 沉稳转场)· 转场审美(按镜头关系选转场)· **一句指令调风格(v12.0.4,BYO)**——「快节奏燃向」/「慢叙抒情」一句话调 pacing 力度 + 转场软硬,无 key 走规则、配 key LLM 解析自由文本。
 - **阶段二十 B 预览音频(v12.1.x)**:片段预览叠播配音(静音裸片 + 同步配音轨)+ 成片音频体检自愈(ffprobe 缺流补轨)。
+- **阶段二十一 角色/资产一致性升级 · 全局资产记忆库 v2(v12.2.x,五刀全交付)**:对标同构竞品 OiiOii「角色高维特征向量 + 跨场景一致性」——名称归一修 DNA 漏注入 · DNA/场景锚落库(rerun/重启复用、早镜不漏) · **给 `global_assets.embedding` 死列通电**(BYO 文本嵌入 + 内存余弦检索) · 建角色入口「相似角色」推荐一键复用(防重复建/跨集漂移) · **身份漂移检测**(逐镜视觉 embedding 余弦距离标 outlier 漂移镜)。全程**无 key 走确定性地板(精确名+文本匹配),有 key 向量增强**,诚实降级。
 - **安全加固(v11.1.4)**:JWT 公开兜底密钥根除(进程级随机密钥,旧泄露值作废)。
 
 | 我的项目 · 删除/下架管理 | 拉片表 + 复刻工作台 |
@@ -346,7 +360,7 @@ Every model call is provider-pluggable (priority chain + automatic fallback). Cr
 |---|---|---|
 | **Creative LLM** (writer / director) | `deepseek-v4-pro` (`OPENAI_CREATIVE_MODEL`) + `deepseek-v4-flash` fast tier for drafts/polish | `MiniMax-M2.7` (`LLM_FALLBACK_MODEL`) · optional self-hosted **XVERSE-Ent** (A5.7B / A4.2B) |
 | **General LLM** (planning / validation / Vision-Audit) | `claude-sonnet-4-6` (`OPENAI_MODEL`) | `MiniMax-M2.7` |
-| **Video** | `veo3.1-pro` (`VEO_MODEL`) | `veo3.1` · `sora-2-pro` · Kling → **MiniMax Hailuo** |
+| **Video** | `veo3.1-pro` (`VEO_MODEL`) | `veo3.1` · Kling → **MiniMax Hailuo** (Sora-2 retired — API EOL 2026-09-24) |
 | **Image** | `flux.1-kontext-pro` (`IMAGE_MODEL`) | Midjourney (`mj_imagine`) · fal FLUX Kontext · local ComfyUI → **MiniMax image** |
 | **TTS / voiceover** | `gpt-4o-mini-tts` (`VE_TTS_MODEL`) | MiniMax T2A (`speech-02-hd`) |
 | **Music / BGM** | MiniMax music | (Suno when gateway channel available) |
@@ -388,6 +402,10 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 - `KELING_API_KEY` — Kling Master 4K + first-last-frame fusion + lip-sync
 - `VIDU_API_KEY` — Vidu Q3 (long-form 16s clips)
 - `VEO_API_KEY` — Veo 3.1-fast video fallback
+- `GROK_API_KEY` — xAI Grok Imagine 1.5 (T2V/I2V, native audio; BYO — 2026-06 image-to-video #1; auto-preferred when set)
+- `JIMENG_AK` / `JIMENG_SK` — ByteDance Seedance 2.0 (火山引擎 CV; multi-ref + native A/V; 2026-06 text-to-video #3; BYO)
+- `LTX_API_KEY` (or `FAL_KEY`) — LTX-2.3 (Lightricks open-weight #2 text-to-video; **self-hostable** via `LTX_BASE_URL`; BYO)
+- `GEN_CONCURRENCY` / `GEN_CONCURRENCY_VIDEO` · `_STORYBOARD` · `_SCENE` — per-stage generation concurrency (default 2, max 8). ⚠️ Higher *video* concurrency is faster but weakens keyframe-chain continuity (shot N pulls shot N-1's last frame) — keep low (1–2) when cross-shot 衔接 matters.
 - `SYNCSO_API_KEY` / `HAILUO_API_KEY` — alternative lip-sync providers
 
 ---

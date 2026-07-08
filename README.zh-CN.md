@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — 一句话变完整短剧" width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic 风之漫剧 <sub><sup>v10.0</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic 风之漫剧 <sub><sup>v12.130</sup></sub></h1>
 
 <p align="center">
   <b>一句话进,整片短剧出 —— 剧本 · 角色 · 分镜 · 配音 · 时间线 · mp4 一条龙.</b><br/>
@@ -203,24 +203,24 @@ Kling lip-sync API 做口播口型, 自动 fallback 到 Sync.so / Hailuo. 流水
 
 ## 🥊 跟竞品比
 
-> 阵容核验 2026-06-22:Artificial Analysis / llm-stats 盲投竞技场 —— **文生视频榜首 Kling v3(2031 分)**,LTX-2 Fast 次席(1920,开源权重最强),**Seedance 2.0** 第三(1851)。**图生视频榜首易主为 xAI Grok Imagine 1.5**(原生音频 + 极速出片,盲测压过 Veo 3.1 / Kling / Seedance)。**Veo 3.1** 仍是画质与物理一致性王者(4K + 原生对白音轨);**Runway Gen-4.5** 控制面最强(motion brush + GWM-1 世界模型)。**HappyHorse-1.0**(阿里 Taotian)4 月匿名登顶后已退出可见榜首、**Sora 2** 已停服(App 2026-04-26 下线、API 2026-09-24 关停),两者移出对比。在产竞品均为生产可用第一梯队 + 公开 BYO API。
+> 阵容核验 2026-07-06:Artificial Analysis 盲投竞技场(**带音频文生视频榜**,口径与上轮无音频榜不同)—— **Dreamina Seedance 2.0 720p 榜首(Elo 1223)**;**阿里双线爆发:Wan2.7-260612 次席(1161,新入榜)**、HappyHorse-1.1 第三(1154);**SkyReels V4(Skywork,1109)首次入榜**,与 Kling 3.0 1080p Pro(1109)并列;Wan 2.7 / Kling 3.0 Omni 紧随(1104/1100)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 被多家评为「性价比冠军」(多语对白+lip sync);**Runway Gen-4.5** 控制面最强;**Sora 2** 关停时间线再确认(App 2026-04-26 已下线、API 2026-09-24 关停,勿作依赖)。**广告垂直层新对标**:Creatify(商品 URL→批量变体+ROAS 分析,$33/mo 起)与 Arcads(拟真 AI 演员 UGC)双雄互补 —— Wind Comic 广告工厂对位:brief/URL→成片→Hook A/B 变体→发布包全链自托管+BYO,正是这两家闭源 SaaS 的开源合体路线。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
-| 能力 | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | **Wind Comic** |
-|---|---|---|---|---|---|---|
-| 一句 prompt 多镜叙事 | ⚠️ | ✅ 故事板模式 | ✅ 原生多镜 | ⚠️ | ⚠️ (单条片) | **✅ 8 智能体 编剧→剪辑 流水线** |
-| 跨镜角色一致性 | ✅ | ✅ | ✅ | ✅ 参考图 | ✅ | **✅ cref+sref+8 维 DNA+vision 重生** |
-| 全片画风锁定 | ✅ | ✅ | ✅ | ✅ | ⚠️ | **✅ Style Bible 帧** |
-| 原生对白 + 音效 | ✅ | ✅ | ✅ | ⚠️ | ✅ | **✅ 逐角色 TTS + 口型** |
-| 中文字幕真渲染(烧入)| ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang 烧入** |
-| 竖屏短剧 trope | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 模板 + 9:16 默认** |
-| 实时协作时间线 | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map 锁 + 光标** |
-| 可自部署 | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
-| 接你自己 LLM | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12+ provider 走 .env** |
-| 开源 | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MIT** |
-| 单镜改 prompt 重生 | ⚠️ | ✅ | ⚠️ | ✅ 运动笔刷 | ⚠️ | **✅ + 用户上传参考图** |
-| 节奏 / 冲突审计 | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 每镜评分 + 反转检测** |
-| 智能剪辑(卡点 + 情绪节奏 + 一句指令调风格)| ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 卡点对齐 · 情绪节奏 · 侧重强调 · 转场审美 · 「快节奏燃向/慢叙抒情」一句话调风格(BYO LLM)** |
+| 能力 | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
+|---|---|---|---|---|---|---|---|
+| 一句 prompt 多镜叙事 | ⚠️ | ✅ 故事板模式 | ✅ 原生多镜 | ⚠️ | ⚠️ (单条片) | ⚠️ (单条片) | **✅ 8 智能体 编剧→剪辑 流水线** |
+| 跨镜角色一致性 | ✅ | ✅ | ✅ | ✅ 参考图 | ✅ | ✅ 参考图生视频 | **✅ cref+sref+8 维 DNA+vision 重生** |
+| 全片画风锁定 | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | **✅ Style Bible 帧** |
+| 原生对白 + 音效 | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 单次生成即带音频 | **✅ 逐角色 TTS + 口型** |
+| 中文字幕真渲染(烧入)| ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang 烧入** |
+| 竖屏短剧 trope | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 模板 + 9:16 默认** |
+| 实时协作时间线 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map 锁 + 光标** |
+| 可自部署 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
+| 接你自己 LLM | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12+ provider 走 .env** |
+| 开源 | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | **✅ MIT** |
+| 单镜改 prompt 重生 | ⚠️ | ✅ | ⚠️ | ✅ 运动笔刷 | ⚠️ | ✅ video-edit 端点 | **✅ + 用户上传参考图** |
+| 节奏 / 冲突审计 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 每镜评分 + 反转检测** |
+| 智能剪辑(卡点 + 情绪节奏 + 一句指令调风格)| ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 卡点对齐 · 情绪节奏 · 侧重强调 · 转场审美 · 「快节奏燃向/慢叙抒情」一句话调风格(BYO LLM)** |
 
 > ⚠️ 表示该 provider 有这能力但形态受限 (例如"只能在付费 Pro 档通过 UI 面板用").
 
@@ -274,7 +274,7 @@ KPI 卡: 平均冲突分 / 反转数 / 通过状态. 每镜柱状图 + 反转 ar
 
 | 能力 | 主(最强) | 补全 | 兜底(不变) |
 |---|---|---|---|
-| **LLM**(编剧 / 导演 / 质检) | `claude-opus-4-7` · `claude-sonnet-4-6` | — | MiniMax / XVERSE |
+| **LLM**(编剧 / 导演 / 质检) | `claude-sonnet-4-6` | — | MiniMax / XVERSE |
 | **视频** | `veo3.1-pro`(Veo 3.1 Pro) | Kling | **MiniMax Hailuo** |
 | **图像** | `flux-2-pro`(`IMAGE_MODEL`) | Midjourney(`mj_imagine`) | **MiniMax image-01** |
 | **配音 TTS** | `gpt-4o-mini-tts` | — | MiniMax T2A |
