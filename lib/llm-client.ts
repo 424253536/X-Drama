@@ -96,7 +96,9 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
   // v12.120:接入 llm-health 健康缓存(与 orchestrator 对齐)—— 网关拥堵时段
   // 广告工具端点(hook-ideas/publish-copy 等)不再每次白撞已知超时/饱和的模型。
   const { filterHealthyAttempts, markLLMDown, llmKey } = await import('@/lib/llm-health');
-  const attempts = filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast));
+  // v12.127:再叠一层配额感知 —— 已破产网关(配额耗尽/欠费)整段跳过,省重复 403 往返。
+  const { filterFundedAttempts, markGatewayOutOfCredits, isOutOfCreditsError } = await import('@/lib/gateway-budget');
+  const attempts = filterFundedAttempts(filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast)));
   if (attempts.length === 0) return { ok: false, error: 'LLM 未配置 (缺 DEEPSEEK_API_KEY / OPENAI_API_KEY)' };
   const timeoutMs = opts.timeoutMs ?? 150_000;
   const retries = Math.max(0, opts.retriesPerAttempt ?? 1);
@@ -132,6 +134,8 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
           return { ok: true, content, model: a.model, usedFallback: i > 0, attemptsTried: tried };
         }
         lastErr = j?.error?.message || `LLM ${r.status}`;
+        // v12.127:403/402 + 配额文案 → 标记该网关破产(同 host 后续尝试整段跳过)
+        if (r.status === 402 || r.status === 403 || isOutOfCreditsError(lastErr)) markGatewayOutOfCredits(a.baseURL);
         console.warn(`[llm-client] ${tag} 失败: ${lastErr}`);
       } catch (e: any) {
         clearTimeout(tm);
