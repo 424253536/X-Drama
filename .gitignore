@@ -47,6 +47,17 @@ next-env.d.ts
 /data/media/
 /data/covers/
 /.dev-logs/
+
+# v12.129 audit P0-2: prevent accidental commit of secrets / local runtime junk
+# .env*.local only matched forward suffixes; key-backup files like .env.local.bak-* slipped through.
+*.bak
+.env*.bak*
+/*.db
+/*.db-wal
+/*.db-shm
+.kokoro-venv/
+*-venv/
+.venv/
 /projects.db
 /projects.db-wal
 /projects.db-shm

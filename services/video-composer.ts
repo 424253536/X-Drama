@@ -54,6 +54,38 @@ const resolvedFFmpegPath = resolveFFmpegPath();
 ffmpeg.setFfmpegPath(resolvedFFmpegPath);
 console.log(`[FFmpeg] Using binary: ${resolvedFFmpegPath}`);
 
+// ═══ 设置 ffprobe 可执行文件路径(v12.129)═══
+// 病根:probeVideoIntegrity 走 fluent-ffmpeg 的 .ffprobe(),它需要**独立的 ffprobe 二进制**。
+// ffmpeg-static 只装 ffmpeg,不含 ffprobe。本机有系统 ffprobe(Homebrew)故一直没暴露,
+// 但 CI(ubuntu / npm-only)与无系统 ffprobe 的部署环境里 .ffprobe() 找不到二进制 → probe 全 fail。
+// → 依赖 ffprobe-static(按平台内置 ffprobe),显式 setFfprobePath;多策略兜底,最后回落系统 PATH。
+export function resolveFFprobePath(): string {
+  // 1. ffprobe-static 导出的 path(非 Turbopack 时正常)
+  try {
+    const ffprobeStatic = require('ffprobe-static');
+    const p = ffprobeStatic?.path || ffprobeStatic?.default?.path;
+    if (p && typeof p === 'string' && fs.existsSync(p)) return p;
+  } catch { /* 包缺失 → 走系统 PATH */ }
+  // 2. 用 require.resolve 定位包目录 + 按平台重建 bin 路径
+  try {
+    const pkgJson = require.resolve('ffprobe-static/package.json');
+    const bin = process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe';
+    const guess = path.join(path.dirname(pkgJson), 'bin', process.platform, process.arch, bin);
+    if (fs.existsSync(guess)) return guess;
+  } catch { /* ignore */ }
+  // 3. 系统 PATH 上的 ffprobe(本机 Homebrew 等)
+  try {
+    const sysPath = execSync('which ffprobe 2>/dev/null || where ffprobe 2>nul', { encoding: 'utf-8' }).trim();
+    if (sysPath && fs.existsSync(sysPath)) return sysPath;
+  } catch { /* ignore */ }
+  console.warn('[FFprobe] Could not resolve ffprobe binary path, relying on PATH fallback');
+  return 'ffprobe';
+}
+
+const resolvedFFprobePath = resolveFFprobePath();
+ffmpeg.setFfprobePath(resolvedFFprobePath);
+console.log(`[FFprobe] Using binary: ${resolvedFFprobePath}`);
+
 export interface ComposerClip {
   shotNumber: number;
   videoUrl: string;       // 远程 URL 或本地路径
