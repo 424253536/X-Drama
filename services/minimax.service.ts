@@ -55,8 +55,9 @@ function isSensitiveContentError(err: unknown): boolean {
  * 此处把 hex 写入本地 tmp 文件，返回 /api/serve-file?path=... URL 供 composer / 浏览器消费
  */
 function persistHexAudioToFile(hex: string, ext: 'mp3' | 'wav' = 'mp3'): string {
-  const dir = path.join(os.tmpdir(), 'qf-audio');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  // v12.124:落 data/media/audio 持久目录(旧 os.tmpdir()/qf-audio 会被 macOS GC → recompose 配音 404)
+  const { persistentMediaDir } = require('@/lib/media-persist') as typeof import('@/lib/media-persist');
+  const dir = persistentMediaDir('audio');
   const filename = `mnx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const fullPath = path.join(dir, filename);
   const buf = Buffer.from(hex, 'hex');

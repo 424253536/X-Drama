@@ -96,8 +96,9 @@ function persistBase64ToFile(dataUri: string, label: string): string {
 
     const ext = match[1] === 'svg+xml' ? 'svg' : (match[1] || 'png');
     const buf = Buffer.from(match[2], 'base64');
-    const tmpDir = path.join(os.tmpdir(), 'qf-images');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    // v12.124:落 data/media/images 持久目录(旧 os.tmpdir()/qf-images 会被 macOS GC → recompose 分镜图 404)
+    const { persistentMediaDir } = require('@/lib/media-persist') as typeof import('@/lib/media-persist');
+    const tmpDir = persistentMediaDir('images');
     const filePath = path.join(tmpDir, `${label.replace(/[^a-zA-Z0-9_-]/g, '_')}-${Date.now()}.${ext}`);
     fs.writeFileSync(filePath, buf);
     console.log(`[ImagePersist] Saved ${(buf.length / 1024).toFixed(0)}KB → ${filePath}`);

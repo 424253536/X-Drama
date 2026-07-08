@@ -44,6 +44,8 @@ next-env.d.ts
 /data/storage/
 /data/composed/
 /data/exports/
+/data/media/
+/data/covers/
 /.dev-logs/
 /projects.db
 /projects.db-wal

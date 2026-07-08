@@ -81,6 +81,8 @@ export async function GET(request: NextRequest) {
     path.join(cwd, 'data', 'composed'),
     path.join(cwd, 'data', 'exports'),
     path.join(cwd, 'data', 'storage'),
+    path.join(cwd, 'data', 'media'),   // v12.124:TTS 音频 / 生成图像持久目录(替代 os.tmpdir 防 GC 404)
+    path.join(cwd, 'data', 'covers'),  // v12.113:成片抽帧封面
   ];
   const isAllowed = allowedPrefixes.some((p) => resolvedPath.startsWith(path.resolve(p)));
   if (!isAllowed) {
