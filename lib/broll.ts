@@ -162,6 +162,17 @@ export function classifyClipSource(url: string | undefined | null): 'ai' | 'brol
 /** AI 镜烤字抽查:与 B-roll 同款(抽第 1 秒帧 → VLM hasBakedText)。 */
 export const screenVideoForBakedText = screenBrollForBakedText;
 
+/**
+ * v12.126.0 去字提示(纯函数):烤字镜重生时给视频 prompt 追加「画面无文字」负向指令,
+ * 显著提高重生一次即拿到干净画面的概率(同模型同 prompt 直接重生仍易复现烤字)。幂等,可测。
+ */
+export function buildNoTextPrompt(prompt: string): string {
+  const directive = 'no on-screen text, no captions, no subtitles, no watermark, no letters or words rendered in the frame';
+  const p = (prompt || '').trim();
+  if (/no on-screen text/i.test(p)) return p; // 已含,幂等
+  return p ? `${p}. ${directive}` : directive;
+}
+
 // ─── v12.108.0 B-roll 结果缓存(落盘 LRU)────────────────────────────────────────
 // 同 query 的筛查结果复用:每次筛查 ~15s(抽帧+VLM)+ 费用;同品类多镜/重跑常撞同查询。
 // data/broll-cache.json,上限 200 条,TTL 7 天(Pexels 直链长期有效)。

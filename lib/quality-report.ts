@@ -62,6 +62,7 @@ export function summarizeQualityLedger(events: QualityEvent[]): QualityReport {
     if (byKind['shot-gate']) parts.push(`${byKind['shot-gate']} 镜风格门禁重生`);
     if (byKind['style-audit']) parts.push(`${byKind['style-audit']} 镜画风校正`);
     if (byKind['video-retry']) parts.push(`${byKind['video-retry']} 镜视频重试`);
+    if (byKind['video-baked-regen']) parts.push(`${byKind['video-baked-regen']} 镜烤字重生已消除`); // v12.126 自愈成功
     if (byKind['broll-fallback']) parts.push(`${byKind['broll-fallback']} 镜实拍素材兜底`);
     if (byKind['kenburns-fallback']) parts.push(`${byKind['kenburns-fallback']} 镜静图动画兜底`);
     if (byKind['compliance']) parts.push(`${byKind['compliance']} 处广告合规替换`);

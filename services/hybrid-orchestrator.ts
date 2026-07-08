@@ -4499,14 +4499,40 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
     try {
       const { isCommercialIdea } = await import('@/lib/end-card');
       if (process.env.VIDEO_TEXT_SCREEN_DISABLE !== '1' && isCommercialIdea(this.originalIdea || '')) {
-        const { classifyClipSource, screenVideoForBakedText } = await import('@/lib/broll');
+        const { classifyClipSource, screenVideoForBakedText, buildNoTextPrompt } = await import('@/lib/broll');
         for (const t of timeline) {
           if (classifyClipSource(t.videoUrl) !== 'ai') continue;
           const verdict = await screenVideoForBakedText(t.videoUrl);
           if (verdict === 'baked-text') {
-            this.qualityLedger.push({ shot: t.shotNumber ?? 0, kind: 'video-baked-text', detail: 'AI 镜画面含烤字' });
-            this.emit('agentTalk', { role: AgentRole.EDITOR, text: `⚠️ 第 ${t.shotNumber} 镜 AI 视频画面检出烤字${process.env.VIDEO_BAKED_DROP === '1' ? ',已剔除交兜底重配' : '(仅记录,VIDEO_BAKED_DROP=1 可自动剔除)'}` });
-            if (process.env.VIDEO_BAKED_DROP === '1') t.videoUrl = '';
+            // v12.126:先自愈一次 —— 用分镜图 I2V 重生(prompt 追加去字指令)+ 重新抽查;仍烤字才记账/剔除。
+            // VIDEO_BAKED_REGEN=0 关闭重生(退回旧行为)。重生走 minimax(veo 网关 503)。
+            let healed = false;
+            const frame = this.shotImageMap.get(t.shotNumber as number);
+            if (process.env.VIDEO_BAKED_REGEN !== '0' && frame) {
+              try {
+                const shot = script?.shots?.find((s: any) => s.shotNumber === t.shotNumber);
+                const clip = await this.regenerateShot(
+                  t.shotNumber as number,
+                  { shotNumber: t.shotNumber as number, imageUrl: frame, prompt: buildNoTextPrompt((shot as any)?.visualPrompt || '') } as any,
+                  { duration: t.duration || 5, videoProvider: 'minimax' },
+                );
+                // regenerateShot 全引擎失败会退回 imageUrl(静图)—— 用 !==frame 排除,只认真视频
+                if (clip?.videoUrl && !clip.videoUrl.startsWith('data:') && clip.videoUrl !== frame) {
+                  const reVerdict = await screenVideoForBakedText(clip.videoUrl);
+                  if (reVerdict !== 'baked-text') {
+                    t.videoUrl = clip.videoUrl;
+                    healed = true;
+                    this.qualityLedger.push({ shot: t.shotNumber ?? 0, kind: 'video-baked-regen', detail: '烤字重生一次已清除' });
+                    this.emit('agentTalk', { role: AgentRole.EDITOR, text: `✅ 第 ${t.shotNumber} 镜烤字已通过重生消除` });
+                  }
+                }
+              } catch (e) { console.warn('[Editor] v12.126 烤字重生失败(退回记账):', e instanceof Error ? e.message : e); }
+            }
+            if (!healed) {
+              this.qualityLedger.push({ shot: t.shotNumber ?? 0, kind: 'video-baked-text', detail: 'AI 镜画面含烤字' });
+              this.emit('agentTalk', { role: AgentRole.EDITOR, text: `⚠️ 第 ${t.shotNumber} 镜 AI 视频画面检出烤字${process.env.VIDEO_BAKED_DROP === '1' ? ',已剔除交兜底重配' : '(重生未消除或已关,仅记录;VIDEO_BAKED_DROP=1 可自动剔除)'}` });
+              if (process.env.VIDEO_BAKED_DROP === '1') t.videoUrl = '';
+            }
           }
         }
       }
