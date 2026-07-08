@@ -20,6 +20,7 @@ export interface QualityReport {
   degradedShots: number[];      // 走了兜底(kenburns)的镜 —— 真降级
   healthScore: number;          // 0-100:100=零事件;重生类扣 5/次,兜底类扣 12/次,下限 20
   summary: string;              // 一句话中文摘要
+  shotReasons: Record<number, string[]>; // v12.125:镜号→命中事件类列表(供 heal-shots 精准自愈)
 }
 
 const DEGRADE_KINDS = new Set(['kenburns-fallback', 'missing-video', 'broll-fallback']);
@@ -34,9 +35,13 @@ export function summarizeQualityLedger(events: QualityEvent[]): QualityReport {
   const byKind: Record<string, number> = {};
   const shotSet = new Set<number>();
   const degraded = new Set<number>();
+  const shotReasons: Record<number, string[]> = {}; // v12.125
   for (const e of events || []) {
     byKind[e.kind] = (byKind[e.kind] || 0) + 1;
-    if (e.shot > 0) shotSet.add(e.shot);
+    if (e.shot > 0) {
+      shotSet.add(e.shot);
+      (shotReasons[e.shot] ||= []).push(e.kind);
+    }
     if (DEGRADE_KINDS.has(e.kind) && e.shot > 0) degraded.add(e.shot);
   }
   const total = (events || []).length;
@@ -71,6 +76,7 @@ export function summarizeQualityLedger(events: QualityEvent[]): QualityReport {
     degradedShots: [...degraded].sort((a, b) => a - b),
     healthScore: score,
     summary: parts.join(';') || '全片零质量干预,一次成型',
+    shotReasons,
   };
 }
 
