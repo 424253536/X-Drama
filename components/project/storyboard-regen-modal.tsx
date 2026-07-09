@@ -42,6 +42,50 @@ export function StoryboardRegenModal({
   // v2.24 B: 用户上传的参考图 URL (服务端持久化后的 http URL)
   const [refImageUrl, setRefImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // v12.137 issue #2 镜头语言草图锁:草图 URL(AI 生成或上传)+ 是否用它锁构图
+  const [sketchUrl, setSketchUrl] = useState<string | null>(null);
+  const [sketchLock, setSketchLock] = useState(false);
+  const [sketchBusy, setSketchBusy] = useState(false);
+
+  const handleGenSketch = async () => {
+    if (sketchBusy || busy) return;
+    const scene = prompt.trim();
+    if (scene.length < 5) { setError('先填画面描述(≥5 字)再生成草图'); return; }
+    setSketchBusy(true); setError(null);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/shot-sketch`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shotNumber, mode: 'generate', sceneDescription: scene, aspectRatio }),
+      });
+      const b = await res.json();
+      if (!res.ok || !b.sketchUrl) { setError(b?.error || `草图生成失败 (${res.status})`); return; }
+      setSketchUrl(b.sketchUrl); setSketchLock(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '草图生成失败');
+    } finally { setSketchBusy(false); }
+  };
+
+  const handleUploadSketch = async (file: File) => {
+    if (sketchBusy || busy) return;
+    if (file.size > 10 * 1024 * 1024) { setError('草图过大 (上限 10MB)'); return; }
+    setSketchBusy(true); setError(null);
+    try {
+      const form = new FormData(); form.append('file', file);
+      const up = await fetch('/api/upload/character-face', { method: 'POST', body: form });
+      const ub = await up.json();
+      if (!up.ok || !ub.url) { setError(ub?.error || `上传失败 (${up.status})`); return; }
+      // 落成 storyboard-sketch 资产(mode:set),供重生取用
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/shot-sketch`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shotNumber, mode: 'set', imageUrl: ub.url }),
+      });
+      const b = await res.json();
+      if (!res.ok || !b.sketchUrl) { setError(b?.error || `草图落库失败 (${res.status})`); return; }
+      setSketchUrl(b.sketchUrl); setSketchLock(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '草图上传失败');
+    } finally { setSketchBusy(false); }
+  };
 
   // v10.3.6 a11y: Escape + 焦点陷阱 + 焦点归还(此前无任何键盘关闭路径);重生中不响应 Escape
   const dialogRef = useFocusTrap<HTMLDivElement>(true, () => { if (!busy) onCancel(); });
@@ -108,6 +152,9 @@ export function StoryboardRegenModal({
             aspectRatio,
             // v2.24 B: 用户上传的参考图 (作 sref 优先于 Style Bible)
             referenceImageUrl: refImageUrl || undefined,
+            // v12.137 issue #2 草图锁:开启则用该镜草图锁构图
+            sketchLock: sketchLock && !!sketchUrl,
+            sketchUrl: sketchLock && sketchUrl ? sketchUrl : undefined,
           }),
         },
       );
@@ -333,6 +380,42 @@ export function StoryboardRegenModal({
                   {a}
                 </button>
               ))}
+            </div>
+
+            {/* v12.137 issue #2:镜头语言草图锁(可选)— AI 生成 / 上传草图 → 锁构图重生 */}
+            <div className="pt-2 mt-1 border-t border-[var(--cinema-border)]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="cinema-mono text-[11px] opacity-70">🎬 镜头语言草图锁 <span className="opacity-40">(可选 · 用草图锁构图/机位)</span></span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleGenSketch}
+                  disabled={sketchBusy || busy}
+                  className="cinema-btn-ghost !text-[10px] !py-1 disabled:opacity-40"
+                  title="AI 按上方画面描述出一张粗线稿构图草图"
+                >
+                  {sketchBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} AI 生成草图
+                </button>
+                <label className="cinema-btn-ghost !text-[10px] !py-1 cursor-pointer disabled:opacity-40">
+                  <Upload className="w-3 h-3" /> 上传草图
+                  <input type="file" accept="image/*" className="hidden" disabled={sketchBusy || busy}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadSketch(f); }} />
+                </label>
+                {sketchUrl && (
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={sketchLock} onChange={(e) => setSketchLock(e.target.checked)} disabled={busy} />
+                    <span className="cinema-mono text-[10px]">重生时用草图锁构图</span>
+                  </label>
+                )}
+              </div>
+              {sketchUrl && (
+                <div className="mt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={sketchUrl} alt="构图草图" className="max-h-24 rounded border border-[var(--cinema-border)]" />
+                  <div className="cinema-mono text-[9px] opacity-40 mt-1">软构图约束:草图定布局/机位,细节配色仍按 prompt(非默认,勾选生效)</div>
+                </div>
+              )}
             </div>
           </div>
 
