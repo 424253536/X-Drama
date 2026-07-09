@@ -85,7 +85,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
   const orchestrator = new HybridOrchestrator();
-  if (proj.style_id) { try { orchestrator.setUserStyle(proj.style_id); } catch { /* ignore */ } }
+  // v12.132(issue #2 Bug B):补拍也贯通角色参考(此前只 setUserStyle,漏 char ref → 补的镜丢角色)
+  try {
+    const { parseProjectContext, applyProjectContext, PROJECT_CONTEXT_COLUMNS } = await import('@/lib/orchestrator-project-context');
+    const row = db.prepare(`SELECT ${PROJECT_CONTEXT_COLUMNS} FROM projects WHERE id = ?`).get(id) as any;
+    applyProjectContext(orchestrator, parseProjectContext(row));
+  } catch { /* ignore */ }
 
   // 取剧本拿每镜 prompt/时长
   const scriptRow = (await listAssetsByType(id, 'script'))[0];

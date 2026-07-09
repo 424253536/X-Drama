@@ -63,10 +63,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
           const orchestrator = new HybridOrchestrator();
 
-          // v2.9: 贯通 style_id —— 重生成的镜头画风要跟老镜头一致
+          // v2.9 + v12.132(issue #2 Bug B):贯通画风 + 角色参考(此前只读 style_id,漏角色参考)
           try {
-            const proj = db.prepare('SELECT style_id FROM projects WHERE id = ?').get(projectId) as { style_id?: string } | undefined;
-            if (proj?.style_id) orchestrator.setUserStyle(proj.style_id);
+            const { parseProjectContext, applyProjectContext, PROJECT_CONTEXT_COLUMNS } = await import('@/lib/orchestrator-project-context');
+            const row = db.prepare(`SELECT ${PROJECT_CONTEXT_COLUMNS} FROM projects WHERE id = ?`).get(projectId) as any;
+            applyProjectContext(orchestrator, parseProjectContext(row));
           } catch {}
 
           // 构建分镜数据 —— imageUrl 从资产库取出原分镜图，用于 I2V 首帧锚定

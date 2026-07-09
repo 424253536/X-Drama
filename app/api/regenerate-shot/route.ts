@@ -31,16 +31,15 @@ export async function POST(request: NextRequest) {
         const orchestrator = new HybridOrchestrator();
         orchestrator.onProgress = (type, data) => send(type, data);
 
-        // v2.9: 项目已经存过 style_id —— 重生成时自动贯通,不依赖 client 传参
-        // 没这行的话重生成的图会用 Director 自动检测的风格,和老镜头不一致
+        // v2.9 + v12.132(issue #2 Bug B):贯通画风 + 角色参考(primary_character_ref /
+        // locked_characters)。此前只读 style_id → 单镜重生的视频拿不到主体参考、丢角色 DNA。
         try {
-          const proj = db.prepare('SELECT style_id FROM projects WHERE id = ?').get(projectId) as { style_id?: string } | undefined;
-          if (proj?.style_id) {
-            orchestrator.setUserStyle(proj.style_id);
-            console.log(`[Regenerate] Project style loaded: ${proj.style_id}`);
-          }
+          const { parseProjectContext, applyProjectContext, PROJECT_CONTEXT_COLUMNS } = await import('@/lib/orchestrator-project-context');
+          const row = db.prepare(`SELECT ${PROJECT_CONTEXT_COLUMNS} FROM projects WHERE id = ?`).get(projectId) as any;
+          const applied = applyProjectContext(orchestrator, parseProjectContext(row));
+          console.log(`[Regenerate] v12.132 项目上下文贯通: style=${applied.style} ref=${applied.primaryRef} locked=${applied.locked}`);
         } catch (e) {
-          console.warn('[Regenerate] style_id load failed:', e);
+          console.warn('[Regenerate] project context load failed:', e);
         }
 
         // ── 单镜头视频重新生成 ──
