@@ -47,12 +47,14 @@ export interface CreatePipelineInput {
   replicaScript?: any;
   /** v12.0.4 一句指令调剪辑风格(「快节奏燃向」/「慢叙抒情」),空 → 默认中速 */
   editStyle?: string;
+  /** v12.134 issue #2:显式选剧本语言(code/别名,如 'ru'/'en'/'俄语');'auto'/空 → 自动检测。 */
+  language?: string;
 }
 
 export type PipelineEmit = (type: string, data: unknown) => void;
 
 export async function runCreatePipeline(input: CreatePipelineInput, emit: PipelineEmit, opts?: { resume?: boolean }): Promise<void> {
-  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle } = input as CreatePipelineInput & Record<string, any>;
+  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language } = input as CreatePipelineInput & Record<string, any>;
   // v12.32.0:阶段耗时归因 —— 各阶段边界本就发 send('step',{step}),顺手用它做计时埋点(零额外侵入)。
   const _stageTimer = new StageTimer();
   let _curStage: string | null = null;
@@ -130,6 +132,15 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     // ── v12.0.4 注入剪辑风格指令(一句话调 pacing/转场)──
     if (editStyle && typeof editStyle === 'string') {
       orchestrator.setEditStyle(editStyle);
+    }
+
+    // ── v12.134(issue #2):显式选剧本语言(覆盖自动检测)──
+    // language 命中支持语种 → 用它;'auto'/空/未知 → normalizeLanguage 回退到按 idea 自动检测。
+    if (language && typeof language === 'string' && language.trim() && language.trim().toLowerCase() !== 'auto') {
+      const { normalizeLanguage, ttsReliable, languageDisplayName } = await import('@/lib/language-detect');
+      const lang = normalizeLanguage(language, idea);
+      orchestrator.setTargetLanguage(lang);
+      send('status', { message: `🌐 剧本语言:${languageDisplayName(lang)}${ttsReliable(lang) ? '' : '(配音降级:仅字幕/近似音色)'}` });
     }
 
     // v2.14 P1.1: 全局默认镜头语言 — 影响所有镜头的运镜默认值。

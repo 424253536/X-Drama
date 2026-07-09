@@ -34,6 +34,7 @@ import { FirstRunGuide } from '@/components/create/first-run-guide';
 import { PreviewShotModal } from '@/components/create/preview-shot-modal';
 import { DemoModeBanner } from '@/components/demo-mode-banner';
 import type { ScriptDraft } from '@/lib/script-drafts';
+import { listSupportedLanguages } from '@/lib/language-detect';
 
 // Pika-style art presets with visual indicators and color themes
 const stylePresets = [
@@ -135,6 +136,8 @@ export default function DashboardCreatePage() {
   const [cameraDefault, setCameraDefault] = useState<string | null>(null);
   // v12.0.4: 一句指令调剪辑风格(''=默认中速 / preset / 自由文本)→ 智能剪辑管线 pacing+转场
   const [editStyle, setEditStyle] = useState('');
+  // v12.134 issue #2: 剧本语言('auto'=按创意自动检测 / 显式语种码)
+  const [scriptLanguage, setScriptLanguage] = useState('auto');
   // v2.15 G9: 草稿数 (1=直接走 Writer; 2/3=先 hit /api/script-drafts 拿对比卡, 用户选完再走完整流程)
   const [draftCount, setDraftCount] = useState<1 | 2 | 3>(1);
   // v10.5.3: 简易/专业开关 —— 默认 pro(与既有 UI 逐像素一致,验收条款);localStorage 记忆
@@ -275,6 +278,8 @@ export default function DashboardCreatePage() {
           references: references.length ? references : undefined,
           // v12.0.4: 一句指令调剪辑风格(空 → 默认中速)
           editStyle: editStyle.trim() || undefined,
+          // v12.134 issue #2: 显式选剧本语言('auto' → 后端按创意自动检测)
+          language: scriptLanguage !== 'auto' ? scriptLanguage : undefined,
         }),
       });
       if (!response.ok) throw new Error('创作失败');
@@ -975,6 +980,24 @@ export default function DashboardCreatePage() {
               className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[var(--cinema-amber)] transition-colors"
             />
           </div>}
+
+          {/* v12.134 issue #2: 剧本语言选择器(默认 auto=按创意自动检测) */}
+          <div className="cinema-card-hi p-3" data-testid="script-language-picker">
+            <div className="cinema-mono text-[10px] opacity-50 mb-1.5 tracking-wider">剧本语言 · 台词/旁白/字幕语种</div>
+            <select
+              value={scriptLanguage}
+              onChange={(e) => setScriptLanguage(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white focus:outline-none focus:border-[var(--cinema-amber)] transition-colors"
+            >
+              <option value="auto">自动检测(按创意文字)</option>
+              {listSupportedLanguages().map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.nativeName}{l.ttsReliable ? '' : ' · 配音降级'}
+                </option>
+              ))}
+            </select>
+            <div className="cinema-mono text-[9px] opacity-40 mt-1.5">仅中/英有原生口型;其余语种字幕+配音就绪、口型近似</div>
+          </div>
 
           {/* v2.15 G8 + v2.16 P1.2: 我的风格库 — 同款卡片包装 */}
           {createMode === 'pro' && <div className="cinema-card-hi p-3">

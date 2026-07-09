@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export { activeOrchestrators };
 
 export async function POST(request: NextRequest) {
-  const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle } = await request.json();
+  const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle, language } = await request.json();
 
   if (!rawIdea || !rawIdea.trim()) {
     return new Response(JSON.stringify({ error: '请提供故事创意' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
     idea, projectId, videoProvider, style, aspect, enableGates, templateId,
     primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references,
     editStyle, // v12.0.4 一句指令调剪辑风格
+    language, // v12.134 issue #2:显式选剧本语言('auto'/空 → 自动检测)
   };
   const encoder = new TextEncoder();
   const sseHeaders = { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' };

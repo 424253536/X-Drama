@@ -10,6 +10,7 @@
  * 本模块只产**布局 + ffmpeg filter 串**(纯函数,可单测);真正跑 ffmpeg + 写 textfile 在
  * video-composer.appendEndCard。
  */
+import type { TargetLanguage } from './language-detect';
 
 export interface EndCardText {
   title?: string;     // 主标语(大字,1-2 行),如「下一个发光的\n会是你吗?」
@@ -40,19 +41,20 @@ const CTA_SIGNAL_EN_RE = /\b(tap|click|shop now|order now|grab (yours|it)|don'?t
 export function ensureCtaEnding(
   shots: Array<{ dialogue?: string }>,
   productHint?: string,
-  lang: 'zh' | 'en' = 'zh', // v12.118:英文片补英文 CTA(此前会被塞中文,硬伤)
+  lang: TargetLanguage = 'zh', // v12.118 英文片补英文 CTA;v12.134 非中文语种统一走英文 CTA(比塞中文合理)
 ): { added: boolean; cta?: string } {
   if (!shots || shots.length === 0) return { added: false };
   const tail = shots.slice(-2);
   if (tail.some((s) => s?.dialogue && (CTA_SIGNAL_RE.test(s.dialogue) || CTA_SIGNAL_EN_RE.test(s.dialogue)))) return { added: false };
-  const hint = (productHint || '').trim().slice(0, lang === 'en' ? 24 : 12);
-  const cta = lang === 'en'
+  const hint = (productHint || '').trim().slice(0, lang === 'zh' ? 12 : 24);
+  // zh → 中文 CTA;其余语种(en/ja/ru/…)→ 英文 CTA(确定性兜底句,理想情况 LLM 已自带 CTA)
+  const cta = lang !== 'zh'
     ? (hint ? `Love it? Try ${hint} — your turn to be surprised.` : 'Love it? Tap the link and see for yourself.')
     : (hint ? `心动就试试${hint},下一个惊喜是你。` : '心动不如行动,来试试,下一个惊喜是你。');
   const last = shots[shots.length - 1];
   const prev = (last.dialogue || '').trim();
   last.dialogue = prev
-    ? (lang === 'en' ? `${prev.replace(/[.!]?$/, '.')} ${cta}` : `${prev.replace(/[。!!]?$/, '。')}${cta}`)
+    ? (lang !== 'zh' ? `${prev.replace(/[.!]?$/, '.')} ${cta}` : `${prev.replace(/[。!!]?$/, '。')}${cta}`)
     : cta;
   return { added: true, cta };
 }

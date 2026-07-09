@@ -11,7 +11,7 @@
 import { buildDirectorCinemaPromptBlock } from './director-enhance';
 import { buildProducerReviewPromptBlock } from './producer-enhance';
 import { buildWriterCinemaPromptBlock, validateWriterCinematography, buildBeatSheetBlock } from './writer-enhance';
-import { buildLanguageDirective } from './language-detect';
+import { buildLanguageDirective, type TargetLanguage } from './language-detect';
 // v2.20 P0.2: drama-tropes 在 Writer prompt 里注入短剧强约束
 import { buildDramaTropeBlock } from './drama-tropes';
 // v2.23 P0.4: 对话覆盖度硬规则 — 强制正反打
@@ -160,7 +160,7 @@ export function getMcKeeWriterPrompt(genre: string, style: string, options?: {
    */
   idea?: string;
   /** v12.6.1: 目标语种 — 锁台词/旁白/场景描述语种(visualPrompt 仍英文)。不传按内容默认中文。 */
-  language?: 'zh' | 'en';
+  language?: TargetLanguage;
 }): string {
   const isAdapt = options?.isScriptAdaptation || false;
   // 动态计算镜头数范围：基于 Director 建议值
