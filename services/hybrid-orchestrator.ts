@@ -1005,6 +1005,7 @@ export class HybridOrchestrator {
     aspectRatio?: string; label?: string;
     cref?: string; sref?: string; cw?: number;
     referenceImages?: string[];
+    sketchUrl?: string; sketchLock?: boolean; sketchMeta?: { shotSize?: string; angle?: string; movement?: string }; // v12.135 镜头语言草图锁
   }): Promise<string> {
     // v3.2 P3.1: 通过 PLUGIN_CHAIN_MODE env 决定是否先试 plugin chain.
     // off (默认) → 直接走老主路径, 行为完全不变.
@@ -1039,7 +1040,19 @@ export class HybridOrchestrator {
     aspectRatio?: string; label?: string;
     cref?: string; sref?: string; cw?: number;
     referenceImages?: string[];
+    sketchUrl?: string; sketchLock?: boolean; sketchMeta?: { shotSize?: string; angle?: string; movement?: string }; // v12.135 镜头语言草图锁
   }): Promise<string> {
+    // v12.135(issue #2 调研落地,默认关):镜头语言草图锁 —— 某镜带草图且开启时,
+    // 把草图作首要构图参考并入 refs + 追加「锁定构图/机位」提示,让出图遵循草图空间布局。
+    // 复用 v12.133 修好的真图输入通道(参考图软构图约束);ComfyUI ControlNet 硬锁为后续。
+    if (opts?.sketchUrl) {
+      const { shouldSketchLock, buildSketchDirective, mergeSketchIntoRefs } = await import('@/lib/storyboard-sketch');
+      if (shouldSketchLock(process.env, opts.sketchLock)) {
+        opts = { ...opts, referenceImages: mergeSketchIntoRefs(opts.sketchUrl, opts.referenceImages) };
+        prompt = `${prompt}${buildSketchDirective(opts.sketchMeta)}`;
+        console.log(`[SketchLock] v12.135 草图构图约束启用: ${opts.label || 'image'}`);
+      }
+    }
     const hasRefImages = !!(opts?.cref || opts?.sref || opts?.referenceImages?.length);
     const label = opts?.label || 'image';
     const veKey = API_CONFIG.openai.apiKey;
