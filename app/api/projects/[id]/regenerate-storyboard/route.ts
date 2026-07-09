@@ -21,7 +21,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { createAsset } from '@/lib/repos/asset-repo';
+import { createAsset, listAssetsByType } from '@/lib/repos/asset-repo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +34,10 @@ interface RegenInput {
   aspectRatio?: string;
   /** v2.24 B: 用户上传的参考图 URL — 作 sref 优先于 Style Bible */
   referenceImageUrl?: string;
+  /** v12.136 issue #2:草图锁 —— 开启则用该镜 storyboard-sketch(或 sketchUrl)锁构图 */
+  sketchLock?: boolean;
+  sketchUrl?: string;
+  sketchMeta?: { shotSize?: string; angle?: string; movement?: string };
 }
 
 function getProjectContext(projectId: string): {
@@ -95,7 +99,7 @@ export async function POST(
   try { body = await request.json(); }
   catch { return new Response('Invalid JSON', { status: 400 }); }
 
-  const { shotNumber, customPrompt, useStyleBible, useCref, aspectRatio, referenceImageUrl } = body;
+  const { shotNumber, customPrompt, useStyleBible, useCref, aspectRatio, referenceImageUrl, sketchLock, sketchUrl: bodySketchUrl, sketchMeta } = body;
   if (!shotNumber || typeof shotNumber !== 'number') {
     return new Response('shotNumber required', { status: 400 });
   }
@@ -156,13 +160,27 @@ export async function POST(
         }
         if (useCref !== false && ctx.primaryCharacterRef) refImages.push(ctx.primaryCharacterRef);
 
+        // v12.136(issue #2 草图锁):开启 sketchLock 时用该镜草图锁构图。
+        // sketchUrl 优先 body 传入,否则自动取该镜已存的 storyboard-sketch 资产。
+        let effectiveSketchUrl: string | undefined = typeof bodySketchUrl === 'string' && bodySketchUrl.startsWith('http') ? bodySketchUrl : undefined;
+        if (sketchLock === true && !effectiveSketchUrl) {
+          try {
+            const sketches = await listAssetsByType(projectId, 'storyboard-sketch');
+            const mine = sketches.filter((a: any) => a.shotNumber === shotNumber).slice(-1)[0] as any;
+            effectiveSketchUrl = mine?.persistentUrl || (mine?.mediaUrls || [])[0] || undefined;
+          } catch { /* 无草图 → 不锁 */ }
+        }
+
         // 走 orchestrator 的 generateImage (private), 用 hack 暴露
         const imageUrl = await (orchestrator as any).generateImage(finalPrompt, {
           aspectRatio: aspectRatio || '16:9',
-          label: `Shot ${shotNumber} (manual regen${referenceImageUrl ? ' + userRef' : ''})`,
+          label: `Shot ${shotNumber} (manual regen${referenceImageUrl ? ' + userRef' : ''}${effectiveSketchUrl && sketchLock ? ' + sketchLock' : ''})`,
           cref: useCref !== false ? ctx.primaryCharacterRef : undefined,
           sref: effectiveSref,
           referenceImages: refImages.length > 0 ? refImages : undefined,
+          sketchUrl: sketchLock === true ? effectiveSketchUrl : undefined, // v12.135 generateImage 消费
+          sketchLock: sketchLock === true ? true : undefined,
+          sketchMeta: sketchMeta && typeof sketchMeta === 'object' ? sketchMeta : undefined,
         });
 
         if (!imageUrl || imageUrl.startsWith('data:')) {

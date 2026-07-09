@@ -39,6 +39,20 @@ export function mergeSketchIntoRefs(sketchUrl: string, refs?: string[]): string[
   return merged.filter((u) => (seen.has(u) ? false : (seen.add(u), true))).slice(0, 4);
 }
 
+/**
+ * v12.136 AI 草图生成 prompt(纯):把镜头场景 + 机位元数据 → 「粗线稿黑白分镜草图」出图 prompt。
+ * 刻意压低细节/配色(只要构图),这样它作构图参考时不会污染最终成片的画风。
+ */
+export function buildSketchGenPrompt(sceneDescription: string, meta?: SketchCameraMeta): string {
+  const cam = [
+    meta?.shotSize ? `shot size: ${meta.shotSize}` : '',
+    meta?.angle ? `camera angle: ${meta.angle}` : '',
+    meta?.movement ? `camera move: ${meta.movement}` : '',
+  ].filter(Boolean).join(', ');
+  const scene = (sceneDescription || '').trim().slice(0, 400) || 'a single shot';
+  return `Rough black-and-white storyboard thumbnail sketch, loose pencil line art, monochrome, no color, minimal shading, simple clean composition lines. Scene: ${scene}.${cam ? ` Camera — ${cam}.` : ''} Show only layout: framing, character placement and scale within the frame, foreground/background blocking. Storyboard panel style, not a finished illustration.`;
+}
+
 /** 每引擎的草图施加方式(纯):comfyui+ControlNet→硬锁;主流 image 引擎→构图参考图;其余→不适用。 */
 export type SketchApplyMode = 'controlnet' | 'reference' | 'none';
 export function sketchApplyMode(engine: string, comfyControlNet = false): SketchApplyMode {
