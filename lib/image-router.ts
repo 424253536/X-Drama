@@ -16,7 +16,7 @@
  * 决策纯函数, 好测.
  */
 
-export type ImageEngine = 'mj' | 'minimax-multi' | 'minimax-single' | 'kontext' | 'seedream'; // v12.109 seedream 档
+export type ImageEngine = 'mj' | 'minimax-multi' | 'minimax-single' | 'kontext' | 'seedream' | 'falflux'; // v12.109 seedream / v12.133 falflux(参考图原生)
 
 export interface ImageRouteDecision {
   primary: ImageEngine;
@@ -48,6 +48,31 @@ export interface ImageRouteInput {
  * | ≥3   | ✓  | ✗       | -       | mj (退化到 2 ref) → kontext                     |
  * | ≥3   | ✗  | ✓       | -       | minimax-multi → kontext                         |
  */
+/**
+ * v12.133(issue #2 Bug A):把 fal.ai FLUX Kontext(falFluxService)提升为**一等参考图引擎**。
+ *
+ * 病根:此前 falFlux 只在整条 engineChain 全炸后才作深兜底,于是有参考图的镜**总是先撞**
+ * 不认参考图的路径 —— minimax-single(丢 refs)、网关 kontext(把参考图当 prompt 文本,模型看不到图)。
+ * falFlux 原生用 image_url/image_urls 传真图,是最该优先的参考图引擎。本函数(纯,像 appendSeedreamTier)
+ * 在有参考图 + falFlux 可用时,把 falflux 插到 kontext/minimax-single 之前;MJ(原生 cref/sref)/
+ * minimax-multi(原生多参)保留主位,falflux 紧随其后。0 参考图不插(那时 mj/seedream 画质更优)。
+ */
+export function preferFalFluxForRefs(
+  route: { primary: ImageEngine; fallbacks: ImageEngine[]; reason: string },
+  refCount: number,
+  falAvailable: boolean,
+): { primary: ImageEngine; fallbacks: ImageEngine[]; reason: string } {
+  if (!falAvailable || refCount < 1) return route;
+  const chain = [route.primary, ...route.fallbacks].filter((e) => e !== 'falflux');
+  const nativeRefPrimary = new Set<ImageEngine>(['mj', 'minimax-multi']);
+  const merged: ImageEngine[] = nativeRefPrimary.has(chain[0])
+    ? [chain[0], 'falflux', ...chain.slice(1)]                 // 原生多参主位保留,falflux 紧随
+    : ['falflux', ...chain];                                   // 主位本是丢/文本 refs 的引擎 → falflux 上位
+  const seen = new Set<ImageEngine>();
+  const dedup = merged.filter((e) => (seen.has(e) ? false : (seen.add(e), true)));
+  return { primary: dedup[0], fallbacks: dedup.slice(1), reason: `${route.reason} +falflux(参考图原生)` };
+}
+
 /** v12.109:seedream 档(qingyuntop images/generations 实测 14s 出图,竖屏直出)追加到链尾。 */
 export function appendSeedreamTier(route: { primary: ImageEngine; fallbacks: ImageEngine[]; reason: string }): typeof route {
   if (process.env.IMAGE_SEEDREAM_DISABLE === '1') return route;

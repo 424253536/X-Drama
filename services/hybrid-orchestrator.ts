@@ -1103,11 +1103,17 @@ export class HybridOrchestrator {
       if (opts?.sref && !refUrls.includes(opts.sref)) refUrls.push(opts.sref);
       const validRefs = refUrls.filter(u => u.startsWith('http')).slice(0, 4);
       const refHint = validRefs.length > 0 ? ` [Reference images: ${validRefs.join(' , ')}]` : '';
+      // v12.133(issue #2 Fix A-2):网关文生图端点默认无图像字段,参考图只能作 prompt 文本(模型看不到图)。
+      // 首选路径是 falFlux(见 preferFalFluxForRefs);此处仅当用户确认其网关支持图像输入时,
+      // 用 KONTEXT_GATEWAY_IMAGE_INPUT=1 附上 image_url/image_urls(默认关,避免不支持的网关 422)。
+      const gatewayImg = process.env.KONTEXT_GATEWAY_IMAGE_INPUT === '1' && validRefs.length > 0
+        ? { image_url: validRefs[0], image_urls: validRefs }
+        : {};
 
       const res = await fetch(`${base}/v1/images/generations`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'flux.1-kontext-pro', prompt: prompt + refHint, n: 1, size: '1024x1024' }),
+        body: JSON.stringify({ model: 'flux.1-kontext-pro', prompt: prompt + refHint, n: 1, size: '1024x1024', ...gatewayImg }),
         signal: AbortSignal.timeout(90_000),
       });
 
@@ -1137,18 +1143,20 @@ export class HybridOrchestrator {
     // ═══ v2.20 P0.3: 智能路由 — 按 refs 数量分流 ═══
     // 关键改进: refs ≥ 3 时优先走 Minimax multi-ref (能用全部 4 张), 而不是 MJ 退化成 2 张.
     // 这样 Style Bible + 主角 + 配角 + 场景 可以同时锁住, 不再每镜舍弃一半参考.
-    const { decideImageRoute, collectValidRefs, appendSeedreamTier } = await import('@/lib/image-router');
+    const { decideImageRoute, collectValidRefs, appendSeedreamTier, preferFalFluxForRefs } = await import('@/lib/image-router');
     const validRefs = collectValidRefs({
       cref: opts?.cref,
       sref: opts?.sref,
       referenceImages: opts?.referenceImages,
     });
-    const route = appendSeedreamTier(decideImageRoute({
+    // v12.133(issue #2 Bug A):有参考图时把 falFlux 提为一等引擎(原生 image_url),
+    // 插到不认参考图的 kontext/minimax-single 之前 —— 修「角色参考被忽略」。
+    const route = appendSeedreamTier(preferFalFluxForRefs(decideImageRoute({
       validRefs,
       mjAvailable: !!this.mjService,
       minimaxAvailable: !!this.minimaxService?.isImageAvailable(),
       kontextAvailable: !!veKey || !!qytKey,
-    }));
+    }), validRefs.length, !!this.falFluxService));
     console.log(`[ImageRouter] ${label}: refs=${validRefs.length} → primary=${route.primary} fallbacks=[${route.fallbacks.join(',')}] (${route.reason})`);
 
     // engine 执行器 — 每个 engine 抽成一个 thunk, router 按顺序串行 try
@@ -1172,7 +1180,22 @@ export class HybridOrchestrator {
         }
         case 'minimax-single': {
           if (!this.minimaxService) throw new Error('minimax not available');
+          // v12.133(issue #2 Fix C):有参考图时走 generateImageWithRefs(此前 minimax-single 静默丢 refs)
+          if (hasRefImages && validRefs.length > 0) {
+            return await this.minimaxService.generateImageWithRefs(prompt, validRefs, { aspectRatio: opts?.aspectRatio || '16:9' });
+          }
           return await this.minimaxService.generateImage(prompt, { aspectRatio: opts?.aspectRatio || '16:9' });
+        }
+        case 'falflux': {
+          // v12.133(issue #2 Bug A):fal.ai FLUX Kontext 原生用 image_url/image_urls 传真参考图。
+          if (!this.falFluxService) throw new Error('falflux not available');
+          const refImages: string[] = [...(opts?.referenceImages || [])];
+          if (opts?.cref && !refImages.includes(opts.cref)) refImages.push(opts.cref);
+          if (opts?.sref && !refImages.includes(opts.sref)) refImages.push(opts.sref);
+          return await this.falFluxService.generateImage(prompt, {
+            referenceImages: refImages.filter((u) => u && u.startsWith('http')).slice(0, 4),
+            aspectRatio: (opts?.aspectRatio as '16:9' | '9:16' | '1:1' | '4:3' | '3:4') || '16:9',
+          });
         }
         case 'kontext': {
           const km = process.env.IMAGE_KONTEXT_MODEL || 'flux.1-kontext-pro'; // v12.109 env 可换 flux-2-pro
