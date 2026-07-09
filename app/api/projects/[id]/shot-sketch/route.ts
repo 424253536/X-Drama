@@ -73,7 +73,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const existing = await listAssetsByType(id, 'storyboard-sketch');
     // 只删同镜号的旧草图(deleteAssetsByType 会删全部,故用逐条删同镜号)
-    for (const a of existing.filter((x: any) => x.shotNumber === shotNumber)) {
+    const { assetShotNumber } = await import('@/lib/heal-shots');
+    for (const a of existing.filter((x: any) => assetShotNumber(x) === shotNumber)) {
       try { db.prepare('DELETE FROM project_assets WHERE id = ?').run((a as any).id); } catch { /* ignore */ }
     }
     await createAsset({ projectId: id, type: 'storyboard-sketch', name: `Shot ${shotNumber} 构图草图`, data: { mode, sketchMeta: sketchMeta || null }, mediaUrls: [finalSketchUrl], shotNumber, persistentUrl: finalSketchUrl.startsWith('http') ? finalSketchUrl : null });

@@ -58,7 +58,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // 有分镜图的镜号
   const sbRows = await listAssetsByType(id, 'storyboard');
-  const storyboardShots = [...new Set(sbRows.map((r: any) => r.shotNumber).filter((n: any) => Number.isInteger(n) && n > 0))];
+  const { assetShotNumber } = await import('@/lib/heal-shots');
+  const storyboardShots = [...new Set(sbRows.map((r: any) => assetShotNumber(r)).filter((n: any) => Number.isInteger(n) && n > 0))]; // v12.138:蛇形行兼容
 
   const healable = identifyHealableShots(report, storyboardShots as number[]);
 

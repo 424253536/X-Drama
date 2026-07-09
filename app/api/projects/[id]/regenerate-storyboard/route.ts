@@ -165,9 +165,10 @@ export async function POST(
         let effectiveSketchUrl: string | undefined = typeof bodySketchUrl === 'string' && bodySketchUrl.startsWith('http') ? bodySketchUrl : undefined;
         if (sketchLock === true && !effectiveSketchUrl) {
           try {
+            const { assetShotNumber, assetFirstMediaUrl } = await import('@/lib/heal-shots');
             const sketches = await listAssetsByType(projectId, 'storyboard-sketch');
-            const mine = sketches.filter((a: any) => a.shotNumber === shotNumber).slice(-1)[0] as any;
-            effectiveSketchUrl = mine?.persistentUrl || (mine?.mediaUrls || [])[0] || undefined;
+            const mine = sketches.filter((a: any) => assetShotNumber(a) === shotNumber).slice(-1)[0] as any;
+            effectiveSketchUrl = (mine && assetFirstMediaUrl(mine)) || undefined; // v12.138:蛇形行兼容(live 抓获)
           } catch { /* 无草图 → 不锁 */ }
         }
 

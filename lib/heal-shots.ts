@@ -63,3 +63,24 @@ export function identifyHealableShots(
   out.sort((a, b) => b.priority - a.priority || a.shot - b.shot);
   return out;
 }
+
+// ─── v12.138 资产行字段兼容(live 抓获的真 bug)─────────────────────────────────
+// listAssetsByType 返回**蛇形**原始行(shot_number / persistent_url / media_urls 为 JSON 字符串),
+// 而多个调用点误用驼峰(shotNumber/persistentUrl/mediaUrls)→ 全 undefined:草图锁取不到草图、
+// heal-shots 的 hasStoryboard 恒 false。这两个纯函数兼容两种形态,所有资产行读取统一走它们。
+
+/** 资产行镜号(蛇形/驼峰兼容)。 */
+export function assetShotNumber(row: any): number | null {
+  const n = row?.shot_number ?? row?.shotNumber;
+  return Number.isInteger(n) ? n : (typeof n === 'number' ? n : null);
+}
+
+/** 资产行首个可用媒体 URL:persistent_url 优先(CDN 过期问题),否则 media_urls JSON 首个。 */
+export function assetFirstMediaUrl(row: any): string | null {
+  const p = row?.persistent_url ?? row?.persistentUrl;
+  if (typeof p === 'string' && p) return p;
+  const m = row?.media_urls ?? row?.mediaUrls;
+  if (Array.isArray(m)) return m[0] || null;
+  if (typeof m === 'string') { try { const a = JSON.parse(m); return Array.isArray(a) ? (a[0] || null) : null; } catch { return null; } }
+  return null;
+}
