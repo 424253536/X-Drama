@@ -49,12 +49,14 @@ export interface CreatePipelineInput {
   editStyle?: string;
   /** v12.134 issue #2:显式选剧本语言(code/别名,如 'ru'/'en'/'俄语');'auto'/空 → 自动检测。 */
   language?: string;
+  /** v12.143(对标阅文分镜面板):全片草图锁 —— 每镜先出构图草图再锁构图渲染(每镜多一次出图)。 */
+  sketchLock?: boolean;
 }
 
 export type PipelineEmit = (type: string, data: unknown) => void;
 
 export async function runCreatePipeline(input: CreatePipelineInput, emit: PipelineEmit, opts?: { resume?: boolean }): Promise<void> {
-  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language } = input as CreatePipelineInput & Record<string, any>;
+  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language, sketchLock } = input as CreatePipelineInput & Record<string, any>;
   // v12.32.0:阶段耗时归因 —— 各阶段边界本就发 send('step',{step}),顺手用它做计时埋点(零额外侵入)。
   const _stageTimer = new StageTimer();
   let _curStage: string | null = null;
@@ -83,6 +85,18 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     const orchestrator = new HybridOrchestrator();
     orchestrator.onProgress = (type, data) => {
       send(type, data);
+      // v12.143:草图锁的每镜草图落 storyboard-sketch 资产(面板展示/重生复用);fire-and-forget
+      if (type === 'storyboardSketch' && data && typeof data === 'object') {
+        const d = data as { shotNumber?: number; sketchUrl?: string };
+        if (d.shotNumber && d.sketchUrl) {
+          void (async () => {
+            try {
+              const { createAsset } = await import('@/lib/repos/asset-repo');
+              await createAsset({ projectId, type: 'storyboard-sketch', name: `Shot ${d.shotNumber} 构图草图`, data: { mode: 'auto', sketchMeta: null }, mediaUrls: [d.sketchUrl!], shotNumber: d.shotNumber, persistentUrl: d.sketchUrl!.startsWith('http') ? d.sketchUrl! : null });
+            } catch { /* 落库失败不阻塞 */ }
+          })();
+        }
+      }
       // v2.23 P0.3: 持久化 character DNA 到 character asset 的 data 字段, 让项目页能拿到
       // v9.0.1b: 走 asset-repo (双驱动). onProgress 是同步回调, DNA 持久化是 best-effort —
       // 用 fire-and-forget async IIFE (与 saveAsset 后台落盘同款), 不阻塞编排进度推送。
@@ -132,6 +146,12 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     // ── v12.0.4 注入剪辑风格指令(一句话调 pacing/转场)──
     if (editStyle && typeof editStyle === 'string') {
       orchestrator.setEditStyle(editStyle);
+    }
+
+    // ── v12.143:全片草图锁(每镜先草图后锁构图渲染;成本:每镜多一次出图)──
+    if (sketchLock === true) {
+      orchestrator.setSketchLockAll(true);
+      send('status', { message: '📐 分镜草图锁已开启:每镜先出构图草图,再按草图锁构图渲染' });
     }
 
     // ── v12.134(issue #2):显式选剧本语言(覆盖自动检测)──

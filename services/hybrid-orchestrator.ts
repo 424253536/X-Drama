@@ -556,6 +556,10 @@ export class HybridOrchestrator {
   /** 允许调用方显式覆盖语种(用户「要求」优先于自动检测)。 */
   setTargetLanguage(lang: TargetLanguage) { this._targetLanguage = lang; }
 
+  // v12.143(对标阅文分镜面板主链):全片草图锁 —— 每镜先出粗线稿草图,再以草图锁构图渲染分镜。
+  private sketchLockAll = false;
+  setSketchLockAll(v: boolean) { this.sketchLockAll = v; }
+
   /**
    * v2.13.5: 把 Writer 产出的 script 注入 orchestrator,让 Character/Scene 设计器
    * 在 idea-input 路径(无 parsedScript)下也能拿到真实剧本文本做 trait 抽取 / 场景细节。
@@ -2974,6 +2978,24 @@ ${shots.map((s, i) => {
 
       console.log(`[P4-Chain] Shot ${sb.shotNumber}: ${refsWithBible.length} reference images (styleBible=${!!this.styleAnchorImageUrl}, cref=${!!crefUrl}, sref=${!!srefUrl}, chain=${recentRendered.length})`);
 
+      // v12.143(全片草图锁,默认关):先出该镜粗线稿构图草图 → 作首要构图参考渲染分镜。
+      // 失败不阻塞(退回常规渲染);草图经 emit 落 storyboard-sketch 资产(面板展示/复用)。
+      let sketchUrlForShot: string | undefined;
+      if (this.sketchLockAll) {
+        try {
+          const { buildSketchGenPrompt } = await import('@/lib/storyboard-sketch');
+          const sketchPrompt = buildSketchGenPrompt(sb.prompt || '', {
+            shotSize: (sb as any).shotSize, movement: (sb as any).cameraMovement,
+          });
+          const su = await this.generateImage(sketchPrompt, { aspectRatio: this.aspect || '16:9', label: `Shot ${sb.shotNumber} 草图` });
+          if (su && su.startsWith('http')) {
+            sketchUrlForShot = su;
+            this.emit('storyboardSketch', { shotNumber: sb.shotNumber, sketchUrl: su });
+            this.emit('agentTalk', { role: AgentRole.STORYBOARD, text: `📐 第 ${sb.shotNumber} 镜构图草图就绪,按草图锁构图渲染` });
+          }
+        } catch (e) { console.warn(`[SketchLockAll] shot ${sb.shotNumber} 草图失败(退回常规渲染):`, e instanceof Error ? e.message.slice(0, 60) : e); }
+      }
+
       // 单张分镜限时 3 分钟; cw 由 policy 决定 (锁脸 125, 主角 100, 配角 80)
       const imageUrl = await Promise.race([
         this.generateImage(renderPrompt, {
@@ -2983,6 +3005,8 @@ ${shots.map((s, i) => {
           cw: this.userPrimaryCw ?? refsPick.cw, // v9.4.9: 多参角色元素 cw 覆盖(仅多参路径设)
           sref: finalSref,
           referenceImages: refsWithBible.length > 0 ? refsWithBible : undefined,
+          sketchUrl: sketchUrlForShot, sketchLock: !!sketchUrlForShot, // v12.143 草图锁构图
+          sketchMeta: { shotSize: (sb as any).shotSize, movement: (sb as any).cameraMovement },
         }),
         new Promise<string>((_, reject) =>
           setTimeout(() => reject(new Error(`Storyboard timeout: Shot ${sb.shotNumber}`)), SB_TIMEOUT)

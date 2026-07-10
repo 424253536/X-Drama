@@ -138,6 +138,8 @@ export default function DashboardCreatePage() {
   const [editStyle, setEditStyle] = useState('');
   // v12.134 issue #2: 剧本语言('auto'=按创意自动检测 / 显式语种码)
   const [scriptLanguage, setScriptLanguage] = useState('auto');
+  // v12.143: 分镜草图锁(对标阅文分镜面板)—— 每镜先出构图草图再锁构图渲染,默认关
+  const [sketchLock, setSketchLock] = useState(false);
   // v2.15 G9: 草稿数 (1=直接走 Writer; 2/3=先 hit /api/script-drafts 拿对比卡, 用户选完再走完整流程)
   const [draftCount, setDraftCount] = useState<1 | 2 | 3>(1);
   // v10.5.3: 简易/专业开关 —— 默认 pro(与既有 UI 逐像素一致,验收条款);localStorage 记忆
@@ -280,6 +282,8 @@ export default function DashboardCreatePage() {
           editStyle: editStyle.trim() || undefined,
           // v12.134 issue #2: 显式选剧本语言('auto' → 后端按创意自动检测)
           language: scriptLanguage !== 'auto' ? scriptLanguage : undefined,
+          // v12.143: 分镜草图锁(每镜先草图后锁构图,更可控但每镜多一次出图)
+          sketchLock: sketchLock || undefined,
         }),
       });
       if (!response.ok) throw new Error('创作失败');
@@ -997,6 +1001,22 @@ export default function DashboardCreatePage() {
               ))}
             </select>
             <div className="cinema-mono text-[9px] opacity-40 mt-1.5">仅中/英有原生口型;其余语种字幕+配音就绪、口型近似</div>
+          </div>
+
+          {/* v12.143: 分镜草图锁(对标阅文分镜面板)—— 生成前约束构图/镜头语言 */}
+          <div className="cinema-card-hi p-3" data-testid="sketch-lock-toggle">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sketchLock}
+                onChange={(e) => setSketchLock(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div>
+                <div className="cinema-mono text-[11px]">🎬 分镜草图锁 <span className="opacity-40">(实验 · 构图更可控)</span></div>
+                <div className="cinema-mono text-[9px] opacity-40 mt-0.5">每镜先出黑白构图草图,再按草图锁构图/机位渲染分镜 —— 输出更贴镜头语言设计;代价:每镜多一次出图。草图会保存,可在镜头工坊逐镜查看/替换。</div>
+              </div>
+            </label>
           </div>
 
           {/* v2.15 G8 + v2.16 P1.2: 我的风格库 — 同款卡片包装 */}
