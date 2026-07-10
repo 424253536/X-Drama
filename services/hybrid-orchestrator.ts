@@ -5250,6 +5250,15 @@ ${characterBibleBlock}${producerContext}
     // v2.20 P0.1: 在角色/场景/分镜之前先渲染 1 张 Style Bible 帧, 全片视觉锚定
     await this.runStyleBibleArtist(plan);
     const script = await this.runWriter(plan);
+    // v12.146(P1-④):情绪节拍→运镜自动标注 —— 只补 Writer 漏填运镜的镜;
+    // 用户在创作页选了全局运镜默认 → 不介入(显式选择优先,由 getCameraDefaultPromptFragment 生效)。
+    if (!this.cameraDefault && Array.isArray((script as any)?.shots)) {
+      const { annotateCameraByEmotion } = await import('@/lib/emotion-camera');
+      const notes = annotateCameraByEmotion((script as any).shots);
+      if (notes.length) {
+        this.emit('agentTalk', { role: AgentRole.STORYBOARD, text: `🎥 情绪节拍自动运镜(${notes.length} 镜):${notes.slice(0, 6).join(';')}${notes.length > 6 ? '…' : ''}` });
+      }
+    }
     const characters = await this.runCharacterDesigner(plan.characters);
     const scenes = await this.runSceneDesigner(plan.scenes);
     // 分镜师：第1阶段 — 纯文字分镜规划
