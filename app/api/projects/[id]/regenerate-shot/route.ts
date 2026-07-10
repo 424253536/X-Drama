@@ -26,7 +26,7 @@ function getStoryboardImageUrl(projectId: string, shotNumber: number): string {
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
-  const { shotNumber, duration, description, videoProvider } = await request.json();
+  const { shotNumber, duration, description, videoProvider, cameraMovement } = await request.json();
 
   if (!shotNumber) {
     return NextResponse.json({ error: '请指定镜头编号' }, { status: 400 });
@@ -77,11 +77,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           } else {
             console.log(`[regenerate-shot] no stored frame for shot ${shotNumber}, falling back to T2V`);
           }
+          // v12.141(P0-1):每镜运镜覆盖 —— preset id/自由文本 → 专业运镜指令拼进视频 prompt
+          const { resolveCameraMovementPrompt } = await import('@/lib/prompt-templates');
+          const cameraPrompt = resolveCameraMovementPrompt(cameraMovement);
           const storyboard = {
             shotNumber,
             imageUrl,
-            prompt: description || '',
+            prompt: [description || '', cameraPrompt].filter(Boolean).join('. '),
           };
+          if (cameraPrompt) console.log(`[regenerate-shot] v12.141 运镜覆盖: ${String(cameraMovement).slice(0, 30)}`);
 
           const provider = videoProvider || 'veo';
           send('progress', { shotNumber, progress: 20, provider });

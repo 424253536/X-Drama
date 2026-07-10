@@ -247,3 +247,16 @@ export function enhanceChatMessage(rawMessage: string, projectTitle?: string): s
     : `[项目上下文] 用户在 Wind Comic 创作工坊里发问。`;
   return `${ctx} 请仅回答与该项目剧本/角色/分镜/视频相关的问题, 其他闲聊礼貌引导回创作。\n\n用户:${msg}`;
 }
+
+/**
+ * v12.141(P0-1,对标阅文每镜运镜):把用户选择的运镜(preset id 或自由文本)解析成
+ * 可拼进视频 prompt 的专业指令段。preset id 命中 → 预设 prompt;自由文本 → `Camera: ...`;
+ * 空/'auto' → ''(跟随剧本自带运镜)。纯函数可测。
+ */
+export function resolveCameraMovementPrompt(input?: string | null): string {
+  const key = (input || '').trim();
+  if (!key || key.toLowerCase() === 'auto') return '';
+  const preset = getCameraPreset(key);
+  if (preset) return preset.prompt;
+  return `Camera: ${key}.`;
+}

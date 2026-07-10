@@ -6,6 +6,7 @@ import type { PipelineNodeData } from '@/types/agents';
 import { NodeShell } from './node-shell';
 import { Video, CircleNotch as Loader2, CheckCircle as CheckCircle2, ArrowsClockwise as RefreshCw, Play, Clock, WarningCircle as AlertCircle } from '@phosphor-icons/react';
 import { VideoModal } from '@/components/ui/video-modal';
+import { CAMERA_LANGUAGE_PRESETS } from '@/lib/prompt-templates';
 import { useProjectWorkspaceStore } from '@/lib/store';
 
 // 更宽松的视频URL检测：只要不是明确的图片格式，都尝试作为视频播放
@@ -33,6 +34,9 @@ function VideoNodeComponent({ data }: NodeProps) {
     }
   };
 
+  // v12.141(P0-1):每镜运镜选择(auto=跟随剧本);重生时传给 regenerate-shot
+  const [shotCamera, setShotCamera] = useState<Record<number, string>>({});
+
   // ═══ 重新生成单个镜头视频 ═══
   const handleRegenerateShot = useCallback(async (shotNumber: number, e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止触发视频播放
@@ -54,7 +58,7 @@ function VideoNodeComponent({ data }: NodeProps) {
       const response = await fetch('/api/regenerate-shot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, shotNumber }),
+        body: JSON.stringify({ projectId, shotNumber, cameraMovement: shotCamera[shotNumber] || undefined }),
       });
 
       if (!response.ok) throw new Error('请求失败');
@@ -108,7 +112,7 @@ function VideoNodeComponent({ data }: NodeProps) {
         return next;
       });
     }
-  }, [regeneratingShots]);
+  }, [regeneratingShots, shotCamera]);
 
   return (
     <NodeShell status={d.status} color="pink" className="min-w-[340px] max-w-[440px]" agentRole={d.agentRole}>
@@ -199,23 +203,39 @@ function VideoNodeComponent({ data }: NodeProps) {
                     </div>
                   )}
                 </div>
-                <div className="px-2 py-1.5 flex items-center justify-between">
-                  <div>
+                <div className="px-2 py-1.5 flex items-center justify-between gap-1">
+                  <div className="shrink-0">
                     <span className="text-[10px] text-pink-400 font-medium">镜头 {sn || '?'}</span>
                     {v.data?.duration && <span className="text-[9px] text-gray-500 ml-1">{v.data.duration}s</span>}
                   </div>
-                  <button
-                    onClick={(e) => handleRegenerateShot(sn, e)}
-                    disabled={isRegenerating}
-                    className={`opacity-0 group-hover:opacity-100 transition-all p-1 rounded-lg ${
-                      isRegenerating
-                        ? 'bg-pink-500/20 cursor-wait'
-                        : 'hover:bg-white/10 active:scale-90'
-                    }`}
-                    title="重新生成"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'text-pink-400 animate-spin' : 'text-gray-400 hover:text-pink-400'}`} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {/* v12.141(P0-1):每镜运镜选择(对标阅文) —— 重生时生效 */}
+                    <select
+                      value={shotCamera[sn] || ''}
+                      onChange={(e) => { e.stopPropagation(); setShotCamera((prev) => ({ ...prev, [sn]: e.target.value })); }}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={isRegenerating}
+                      className="opacity-0 group-hover:opacity-100 transition-all bg-black/50 border border-white/10 rounded text-[9px] text-gray-300 px-1 py-0.5 max-w-[86px] focus:outline-none"
+                      title="运镜(重生该镜视频时生效)"
+                    >
+                      <option value="">运镜·跟随剧本</option>
+                      {CAMERA_LANGUAGE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={(e) => handleRegenerateShot(sn, e)}
+                      disabled={isRegenerating}
+                      className={`opacity-0 group-hover:opacity-100 transition-all p-1 rounded-lg ${
+                        isRegenerating
+                          ? 'bg-pink-500/20 cursor-wait'
+                          : 'hover:bg-white/10 active:scale-90'
+                      }`}
+                      title="重新生成"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'text-pink-400 animate-spin' : 'text-gray-400 hover:text-pink-400'}`} />
+                    </button>
+                  </div>
                 </div>
                 {v.version > 1 && (
                   <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-pink-500/80 text-[8px] text-white font-medium">

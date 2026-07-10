@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  *   - stage: 'video' | 'editor' | 'storyboard' 等，重新执行某个阶段
  */
 export async function POST(request: NextRequest) {
-  const { projectId, shotNumber, stage, videoProvider } = await request.json();
+  const { projectId, shotNumber, stage, videoProvider, cameraMovement } = await request.json();
 
   if (!projectId) {
     return new Response(JSON.stringify({ error: '缺少 projectId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -64,6 +64,15 @@ export async function POST(request: NextRequest) {
               : '',
             prompt: sbAsset ? JSON.parse(sbAsset.data || '{}').description || '' : `镜头 ${shotNumber}`,
           };
+          // v12.141(P0-1):每镜运镜覆盖(preset id/自由文本 → 专业运镜指令)
+          {
+            const { resolveCameraMovementPrompt } = await import('@/lib/prompt-templates');
+            const cameraPrompt = resolveCameraMovementPrompt(cameraMovement);
+            if (cameraPrompt) {
+              storyboard.prompt = [storyboard.prompt, cameraPrompt].filter(Boolean).join('. ');
+              console.log(`[regenerate-shot] v12.141 运镜覆盖: ${String(cameraMovement).slice(0, 30)}`);
+            }
+          }
 
           try {
             const result = await orchestrator.regenerateShot(shotNumber, storyboard, {
