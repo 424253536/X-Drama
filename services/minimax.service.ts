@@ -880,9 +880,10 @@ export class MinimaxService {
       // 异步模式：需要轮询
       const taskId = data.task_id;
       if (!taskId) {
-        // 如果 music-01 不可用，尝试用 speech-02 生成背景音
-        console.warn('[Minimax] music-2.6 unavailable, trying speech synthesis as fallback...');
-        return await this.generateSpeechMusic(prompt, options?.duration || 30);
+        // v12.139(用户实测抓获):严禁再用 speech-02 念 prompt 冒充 BGM ——
+        // TTS 没有环境音能力,产出=男声朗读 prompt,与旁白叠成「重叠人声」。
+        // 直接抛错,上游(orchestrator)落「无 BGM + audioWarnings」诚实降级,成片干净。
+        throw new Error(`Minimax music 生成未返回音频/任务ID: ${JSON.stringify(data).slice(0, 160)}`);
       }
 
       console.log(`[Minimax] Music task created: ${taskId}`);
@@ -890,12 +891,8 @@ export class MinimaxService {
     } catch (error) {
       console.error('[Minimax] Music generation error:', error);
       _trackMinimaxError(error, 'music-2.6', 'generateMusic');
-      // 回退到语音合成模拟
-      try {
-        return await this.generateSpeechMusic(prompt, options?.duration || 30);
-      } catch {
-        throw error;
-      }
+      // v12.139:不再回退「TTS 念 prompt」——那不是音乐是念稿(用户实测重叠人声根因)。
+      throw error;
     }
   }
 
@@ -940,56 +937,6 @@ export class MinimaxService {
   }
 
   // 使用语音合成API作为配乐后备方案
-  private async generateSpeechMusic(prompt: string, duration: number): Promise<string> {
-    console.log(`[Minimax] Using T2A for ambient audio (fallback, duration hint=${duration}s)...`);
-
-    const body = {
-      model: 'speech-02-hd',
-      text: `[ambient music] ${prompt}`.slice(0, 500),
-      stream: false,
-      voice_setting: {
-        voice_id: 'male-qn-jingying',
-        speed: 0.8,
-        vol: 0.6,
-        pitch: -2,
-      },
-      audio_setting: {
-        sample_rate: 32000,
-        bitrate: 128000,
-        format: 'mp3',
-        channel: 1,
-      },
-    };
-
-    const response = await fetchWithTimeout(`${this.baseURL}/v1/t2a_v2`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    }, 60_000);
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(`Minimax T2A error: ${response.status}`);
-    }
-
-    const audioField = data.data?.audio;
-    if (typeof audioField === 'string' && audioField.length > 100 && /^[0-9a-fA-F]+$/.test(audioField.slice(0, 64))) {
-      return persistHexAudioToFile(audioField, 'mp3');
-    }
-
-    const audioUrl = data.data?.audio?.audio_url || data.audio_url || data.data?.audio_url;
-    if (audioUrl) return audioUrl;
-
-    if (data.data?.audio?.data) {
-      return `data:audio/mp3;base64,${data.data.audio.data}`;
-    }
-
-    throw new Error('Minimax T2A: no audio URL in response');
-  }
-
   // ═══ AI 配音（TTS 语音合成）═══
   // 使用 MiniMax Speech-02 模型生成角色配音/旁白
   async generateSpeech(text: string, options?: {
