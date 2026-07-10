@@ -60,6 +60,21 @@ const ROLE_PRESETS: Array<{
 
 const DEFAULT_SLOT: LockedCharacter = { name: '', role: 'lead', cw: 125, imageUrl: '' };
 
+/**
+ * v12.147(Agent Memory 深化):从角色库挑的角色填进第一个空槽(name 和 imageUrl 都空才算空)。
+ * 无空槽 → null(调用方提示先清一个)。纯函数便于单测。
+ */
+export function fillFirstEmptySlot(
+  slots: LockedCharacter[],
+  pick: { name: string; imageUrl: string; traits?: CharacterTraits },
+): { next: LockedCharacter[]; idx: number } | null {
+  const idx = slots.findIndex((s) => !s.name.trim() && !s.imageUrl);
+  if (idx === -1) return null;
+  const next = [...slots];
+  next[idx] = { ...next[idx], name: pick.name, imageUrl: pick.imageUrl, traits: pick.traits };
+  return { next, idx };
+}
+
 export function CharacterLockSection({ value, onChange }: Props) {
   // 始终内部维持 3 个槽位;onChange 时过滤掉空的(name 或 imageUrl 缺失)
   const [slots, setSlots] = useState<LockedCharacter[]>(() => {
@@ -94,6 +109,28 @@ export function CharacterLockSection({ value, onChange }: Props) {
     updateSlot(idx, { name: '', imageUrl: '' });
   };
 
+  // v12.147:从角色库带出(global_assets 跨项目记忆)—— 首次展开才拉取,零成本默认收起
+  const [libOpen, setLibOpen] = useState(false);
+  const [libAssets, setLibAssets] = useState<Array<{ id: string; name: string; thumbnail: string; metadata?: any }> | null>(null);
+  const [libHint, setLibHint] = useState('');
+  const toggleLibrary = async () => {
+    const opening = !libOpen;
+    setLibOpen(opening);
+    if (!opening || libAssets !== null) return;
+    try {
+      const res = await fetch('/api/global-assets?type=character&limit=12');
+      const data = await res.json();
+      setLibAssets(Array.isArray(data.assets) ? data.assets.filter((a: any) => a.thumbnail) : []);
+    } catch { setLibAssets([]); }
+  };
+  const pickFromLibrary = (a: { id: string; name: string; thumbnail: string; metadata?: any }) => {
+    const filled = fillFirstEmptySlot(slots, { name: a.name, imageUrl: a.thumbnail, traits: a.metadata?.traits });
+    if (!filled) { setLibHint('3 个槽位已满,先清空一个再带出'); return; }
+    setLibHint('');
+    setSlots(filled.next);
+    onChange(filled.next.filter(s => s.name.trim() && s.imageUrl));
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
@@ -109,6 +146,40 @@ export function CharacterLockSection({ value, onChange }: Props) {
           <span className="[.cinema-page_&]:hidden">🔒 上传后,该角色在全片所有镜头里脸都会锁定</span>
           <span className="hidden [.cinema-page_&]:inline">UP TO 3 · 全片锁脸</span>
         </span>
+      </div>
+      {/* v12.147:跨项目角色记忆 —— 一键把历史项目的角色带进锁脸槽 */}
+      <div>
+        <button
+          type="button"
+          onClick={toggleLibrary}
+          className="text-[11px] text-cyan-300/80 hover:text-cyan-200 transition-colors cinema-mono"
+          data-testid="char-library-toggle"
+        >
+          📚 从角色库带出{libOpen ? ' ▲' : ' ▼'}
+        </button>
+        {libOpen && (
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {libAssets === null ? (
+              <span className="text-[10px] text-gray-500">加载角色库…</span>
+            ) : libAssets.length === 0 ? (
+              <span className="text-[10px] text-gray-500">角色库还是空的 —— 在「角色工坊」里保存角色,或完片后手动入库,下次这里一键带出</span>
+            ) : (
+              libAssets.map((a) => (
+                <button key={a.id} type="button" onClick={() => pickFromLibrary(a)} title={`带出「${a.name}」`} className="shrink-0 text-center group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={a.thumbnail}
+                    alt={a.name}
+                    className="w-12 h-12 rounded-lg object-cover border border-white/10 group-hover:border-cyan-400/60 transition-colors"
+                    onError={(e) => { const b = e.currentTarget.closest('button'); if (b) (b as HTMLElement).style.display = 'none'; }}
+                  />
+                  <div className="text-[9px] text-gray-400 mt-0.5 max-w-12 truncate">{a.name}</div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+        {libHint && <div className="text-[10px] text-amber-400/80 mt-1">{libHint}</div>}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {slots.map((slot, idx) => (
