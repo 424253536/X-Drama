@@ -75,6 +75,57 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     });
   }
+
+  // ── v12.152:剧本册导出(md / pdf,零生图 API)──
+  const format = request.nextUrl.searchParams.get('format');
+  if (format === 'md' || format === 'pdf') {
+    const { pullSheetToMarkdown, buildScriptBookHtml } = await import('@/lib/script-export');
+    const meta = {
+      title: script?.title,
+      logline: typeof script?.logline === 'string' ? script.logline : undefined,
+      synopsis: typeof script?.synopsis === 'string' ? script.synopsis : undefined,
+      style: typeof script?.style === 'string' ? script.style : undefined,
+    };
+    if (format === 'md') {
+      return new NextResponse(pullSheetToMarkdown(sheet, meta), {
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="script-book-${encodeURIComponent(id)}.md"`,
+        },
+      });
+    }
+    // pdf:站内相对缩略图补全 origin(puppeteer setContent 下相对 URL 取不到)
+    const origin = request.nextUrl.origin;
+    const absSheet = {
+      ...sheet,
+      shots: sheet.shots.map((sh) => ({
+        ...sh,
+        thumbnail: sh.thumbnail && sh.thumbnail.startsWith('/') ? `${origin}${sh.thumbnail}` : sh.thumbnail,
+      })),
+    };
+    const html = buildScriptBookHtml(absSheet, meta);
+    try {
+      const puppeteer = (await import('puppeteer')).default;
+      // 优先系统 Chrome(本机开发环境惯例),没有再用 puppeteer 自带
+      const browser = await puppeteer.launch({ headless: true, channel: 'chrome' }).catch(() => puppeteer.launch({ headless: true }));
+      try {
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: 'load', timeout: 15_000 }).catch(() => {/* 图片慢加载不阻塞出册 */});
+        const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '12mm', left: '8mm', right: '8mm' } });
+        return new NextResponse(Buffer.from(pdf), {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="script-book-${encodeURIComponent(id)}.pdf"`,
+          },
+        });
+      } finally {
+        await browser.close().catch(() => {});
+      }
+    } catch (e) {
+      console.error('[pull-sheet] pdf render failed:', e);
+      return NextResponse.json({ message: `PDF 渲染失败:${e instanceof Error ? e.message.slice(0, 120) : ''}(可先用 md/csv 导出)` }, { status: 500 });
+    }
+  }
   return NextResponse.json(sheet);
 }
 

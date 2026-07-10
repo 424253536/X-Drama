@@ -118,6 +118,21 @@ export function PullSheetTable({ projectId }: { projectId: string }) {
         >
           <DownloadSimple className="w-3.5 h-3.5" />导出 CSV
         </a>
+        {/* v12.152:剧本册离线导出(Markdown / PDF,零生图 API) */}
+        <a
+          href={`/api/projects/${encodeURIComponent(projectId)}/pull-sheet?format=md`}
+          className="cinema-btn-ghost !text-[11px] !py-1 inline-flex items-center gap-1.5"
+          download
+        >
+          <DownloadSimple className="w-3.5 h-3.5" />剧本册 MD
+        </a>
+        <a
+          href={`/api/projects/${encodeURIComponent(projectId)}/pull-sheet?format=pdf`}
+          className="cinema-btn-ghost !text-[11px] !py-1 inline-flex items-center gap-1.5"
+          download
+        >
+          <DownloadSimple className="w-3.5 h-3.5" />剧本册 PDF
+        </a>
       </div>
 
       <SheetView sheet={sheet} />
