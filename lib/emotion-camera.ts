@@ -80,3 +80,17 @@ export function annotateCameraByEmotion(shots: EmotionCameraShot[]): string[] {
   }
   return notes;
 }
+
+/**
+ * 运镜 → Ken Burns 方向(v12.151):animatic 降级时静帧推拉方向跟随该镜运镜设计,
+ * 而不是机械轮换 —— 引擎全挂时降级片也保留镜头语言。归一不了 → null(调用方轮换兜底)。
+ */
+export function movementToKenBurns(movement: string | null | undefined): 'in' | 'out' | 'pan' | null {
+  const m = (movement || '').toLowerCase();
+  if (!m.trim()) return null;
+  if (/push|dolly[\s-]?in|zoom[\s-]?in|crane|pedestal|推|急推|升/.test(m)) return 'in';
+  if (/pull|dolly[\s-]?out|zoom[\s-]?out|拉远|后拉/.test(m)) return 'out';
+  if (/pan|truck|orbit|arc|handheld|whip|摇|移|环绕|跟拍/.test(m)) return 'pan';
+  if (/static|locked|固定|静止/.test(m)) return 'in'; // 纯静帧太死,static 给最轻的缓推
+  return null;
+}

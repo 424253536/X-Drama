@@ -3976,8 +3976,12 @@ ${shots.map((s, i) => {
             continue;
           }
           try {
-            // 推拉方向轮换:让连续静帧不至于都是同一种运动
-            const dir: 'in' | 'out' | 'pan' = (['in', 'out', 'pan'] as const)[i % 3];
+            // v12.151:方向优先跟随该镜运镜设计(与 v12.146 情绪运镜联动,降级片也有镜头语言);
+            // 无运镜/归一失败 → 原轮换兜底(连续静帧不至于同一种运动)。
+            const { movementToKenBurns } = await import('@/lib/emotion-camera');
+            const shotMove = (script as any)?.shots?.find((sh: any) => sh.shotNumber === fv.shotNumber)?.cameraMovement;
+            const dir: 'in' | 'out' | 'pan' = movementToKenBurns(shotMove)
+              ?? (['in', 'out', 'pan'] as const)[i % 3];
             const localMp4 = await stillFrameToVideo(stillImage, fv.duration || 8, undefined, dir);
             fv.videoUrl = `/api/serve-file?path=${encodeURIComponent(localMp4)}`;
             (fv as any).isAnimatic = true;
