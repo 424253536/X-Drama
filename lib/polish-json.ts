@@ -66,8 +66,99 @@ export function robustJsonParse(raw: string): any | null {
     }
   } catch {}
 
+  // ── v12.148 Tier 3.7: 内容裸引号转义 —— Tier 2.5 的全角→ASCII 引号替换会把
+  // 中文正文里的“成对引号”变成裸 ASCII 引号(提前终止字符串,整包炸)。启发式:
+  // 字符串内遇 '"' 且后面第一个非空白字符不是 , } ] :(不像合法闭合)→ 视为内容引号转义。
+  const quoteFixed = escapeUnescapedQuotes(fixed);
+  try {
+    const v = JSON.parse(quoteFixed);
+    if (v && typeof v === 'object') return v;
+  } catch {}
+
+  // ── v12.148 Tier 3.8: 截断补全 —— LLM 输出超长被腰斩(如 Writer 23KB 剧本在字符串
+  // 中间断掉)时,回退到最后一个结构安全点、按括号栈补闭合,救回完整前缀。
+  // 此前这种情况 4 级全败 → 整包好剧本被扔掉换模板兜底(占位「镜头N」),损失极大。
+  try {
+    const completed = completeTruncatedJson(quoteFixed);
+    if (completed) {
+      const v = JSON.parse(completed);
+      if (v && typeof v === 'object') return v;
+    }
+  } catch {}
+
   // ── Tier 4: 正则硬抽
   return extractFieldsByRegex(candidate);
+}
+
+/**
+ * 字符串内容里的未转义 ASCII 引号 → \"(v12.148 Tier 3.7)。
+ * 判定:inString 时遇 '"',窥探其后第一个非空白字符 —— 是 , } ] : 或 EOF 则视为
+ * 合法闭合;否则视为正文引号,转义后保持 inString。对已转义的 \" 不动。
+ */
+export function escapeUnescapedQuotes(s: string): string {
+  let out = '';
+  let inString = false, escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) { out += c; escaped = false; continue; }
+    if (c === '\\' && inString) { out += c; escaped = true; continue; }
+    if (c === '"') {
+      if (!inString) { inString = true; out += c; continue; }
+      let j = i + 1;
+      while (j < s.length && (s[j] === ' ' || s[j] === '\t' || s[j] === '\n' || s[j] === '\r')) j++;
+      const n = j < s.length ? s[j] : '';
+      // 逗号还要再窥一位:内容引号后恰好跟逗号(『他说"你是谁",然后…』)会伪装成闭合 ——
+      // 逗号之后若不是「新 key/新值的开始」("、数字、-、{、[、t/f/n)则仍是内容引号。
+      let closes = n === '}' || n === ']' || n === ':' || n === '';
+      if (n === ',') {
+        let k = j + 1;
+        while (k < s.length && (s[k] === ' ' || s[k] === '\t' || s[k] === '\n' || s[k] === '\r')) k++;
+        const n2 = k < s.length ? s[k] : '';
+        closes = n2 === '"' || n2 === '{' || n2 === '[' || n2 === '-' || (n2 >= '0' && n2 <= '9') || n2 === 't' || n2 === 'f' || n2 === 'n' || n2 === '';
+      }
+      if (closes) { inString = false; out += c; }
+      else { out += '\\"'; } // 内容引号:转义,保持在字符串内
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * 截断 JSON 补全:收集所有「结构安全点」(字符串外的 ',' 与 '}' ']'),从最后一个
+ * 往前逐个尝试 —— 截到该点、去尾部悬空逗号、按当时括号栈补闭合、strict parse。
+ * 首个 parse 成功的返回;全败/本就完整(栈空)→ null。
+ * 尝试点上限 24:安全点位于长文本 JSON 的密集尾部,24 个足够跨过残缺的最后一个对象。
+ */
+export function completeTruncatedJson(s: string, maxAttempts = 24): string | null {
+  const start = s.indexOf('{');
+  if (start === -1) return null;
+  const candidates: Array<{ idx: number; stack: string[] }> = [];
+  const stack: string[] = [];
+  let inString = false, escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\' && inString) { escaped = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{') stack.push('}');
+    else if (c === '[') stack.push(']');
+    else if (c === '}' || c === ']') { stack.pop(); candidates.push({ idx: i, stack: [...stack] }); }
+    else if (c === ',') candidates.push({ idx: i - 1, stack: [...stack] }); // 截到逗号前一位
+  }
+  if (stack.length === 0 && !inString) return null; // 结构本就平衡,轮不到本级
+  for (let k = candidates.length - 1, tried = 0; k >= 0 && tried < maxAttempts; k--, tried++) {
+    const { idx, stack: st } = candidates[k];
+    const head = s.slice(start, idx + 1).replace(/,\s*$/, '');
+    const attempt = head + [...st].reverse().join('');
+    try {
+      const v = JSON.parse(attempt);
+      if (v && typeof v === 'object') return attempt;
+    } catch { /* 下一个候选点 */ }
+  }
+  return null;
 }
 
 /**

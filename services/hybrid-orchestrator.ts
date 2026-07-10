@@ -1232,7 +1232,11 @@ export class HybridOrchestrator {
           // v12.140(P0-3):有参考图先走 i2i(角色/草图参考直达);网关拒 image 字段自动退纯 t2i
           if (hasRefImages && validRefs.length > 0 && process.env.SEEDREAM_I2I_DISABLE !== '1') {
             try {
-              return await apiImage(sm, qytBase, qytKey, size, validRefs.slice(0, 4));
+              const u = await apiImage(sm, qytBase, qytKey, size, validRefs.slice(0, 4));
+              // v12.148:seedream i2i 输出跟随参考图尺寸、忽略 size(实测 9:16 项目出 2848x1600)
+              // —— 画幅守门:漂移则中央 cover 裁切到目标,失败原图透传。
+              const { ensureImageAspect } = await import('@/lib/image-aspect-guard');
+              return await ensureImageAspect(u, opts?.aspectRatio || '16:9', label);
             } catch (e) {
               console.warn(`[ImageRouter] seedream i2i 失败,退回 t2i:`, e instanceof Error ? e.message.slice(0, 80) : e);
             }
@@ -3915,7 +3919,9 @@ ${shots.map((s, i) => {
             // 仍排在 Ken Burns 静帧之前,保证只在所有真视频引擎都失败时才掉到 animatic。
             if (this.minimaxService?.isVideoAvailable()) passBEngines.push({
               name: 'Minimax-Hailuo-Fast',
-              gen: () => this.minimaxService!.generateVideoFast(t2vPrompt, { duration: 5 }),
+              // v12.148:Fast 已是 i2v-only(纯文生 2013)—— Pass-A 的首帧仍在作用域,带上;
+              // 无首帧时仍纯文生(诚实失败进 Kling/Ken Burns)。
+              gen: () => this.minimaxService!.generateVideoFast(t2vPrompt, { duration: 5, firstFrameImage: retryFirstFrame || undefined }),
             });
             if (this.klingService) passBEngines.push({
               name: 'Kling-T2V',

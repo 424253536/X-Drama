@@ -280,7 +280,7 @@ export class MinimaxService {
       if (!options?._noFastFallback && isMinimaxVideoQuotaError(emsg)) {
         console.warn(`[Minimax] 标准版视频额度用尽 — 自动路由到 Fast 版 (独立额度): ${emsg.slice(0, 80)}`);
         try {
-          return await this.generateVideoFast(prompt, { duration: options?.duration });
+          return await this.generateVideoFast(prompt, { duration: options?.duration, firstFrameImage: imageUrl || undefined });
         } catch (fastErr) {
           console.warn('[Minimax] Fast 版兜底也失败:', fastErr instanceof Error ? fastErr.message : fastErr);
         }
@@ -304,7 +304,7 @@ export class MinimaxService {
    * 'MiniMax-Hailuo-2.3-Fast'(纯文生,不支持 first_frame)。
    * ═══════════════════════════════════════════════════════
    */
-  async generateVideoFast(prompt: string, options?: { duration?: number; _retryCount?: number }): Promise<string> {
+  async generateVideoFast(prompt: string, options?: { duration?: number; _retryCount?: number; firstFrameImage?: string }): Promise<string> {
     if (!this.videoEndpointAvailable) {
       throw new Error(
         `Minimax video endpoint unavailable on baseURL "${this.baseURL}" — ` +
@@ -330,6 +330,9 @@ export class MinimaxService {
           model,
           prompt: effectivePrompt,
           prompt_optimizer: true,
+          // v12.148:平台已把 Hailuo-2.3-Fast 改为 i2v-only(纯文生报 2013 invalid params)
+          // —— 有首帧必带;没有仍发纯文生(留给未来 t2v 模型,当前会诚实失败进下一档)。
+          ...(options?.firstFrameImage ? { first_frame_image: options.firstFrameImage } : {}),
         }),
       });
 
