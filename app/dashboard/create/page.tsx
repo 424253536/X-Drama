@@ -499,6 +499,16 @@ export default function DashboardCreatePage() {
         break;
       }
 
+      case 'storyboardSketch': {
+        // v12.144(草图锁全片模式):每镜构图草图 → 存资产,分镜面板显示草图缩略
+        const sk = data as { shotNumber?: number; sketchUrl?: string };
+        if (sk?.shotNumber && sk?.sketchUrl) {
+          s.addAsset({ id: `asset-sksk-${Date.now()}-${sk.shotNumber}`, projectId, type: 'storyboard-sketch', name: `Shot ${sk.shotNumber} 草图`, data: {}, mediaUrls: [sk.sketchUrl], shotNumber: sk.shotNumber, version: 1, createdAt: ts, updatedAt: ts });
+          refreshNodeAssets();
+        }
+        break;
+      }
+
       case 'storyboards': {
         // 第2阶段：渲染完成的分镜图，更新已有的分镜资产
         const existing = s.assets.filter(a => a.type === 'storyboard');
@@ -623,7 +633,7 @@ export default function DashboardCreatePage() {
       'node-writer': ['script', 'character'],
       'node-character': ['character'],
       'node-scene': ['scene'],
-      'node-storyboard': ['storyboard'],
+      'node-storyboard': ['storyboard', 'storyboard-sketch'], // v12.144 面板含草图
       'node-video': ['video'],
       'node-editor': ['timeline', 'final_video', 'music'],
     };

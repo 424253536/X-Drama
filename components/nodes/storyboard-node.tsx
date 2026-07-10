@@ -15,6 +15,12 @@ const CAMERA_ICONS: Record<string, string> = {
 function StoryboardNodeComponent({ data }: NodeProps) {
   const d = data as unknown as PipelineNodeData;
   const storyboards = d.assets?.filter(a => a.type === 'storyboard') || [];
+  // v12.144:分镜面板 —— 同镜草图(草图锁模式产出)按 shotNumber 关联,卡内并排展示
+  const sketchByShot = new Map<number, string>(
+    (d.assets?.filter(a => a.type === 'storyboard-sketch') || [])
+      .map(a => [a.shotNumber as number, a.mediaUrls?.[0] || ''])
+      .filter(([, u]) => !!u) as Array<[number, string]>,
+  );
   // v12.10.0(#2):逐秒 beat 来自剧本 shot(Writer 已产出),按 shotNumber 关联到分镜卡,
   // 让分镜「精确到第几秒是什么内容」可见。
   const scriptShots: any[] = (d.assets?.find(a => a.type === 'script')?.data as any)?.shots || [];
@@ -72,6 +78,20 @@ function StoryboardNodeComponent({ data }: NodeProps) {
                     </span>
                   )}
                 </div>
+
+                {/* v12.144 分镜面板:分镜图 + 构图草图并排(有图才显示;此前纯文字卡) */}
+                {(sb.mediaUrls?.[0] || sketchByShot.get(sb.shotNumber as number)) && (
+                  <div className="flex gap-1.5 mb-1.5">
+                    {sb.mediaUrls?.[0] && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={sb.mediaUrls[0]} alt={`Shot ${sb.shotNumber}`} className="h-20 rounded-lg border border-white/10 object-cover flex-1 min-w-0" />
+                    )}
+                    {sketchByShot.get(sb.shotNumber as number) && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={sketchByShot.get(sb.shotNumber as number)} alt="构图草图" title="构图草图(草图锁)" className="h-20 w-14 rounded-lg border border-cyan-500/30 object-cover shrink-0 opacity-80" />
+                    )}
+                  </div>
+                )}
 
                 {/* Text description */}
                 <div className="text-[11px] text-gray-300 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all">

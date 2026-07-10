@@ -266,7 +266,7 @@ export interface ChatMessage {
 }
 
 // 项目资产
-export type AssetType = 'character' | 'scene' | 'storyboard' | 'video' | 'script' | 'music' | 'final_video' | 'timeline';
+export type AssetType = 'character' | 'scene' | 'storyboard' | 'video' | 'script' | 'music' | 'final_video' | 'timeline' | 'storyboard-sketch'; // v12.144 构图草图(草图锁)
 
 export interface ProjectAsset {
   id: string;
