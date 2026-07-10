@@ -1061,7 +1061,7 @@ export class HybridOrchestrator {
     const qytBase = API_CONFIG.qingyuntop.baseURL;
 
     // vectorengine / qingyuntop 通用 OpenAI 兼容图片生成
-    const apiImage = async (model: string, apiBase: string, apiKey: string, size?: string): Promise<string> => {
+    const apiImage = async (model: string, apiBase: string, apiKey: string, size?: string, i2iRefs?: string[]): Promise<string> => {
       const sizeMap: Record<string, Record<string, string>> = {
         'flux.1-kontext-pro': { '16:9': '1024x1024', '9:16': '1024x1024', '1:1': '1024x1024' },
       };
@@ -1072,10 +1072,13 @@ export class HybridOrchestrator {
       if (isGatewayOutOfCredits(apiBase)) throw new Error(`${gateway} 配额耗尽(跳过 ${model})`);
       console.log(`[ImageRouter] → ${gateway} ${model} (${finalSize}) for: ${label}`);
 
+      // v12.140(P0-3):doubao-seedream 系支持 i2i(image 参考图数组)—— 带 refs 时附上,
+      // 角色/草图参考直达 seedream 档(此前该档纯 t2i,一致性靠 prompt 文本)。
+      const i2iBody = i2iRefs && i2iRefs.length > 0 ? { image: i2iRefs.length === 1 ? i2iRefs[0] : i2iRefs } : {};
       const res = await fetch(`${apiBase}/v1/images/generations`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt, n: 1, size: finalSize }),
+        body: JSON.stringify({ model, prompt, n: 1, size: finalSize, ...i2iBody }),
         signal: AbortSignal.timeout(90_000),
       });
 
@@ -1222,6 +1225,14 @@ export class HybridOrchestrator {
           if (!qytKey) throw new Error('no qingyuntop key for seedream');
           const sm = process.env.IMAGE_SEEDREAM_MODEL || 'doubao-seedream-4-5-251128';
           const size = opts?.aspectRatio === '9:16' ? '720x1280' : opts?.aspectRatio === '1:1' ? '1024x1024' : '1280x720';
+          // v12.140(P0-3):有参考图先走 i2i(角色/草图参考直达);网关拒 image 字段自动退纯 t2i
+          if (hasRefImages && validRefs.length > 0 && process.env.SEEDREAM_I2I_DISABLE !== '1') {
+            try {
+              return await apiImage(sm, qytBase, qytKey, size, validRefs.slice(0, 4));
+            } catch (e) {
+              console.warn(`[ImageRouter] seedream i2i 失败,退回 t2i:`, e instanceof Error ? e.message.slice(0, 80) : e);
+            }
+          }
           return await apiImage(sm, qytBase, qytKey, size);
         }
       }

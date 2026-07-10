@@ -59,3 +59,13 @@ describe('v12.133 · falFlux 一等参考图引擎', () => {
     expect(c[c.length - 1]).toBe('seedream');
   });
 });
+
+describe('v12.140 · seedream i2i(P0-3)', () => {
+  it('源码接线锁:seedream 档带参考图走 i2i,失败退 t2i,env 可关', async () => {
+    const fs = await import('fs');
+    const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    expect(src).toContain("SEEDREAM_I2I_DISABLE");
+    expect(src).toContain('seedream i2i 失败,退回 t2i');
+    expect(src).toMatch(/i2iRefs && i2iRefs\.length > 0 \? \{ image:/);
+  });
+});
