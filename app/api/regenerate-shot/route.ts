@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  *   - stage: 'video' | 'editor' | 'storyboard' 等，重新执行某个阶段
  */
 export async function POST(request: NextRequest) {
-  const { projectId, shotNumber, stage, videoProvider, cameraMovement } = await request.json();
+  const { projectId, shotNumber, stage, videoProvider, cameraMovement, dryRun } = await request.json();
 
   if (!projectId) {
     return new Response(JSON.stringify({ error: '缺少 projectId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -103,19 +103,30 @@ export async function POST(request: NextRequest) {
         // 识别:video 资产 data.isAnimatic === true(Ken Burns 降级)或 mediaUrls 为空。
         // 逐镜重生(分镜图优先作首帧)→ 成功即更新资产;有成功镜则自动重做 editor 合成。
         if (stage === 'failed-videos' && !shotNumber) {
-          const videoAssets = db.prepare(
-            'SELECT * FROM project_assets WHERE project_id = ? AND type = ? ORDER BY shot_number'
-          ).all(projectId, 'video') as any[];
+          // v12.153 修正:走 asset-repo(双驱动)—— db.prepare 直查 sqlite 在双驱动环境读 0 行,
+          // 同一项目 health API(asset-repo)能识别 4 降级镜而本分支识别 0(live 实测抓到)。
+          const { listAssetsByType } = await import('@/lib/repos/asset-repo');
+          const videoAssets = await listAssetsByType(projectId, 'video') as any[];
           const isDegraded = (a: any) => {
             try {
               const d = JSON.parse(a.data || '{}');
               const urls = JSON.parse(a.media_urls || '[]');
-              // isAnimatic 标记 v12.150 才落库 —— 旧项目兜底认 Ken Burns 产物文件名(animatic-<ts>.mp4)
-              return d.isAnimatic === true || !urls[0] || /animatic-\d+\.mp4/.test(String(urls[0]));
+              // isAnimatic 标记 v12.150 才落库 —— 旧项目兜底认 Ken Burns 产物文件名。
+              // 注意 persistent_url 会被洗成 ?key=hash(无文件名特征),原始 media_urls[0] 常保留
+              // ?path=...animatic-<ts>.mp4 —— 两个都测,任一命中即认降级。
+              const candidates = [a.persistent_url, urls[0]].map((x) => String(x || ''));
+              return d.isAnimatic === true || candidates.every((x) => !x) || candidates.some((x) => /animatic-\d+\.mp4/.test(x));
             } catch { return false; }
           };
           const targets = videoAssets.filter(isDegraded);
           send('batchStart', { total: targets.length, shots: targets.map((a) => a.shot_number) });
+          // dryRun:只回识别清单不真跑(UI 预览/验证用)
+          if ((await Promise.resolve(dryRun)) === true) {
+            send('batchDone', { total: targets.length, ok: 0, fail: 0, dryRun: true });
+            send('regenerateDone', { projectId });
+            controller.close();
+            return;
+          }
           if (targets.length === 0) {
             send('status', { message: '没有失败/降级镜头,无需补渲 ✅' });
           }
@@ -125,12 +136,9 @@ export async function POST(request: NextRequest) {
             const sn = asset.shot_number;
             send('status', { message: `补渲镜头 ${sn}(${okCount + 1}/${targets.length})...` });
             try {
-              const sbAsset = db.prepare(
-                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? AND shot_number = ?'
-              ).get(projectId, 'storyboard', sn) as any;
-              const sceneAsset = db.prepare(
-                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? LIMIT 1'
-              ).get(projectId, 'scene') as any;
+              const sbAll = await listAssetsByType(projectId, 'storyboard') as any[];
+              const sbAsset = sbAll.find((x) => x.shot_number === sn);
+              const sceneAsset = ((await listAssetsByType(projectId, 'scene')) as any[])[0];
               const pick = (a: any) => a ? (a.persistent_url || JSON.parse(a.media_urls || '[]')[0] || '') : '';
               const storyboard = {
                 shotNumber: sn,
@@ -159,9 +167,8 @@ export async function POST(request: NextRequest) {
             try {
               const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
               const scriptData = project?.script_data ? JSON.parse(project.script_data) : null;
-              const freshVideos = (db.prepare(
-                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? ORDER BY shot_number'
-              ).all(projectId, 'video') as any[]).map((a: any) => ({
+              const freshRows = (await listAssetsByType(projectId, 'video')) as any[];
+              const freshVideos = freshRows.sort((a, b) => (a.shot_number ?? 0) - (b.shot_number ?? 0)).map((a: any) => ({
                 shotNumber: a.shot_number,
                 videoUrl: a.persistent_url || JSON.parse(a.media_urls || '[]')[0] || '',
                 duration: JSON.parse(a.data || '{}').duration || 8,

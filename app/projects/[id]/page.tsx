@@ -102,8 +102,22 @@ export default function ProjectDetailPage() {
     }
     return { className: `w-full object-contain bg-black ${mainFrameClass}` }; // 回退:项目比例框,但 object-contain 不变形
   };
+  // v12.153 成片全维体检(ffprobe:画幅/时长/帧率/码率/音轨/镜头完整度/降级镜)
+  const [healthReport, setHealthReport] = useState<{ overall: string; items: Array<{ key: string; label: string; status: string; detail: string }>; animaticShots?: number[] } | null>(null);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const loadHealth = async () => {
+    try {
+      const d = await fetch(`/api/projects/${id}/health`).then((r) => r.json());
+      if (Array.isArray(d.items)) setHealthReport(d);
+    } catch { /* 拉不到不打扰 */ }
+  };
   // v12.1.1 成片音频体检
   const [audioCheck, setAudioCheck] = useState<{ audible: boolean; label: string; hasAudioStream: boolean | null; healed: boolean } | null>(null);
+  // v12.153:videos tab 激活拉体检(降级镜识别权威来源;play tab 面板也复用)
+  useEffect(() => {
+    if ((activeTab === 'videos' || activeTab === 'play') && !healthReport) void loadHealth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
   useEffect(() => {
     if (activeTab !== 'play') return;
     let alive = true;
@@ -829,7 +843,9 @@ export default function ProjectDetailPage() {
             )}
             {/* v12.150:失败/降级镜头批量补渲(isAnimatic 降级或无视频的镜;余额恢复后一键补) */}
             {(() => {
-              const degraded = videos.filter((v: any) => v?.data?.isAnimatic === true || !v?.mediaUrls?.[0] || /animatic-\d+\.mp4/.test(String(v?.mediaUrls?.[0] || '')));
+              // 本地识别 ∪ 体检报告(persistent_url 洗成 ?key=hash 后本地正则失效,服务端 health 才是权威)
+              const healthAnimatic = new Set(healthReport?.animaticShots || []);
+              const degraded = videos.filter((v: any) => v?.data?.isAnimatic === true || !v?.mediaUrls?.[0] || /animatic-\d+\.mp4/.test(String(v?.mediaUrls?.[0] || '')) || healthAnimatic.has(v?.shotNumber));
               if (degraded.length === 0 && !rerenderMsg) return null;
               return (
                 <div className="mb-3 flex items-center gap-3 flex-wrap" data-testid="batch-rerender-bar">
@@ -1037,6 +1053,31 @@ export default function ProjectDetailPage() {
           {/* 完整播放 */}
           {activeTab === 'play' && (
             <div>
+              {/* v12.153:成片全维体检(点开才 ffprobe,红黄绿逐维) */}
+              <div className="mb-3" data-testid="film-health-panel">
+                <button
+                  type="button"
+                  onClick={() => { const opening = !healthOpen; setHealthOpen(opening); if (opening && !healthReport) void loadHealth(); }}
+                  className="cinema-btn-ghost !text-[11px] !py-1"
+                >
+                  🩺 成片体检 {healthReport ? ({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[healthReport.overall] || '' : ''}{healthOpen ? ' ▲' : ' ▼'}
+                </button>
+                {healthOpen && (
+                  <div className="mt-2 cinema-card p-3 space-y-1.5">
+                    {!healthReport && <div className="cinema-mono text-[10px] opacity-60">探测中…</div>}
+                    {healthReport?.items.map((it) => (
+                      <div key={it.key} className="flex items-start gap-2 text-[11px]">
+                        <span className="shrink-0">{({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[it.status] || '⚪'}</span>
+                        <span className="shrink-0 font-medium w-16">{it.label}</span>
+                        <span className="opacity-70 min-w-0">{it.detail}</span>
+                      </div>
+                    ))}
+                    {healthReport && (
+                      <button type="button" onClick={() => void loadHealth()} className="cinema-mono text-[10px] opacity-50 hover:opacity-90">↻ 重新体检</button>
+                    )}
+                  </div>
+                )}
+              </div>
               {audioCheck && (
                 <div className="mb-3 flex items-center gap-2 text-[12px]" data-testid="final-audio-badge">
                   <span className={`cinema-chip ${audioCheck.audible ? 'cinema-chip-green' : 'cinema-chip-amber'}`}>

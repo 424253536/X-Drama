@@ -8,7 +8,7 @@ describe('v12.150 · 批量补渲', () => {
   it('API:failed-videos 分支(识别含 URL 兜底)+ 成功后自动重合成 + 原 stage 分支互斥', () => {
     const src = fs.readFileSync('app/api/regenerate-shot/route.ts', 'utf-8');
     expect(src).toContain("stage === 'failed-videos' && !shotNumber");
-    expect(src).toContain('d.isAnimatic === true || !urls[0] || /animatic-');
+    expect(src).toContain('candidates.some((x) => /animatic-'); // v12.153 修正:双 URL 测(persistent_url 被洗成 ?key= 后仍认得出)
     expect(src).toContain("send('batchDone'");
     expect(src).toContain('runEditor(freshVideos, scriptData)');
     expect(src).toContain("stage !== 'failed-videos'"); // 不落进旧阶段分支
