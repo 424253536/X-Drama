@@ -23,6 +23,41 @@ export default function SeriesPanel() {
   const params = useParams();
   const seriesId = String(params?.id || '');
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  // v12.155:逐集体检(后台拉,徽章渐进);全季补渲(逐集调 failed-videos,串行防抢引擎额度)
+  const [healthMap, setHealthMap] = useState<Record<string, any> | null>(null);
+  const [seasonFixBusy, setSeasonFixBusy] = useState(false);
+  const [seasonFixMsg, setSeasonFixMsg] = useState('');
+  const loadSeriesHealth = useCallback(async () => {
+    try {
+      const d = await fetch(`/api/series/${encodeURIComponent(seriesId)}/health`).then((r) => r.json());
+      if (Array.isArray(d.episodes)) {
+        const map: Record<string, any> = {};
+        for (const e of d.episodes) map[e.projectId] = e;
+        setHealthMap(map);
+      }
+    } catch { /* 徽章缺席不阻塞 */ }
+  }, [seriesId]);
+  useEffect(() => { void loadSeriesHealth(); }, [loadSeriesHealth]);
+  const seasonFixAll = async () => {
+    if (seasonFixBusy || !healthMap) return;
+    setSeasonFixBusy(true);
+    const targets = Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0);
+    let done = 0;
+    for (const h of targets as any[]) {
+      setSeasonFixMsg(`第 ${h.episodeNumber ?? '?'} 集补渲中(${done + 1}/${targets.length})…`);
+      try {
+        await fetch('/api/regenerate-shot', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: h.projectId, stage: 'failed-videos' }),
+        }).then((r) => r.body?.getReader && new Response(r.body).text());
+      } catch { /* 单集失败继续下一集 */ }
+      done++;
+    }
+    setSeasonFixMsg(`全季补渲完成(${done} 集),重新体检…`);
+    await loadSeriesHealth();
+    setSeasonFixMsg('');
+    setSeasonFixBusy(false);
+  };
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>('');
@@ -181,6 +216,20 @@ export default function SeriesPanel() {
         </div>
       </div>
 
+      {/* v12.155:系列质量中枢 —— 逐集体检徽章 + 全季一键补渲降级镜 */}
+      {healthMap && Object.values(healthMap).some((h: any) => h.animaticShots?.length > 0) && (
+        <div className="mb-3 flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            disabled={seasonFixBusy}
+            onClick={() => void seasonFixAll()}
+            className="text-[11px] px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
+          >
+            {seasonFixBusy ? '⏳ 全季补渲中…' : `⚡ 全季补渲降级镜(${Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0).length} 集受影响)`}
+          </button>
+          {seasonFixMsg && <span className="text-[10px] text-gray-400 font-mono">{seasonFixMsg}</span>}
+        </div>
+      )}
       {loading ? (
         <div className="text-center py-12 text-gray-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline mr-2" />加载中…</div>
       ) : episodes.length === 0 ? (
@@ -194,6 +243,16 @@ export default function SeriesPanel() {
                 <span className="text-cyan-400 font-bold text-sm w-12 shrink-0">第{ep.episode_number ?? '?'}集</span>
                 <span className="flex-1 text-sm text-white truncate">{ep.title}</span>
                 {ep.aspect && <span className="text-[10px] text-gray-500 font-mono">{ep.aspect}</span>}
+                {/* v12.155:该集体检徽章(🟢🟡🔴;降级镜数一眼可见) */}
+                {healthMap?.[ep.id] && (
+                  <span
+                    className="text-[11px]"
+                    title={[...(healthMap[ep.id].failItems || []), ...(healthMap[ep.id].warnItems || [])].join(' · ') || '体检全绿'}
+                  >
+                    {({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[healthMap[ep.id].overall] || '⚪'}
+                    {healthMap[ep.id].animaticShots?.length > 0 && <span className="text-amber-400/80 ml-0.5">{healthMap[ep.id].animaticShots.length}镜降级</span>}
+                  </span>
+                )}
                 <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border ${st.cls}`}>
                   {ep.status === 'active' && <Loader2 className="w-3 h-3 animate-spin" />}
                   {ep.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}

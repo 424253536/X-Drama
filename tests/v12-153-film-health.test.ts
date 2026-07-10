@@ -32,9 +32,11 @@ describe('v12.153 · buildFilmHealthReport', () => {
     expect(buildFilmHealthReport({ finalProbe: null, hasFinalAsset: true, projectAspect: '9:16', expectedDurationSec: null, shotTotal: 0, shotWithVideo: 0, animaticShots: [] }).overall).toBe('unknown');
   });
   it('接线锁:health API(asset-repo + animaticShots 外挂)+ play/videos tab 面板与按钮', () => {
-    const api = fs.readFileSync('app/api/projects/[id]/health/route.ts', 'utf-8');
-    expect(api).toContain('listAssetsByType');
-    expect(api).toContain('animaticShots, probedAt');
+    // v12.155:取数抽到 film-health-io(asset-repo/animaticShots 断言随迁)
+    const io = fs.readFileSync('lib/film-health-io.ts', 'utf-8');
+    expect(io).toContain('listAssetsByType');
+    expect(io).toContain('animaticShots');
+    expect(fs.readFileSync('app/api/projects/[id]/health/route.ts', 'utf-8')).toContain('buildProjectHealth');
     const ui = fs.readFileSync('app/projects/[id]/page.tsx', 'utf-8');
     expect(ui).toContain('film-health-panel');
     expect(ui).toContain('healthAnimatic.has(v?.shotNumber)');
