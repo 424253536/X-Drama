@@ -5164,28 +5164,41 @@ ${characterBibleBlock}${producerContext}
       subjectReferenceUrl: this.primaryCharacterRef || undefined,
       subjectReferences: subjectRefs.length > 0 ? subjectRefs : undefined,
     };
-    if (useVeo) {
+    // v12.154:首帧过引擎通道 —— 站内 serve-file/过期风险 URL 转 base64(MiniMax/Kling 官方均收);
+    // 转不了(无本地文件)保持原 URL 让引擎自取,失败自然进下一档。
+    const { toEngineImage } = await import('@/lib/first-frame');
+    const engineFrame = toEngineImage(storyboard.imageUrl) || storyboard.imageUrl;
+    const duration = options?.duration || 8;
+
+    // v12.154:真引擎链 Veo → MiniMax → Kling(此前无 Kling;且末档把分镜图当视频谎报 completed)
+    const attempts: Array<{ name: string; gen: () => Promise<string> }> = [];
+    if (useVeo) attempts.push({ name: 'Veo', gen: () => this.veoService!.generateVideo(engineFrame, storyboard.prompt, { duration, aspectRatio: this.videoAspect() }) });
+    if (this.minimaxService) attempts.push({ name: 'Minimax', gen: () => this.minimaxService!.generateVideo(engineFrame, storyboard.prompt, minimaxOpts) });
+    if (this.klingService) attempts.push({ name: 'Kling', gen: () => this.klingService!.generateVideo(engineFrame, storyboard.prompt, { duration: Math.min(duration, 10), aspectRatio: this.videoAspect() as any }) });
+
+    let isAnimatic = false;
+    videoUrl = '';
+    for (const a of attempts) {
       try {
-        videoUrl = await this.veoService!.generateVideo(storyboard.imageUrl, storyboard.prompt, { duration: options?.duration || 8, aspectRatio: this.videoAspect() });
+        videoUrl = await a.gen();
+        if (videoUrl && /^(https?:|\/api\/serve-file)/.test(videoUrl)) { console.log(`[Regenerate] Shot ${shotNumber} ✅ ${a.name}`); break; }
+        videoUrl = '';
       } catch (e) {
-        console.error(`[Regenerate] Veo failed for shot ${shotNumber}:`, e);
-        // Fallback to Minimax
-        if (this.minimaxService) {
-          try { videoUrl = await this.minimaxService.generateVideo(storyboard.imageUrl, storyboard.prompt, minimaxOpts); }
-          catch { videoUrl = storyboard.imageUrl; }
-        } else {
-          videoUrl = storyboard.imageUrl;
-        }
+        console.error(`[Regenerate] ${a.name} failed for shot ${shotNumber}:`, e instanceof Error ? e.message.slice(0, 100) : e);
       }
-    } else if (this.minimaxService) {
-      try { videoUrl = await this.minimaxService.generateVideo(storyboard.imageUrl, storyboard.prompt, minimaxOpts); }
-      catch { videoUrl = storyboard.imageUrl; }
-    } else {
-      await sleep(2000);
-      videoUrl = mockSvg(640, 360, '#6b21a8', '#ec4899', `Shot ${shotNumber} v2`);
+    }
+    if (!videoUrl) {
+      // 末档:Ken Burns animatic(真视频文件 + 如实标降级),方向跟随该镜运镜(v12.151)
+      const { stillFrameToVideo } = await import('./video-composer');
+      const { movementToKenBurns } = await import('@/lib/emotion-camera');
+      const dir = movementToKenBurns((storyboard as any).cameraMovement || storyboard.prompt) ?? 'in';
+      const localMp4 = await stillFrameToVideo(storyboard.imageUrl, duration, undefined, dir);
+      videoUrl = `/api/serve-file?path=${encodeURIComponent(localMp4)}`;
+      isAnimatic = true;
+      console.warn(`[Regenerate] Shot ${shotNumber} 所有引擎失败 → Ken Burns animatic(${dir})`);
     }
     this.update(AgentRole.VIDEO_PRODUCER, { status: 'completed', progress: 100 });
-    return { shotNumber, videoUrl, duration: options?.duration || 8, status: 'completed' };
+    return { shotNumber, videoUrl, duration, status: 'completed', isAnimatic } as VideoClip & { isAnimatic: boolean };
   }
 
   /**

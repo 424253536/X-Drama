@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  *   - stage: 'video' | 'editor' | 'storyboard' 等，重新执行某个阶段
  */
 export async function POST(request: NextRequest) {
-  const { projectId, shotNumber, stage, videoProvider, cameraMovement, dryRun } = await request.json();
+  const { projectId, shotNumber, stage, videoProvider, cameraMovement, dryRun, force } = await request.json();
 
   if (!projectId) {
     return new Response(JSON.stringify({ error: '缺少 projectId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -56,12 +56,12 @@ export async function POST(request: NextRequest) {
             'SELECT * FROM project_assets WHERE project_id = ? AND type = ? LIMIT 1'
           ).get(projectId, 'scene') as any;
 
-          // v2.9: 优先拿持久化 URL,原 CDN 可能已 404
+          // v12.154:引擎首帧统一走 pickEngineImageUrl(http CDN 优先;站内由 toEngineImage 转 base64);
+          // 分镜图优先于场景图(该镜构图 > 通用场景)。
+          const { pickEngineImageUrl: pickEng } = await import('@/lib/first-frame');
           const storyboard = {
             shotNumber,
-            imageUrl: sceneAsset
-              ? (sceneAsset.persistent_url || JSON.parse(sceneAsset.media_urls || '[]')[0] || '')
-              : '',
+            imageUrl: (sbAsset && pickEng(sbAsset)) || (sceneAsset && pickEng(sceneAsset)) || '',
             prompt: sbAsset ? JSON.parse(sbAsset.data || '{}').description || '' : `镜头 ${shotNumber}`,
           };
           // v12.141(P0-1):每镜运镜覆盖(preset id/自由文本 → 专业运镜指令)
@@ -80,10 +80,10 @@ export async function POST(request: NextRequest) {
               videoProvider: videoProvider || 'veo',
             });
 
-            // 更新DB
+            // 更新DB(v12.154:如实存降级标记)
             await updateAssetBySelector(
               projectId, { type: 'video', shotNumber },
-              { mediaUrls: [result.videoUrl], data: { duration: result.duration, status: 'completed' }, bumpVersion: true },
+              { mediaUrls: [result.videoUrl], data: { duration: result.duration, status: 'completed', isAnimatic: !!(result as any).isAnimatic }, bumpVersion: true },
             );
 
             send('regenerateComplete', {
@@ -118,7 +118,8 @@ export async function POST(request: NextRequest) {
               return d.isAnimatic === true || candidates.every((x) => !x) || candidates.some((x) => /animatic-\d+\.mp4/.test(x));
             } catch { return false; }
           };
-          const targets = videoAssets.filter(isDegraded);
+          // force:跳过降级识别,全部镜重渲(资产被历史 bug 污染/想整体升质量时用)
+          const targets = force === true ? videoAssets : videoAssets.filter(isDegraded);
           send('batchStart', { total: targets.length, shots: targets.map((a) => a.shot_number) });
           // dryRun:只回识别清单不真跑(UI 预览/验证用)
           if ((await Promise.resolve(dryRun)) === true) {
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
             send('status', { message: '没有失败/降级镜头,无需补渲 ✅' });
           }
 
-          let okCount = 0;
+          let okCount = 0; let animaticCount = 0; // v12.154:真视频与降级分开统计,不再谎报
           for (const asset of targets) {
             const sn = asset.shot_number;
             send('status', { message: `补渲镜头 ${sn}(${okCount + 1}/${targets.length})...` });
@@ -139,31 +140,32 @@ export async function POST(request: NextRequest) {
               const sbAll = await listAssetsByType(projectId, 'storyboard') as any[];
               const sbAsset = sbAll.find((x) => x.shot_number === sn);
               const sceneAsset = ((await listAssetsByType(projectId, 'scene')) as any[])[0];
-              const pick = (a: any) => a ? (a.persistent_url || JSON.parse(a.media_urls || '[]')[0] || '') : '';
+              // v12.154:引擎首帧 http CDN 优先(persistent 站内路径由 toEngineImage 转 base64)
+              const { pickEngineImageUrl } = await import('@/lib/first-frame');
               const storyboard = {
                 shotNumber: sn,
-                imageUrl: pick(sbAsset) || pick(sceneAsset), // 分镜图优先(该镜构图),场景图兜底
+                imageUrl: (sbAsset && pickEngineImageUrl(sbAsset)) || (sceneAsset && pickEngineImageUrl(sceneAsset)) || '',
                 prompt: sbAsset ? JSON.parse(sbAsset.data || '{}').description || '' : `镜头 ${sn}`,
               };
               const result = await orchestrator.regenerateShot(sn, storyboard, {
                 duration: 8,
                 videoProvider: videoProvider || 'veo',
-              });
+              }) as any;
               await updateAssetBySelector(
                 projectId, { type: 'video', shotNumber: sn },
-                { mediaUrls: [result.videoUrl], data: { duration: result.duration, status: 'completed', isAnimatic: false }, bumpVersion: true },
+                { mediaUrls: [result.videoUrl], data: { duration: result.duration, status: 'completed', isAnimatic: !!result.isAnimatic }, bumpVersion: true },
               );
-              okCount++;
-              send('regenerateComplete', { shotNumber: sn, videoUrl: result.videoUrl, duration: result.duration, status: 'completed' });
+              if (!result.isAnimatic) okCount++; else animaticCount++;
+              send('regenerateComplete', { shotNumber: sn, videoUrl: result.videoUrl, duration: result.duration, status: 'completed', isAnimatic: !!result.isAnimatic });
             } catch (e) {
               send('regenerateError', { shotNumber: sn, error: e instanceof Error ? e.message.slice(0, 120) : '生成失败' });
             }
           }
-          send('batchDone', { total: targets.length, ok: okCount, fail: targets.length - okCount });
+          send('batchDone', { total: targets.length, ok: okCount, animatic: animaticCount, fail: targets.length - okCount - animaticCount });
 
           // 有成功镜 → 自动重做剪辑合成(与 stage==='editor' 同逻辑)
-          if (okCount > 0) {
-            send('status', { message: `${okCount} 镜补渲成功,自动重新合成成片...` });
+          if (okCount + animaticCount > 0) {
+            send('status', { message: `补渲完成:${okCount} 镜真视频${animaticCount ? `、${animaticCount} 镜仍降级(引擎未通)` : ''},自动重新合成成片...` });
             try {
               const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
               const scriptData = project?.script_data ? JSON.parse(project.script_data) : null;

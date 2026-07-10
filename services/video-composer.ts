@@ -1504,10 +1504,18 @@ export async function stillFrameToVideo(
   // 1. 下载/解码图片到本地
   let localImage: string;
   if (imageUrl.startsWith('/api/serve-file')) {
-    // 从 /api/serve-file?path=... 提取本地路径
+    // 从 /api/serve-file 提取本地路径:?path= 直解;?key= 走 storage 注册表(v12.154:
+    // persistAsset 洗过的 URL 只有 key,此前这里直接 throw → Ken Burns 末档也失败)
     try {
       const u = new URL(imageUrl, 'http://localhost');
-      const lp = decodeURIComponent(u.searchParams.get('path') || '');
+      let lp = decodeURIComponent(u.searchParams.get('path') || '');
+      if (!lp) {
+        const key = u.searchParams.get('key');
+        if (key) {
+          const { resolveByKey } = require('@/lib/asset-storage') as typeof import('@/lib/asset-storage');
+          lp = resolveByKey(key)?.absPath || '';
+        }
+      }
       if (lp && fs.existsSync(lp)) {
         localImage = lp;
       } else {

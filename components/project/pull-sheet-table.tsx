@@ -76,20 +76,18 @@ function cell(v: unknown): string {
 }
 
 export function PullSheetTable({ projectId }: { projectId: string }) {
+  const [importMsg, setImportMsg] = useState('');
   const [sheet, setSheet] = useState<PullSheet | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/pull-sheet`);
-        if (alive && res.ok) setSheet(await res.json());
-      } catch { /* 非关键路径 */ }
-      finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; };
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/pull-sheet`);
+      if (res.ok) setSheet(await res.json());
+    } catch { /* 非关键路径 */ }
+    finally { setLoading(false); }
   }, [projectId]);
+  useEffect(() => { void load(); }, [load]);
 
   if (loading) {
     return <div className="cinema-card-hi p-6 text-center cinema-mono text-[11px] opacity-50">拉片表生成中…</div>;
@@ -133,6 +131,35 @@ export function PullSheetTable({ projectId }: { projectId: string }) {
         >
           <DownloadSimple className="w-3.5 h-3.5" />剧本册 PDF
         </a>
+        {/* v12.154:分镜表回灌 —— 导出 CSV → Excel 改 → 传回 merge 进剧本 */}
+        <label className="cinema-btn-ghost !text-[11px] !py-1 inline-flex items-center gap-1.5 cursor-pointer">
+          ⤴️ 回灌 CSV
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              setImportMsg('回灌中…');
+              try {
+                const csv = await file.text();
+                const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/pull-sheet/import`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv }),
+                });
+                const d = await res.json();
+                if (!res.ok) { setImportMsg(`回灌失败:${d.message || res.status}`); return; }
+                const parts = [`已应用 ${d.applied} 处修改(${d.rowsParsed} 行)`];
+                if (d.unknownShots?.length) parts.push(`未知镜号跳过:${d.unknownShots.join(',')}`);
+                if (d.badLines) parts.push(`坏行 ${d.badLines}`);
+                setImportMsg(parts.join(';'));
+                if (d.applied > 0) void load(); // 重拉表格显示新值
+              } catch { setImportMsg('回灌失败:网络或文件读取错误'); }
+            }}
+          />
+        </label>
+        {importMsg && <span className="cinema-mono text-[10px] opacity-70">{importMsg}</span>}
       </div>
 
       <SheetView sheet={sheet} />

@@ -205,7 +205,7 @@ export class MinimaxService {
       // 不满足该条件 → hasRealImage=false → 模型选成 Hailuo-2.3 文生视频,
       // 用户上传的参考图被静默丢掉。这里改成"非 data:、非空"即认为有图,
       // 让本地上传也能走 I2V-01 真图生视频。
-      const hasRealImage = !!imageUrl && !imageUrl.startsWith('data:') && imageUrl.length > 0;
+      const hasRealImage = !!imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('data:image/')); // v12.154:base64 首帧(本地图转)也算真图
 
       // v2.22 fix: I2V-01 已被当前套餐 EOL (实测 2061 "your current token plan
       // not support model"). 改成统一用 Hailuo 2.3 — T2V 和 I2V 同一个模型,

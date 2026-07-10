@@ -47,7 +47,7 @@ export class KlingService {
         throw new Error('KELING_API_KEY is not configured');
       }
 
-      const hasRealImage = imageUrl && !imageUrl.startsWith('data:') && imageUrl.startsWith('http');
+      const hasRealImage = !!imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('data:image/')); // v12.154:base64 首帧
 
       console.log(`[Kling] Starting video generation: ${hasRealImage ? 'image-to-video' : 'text-to-video'}`);
       console.log(`[Kling] Prompt: ${prompt.slice(0, 100)}...`);
@@ -55,15 +55,18 @@ export class KlingService {
       const body: Record<string, any> = {
         model_name: 'kling-v1',
         prompt: prompt,
-        mode: options?.mode || 'standard',
-        duration: String(Math.min(options?.duration || 5, 10)),
+        // 可灵官方 mode 枚举是 'std' | 'pro'(v12.154 live 实测:'standard' 报 1201 invalid)
+        mode: options?.mode === 'professional' ? 'pro' : 'std',
+        // 可灵官方 duration 枚举只收 '5' | '10'(live 实测 '8' 报 1201)
+        duration: (options?.duration || 5) > 5 ? '10' : '5',
       };
 
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
 
       if (hasRealImage) {
-        body.image = imageUrl;
+        // 可灵官方 image 字段:URL 或**纯 base64**(不带 data: 前缀)
+        body.image = imageUrl.startsWith('data:image/') ? imageUrl.split(',')[1] : imageUrl;
       }
 
       // v12.15.0(Phase 2.1):多参 Elements —— 给 Kling 喂角色(frontal+多角度)+ 场景参考图。

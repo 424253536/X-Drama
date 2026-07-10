@@ -12,7 +12,7 @@ describe('v12.150 · 批量补渲', () => {
     expect(src).toContain("send('batchDone'");
     expect(src).toContain('runEditor(freshVideos, scriptData)');
     expect(src).toContain("stage !== 'failed-videos'"); // 不落进旧阶段分支
-    expect(src).toContain('isAnimatic: false'); // 补渲成功清标记
+    expect(src).toContain('isAnimatic: !!result.isAnimatic'); // v12.154:如实存(真视频清、降级保留)
   });
   it('落库:create-pipeline 视频资产带 isAnimatic', () => {
     expect(fs.readFileSync('lib/create-pipeline.ts', 'utf-8')).toContain('isAnimatic: !!(v as any).isAnimatic');
