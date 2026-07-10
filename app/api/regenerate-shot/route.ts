@@ -99,8 +99,84 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // ── v12.150:失败/降级镜头批量补渲(余额恢复后一键补,不整片重跑)──
+        // 识别:video 资产 data.isAnimatic === true(Ken Burns 降级)或 mediaUrls 为空。
+        // 逐镜重生(分镜图优先作首帧)→ 成功即更新资产;有成功镜则自动重做 editor 合成。
+        if (stage === 'failed-videos' && !shotNumber) {
+          const videoAssets = db.prepare(
+            'SELECT * FROM project_assets WHERE project_id = ? AND type = ? ORDER BY shot_number'
+          ).all(projectId, 'video') as any[];
+          const isDegraded = (a: any) => {
+            try {
+              const d = JSON.parse(a.data || '{}');
+              const urls = JSON.parse(a.media_urls || '[]');
+              // isAnimatic 标记 v12.150 才落库 —— 旧项目兜底认 Ken Burns 产物文件名(animatic-<ts>.mp4)
+              return d.isAnimatic === true || !urls[0] || /animatic-\d+\.mp4/.test(String(urls[0]));
+            } catch { return false; }
+          };
+          const targets = videoAssets.filter(isDegraded);
+          send('batchStart', { total: targets.length, shots: targets.map((a) => a.shot_number) });
+          if (targets.length === 0) {
+            send('status', { message: '没有失败/降级镜头,无需补渲 ✅' });
+          }
+
+          let okCount = 0;
+          for (const asset of targets) {
+            const sn = asset.shot_number;
+            send('status', { message: `补渲镜头 ${sn}(${okCount + 1}/${targets.length})...` });
+            try {
+              const sbAsset = db.prepare(
+                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? AND shot_number = ?'
+              ).get(projectId, 'storyboard', sn) as any;
+              const sceneAsset = db.prepare(
+                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? LIMIT 1'
+              ).get(projectId, 'scene') as any;
+              const pick = (a: any) => a ? (a.persistent_url || JSON.parse(a.media_urls || '[]')[0] || '') : '';
+              const storyboard = {
+                shotNumber: sn,
+                imageUrl: pick(sbAsset) || pick(sceneAsset), // 分镜图优先(该镜构图),场景图兜底
+                prompt: sbAsset ? JSON.parse(sbAsset.data || '{}').description || '' : `镜头 ${sn}`,
+              };
+              const result = await orchestrator.regenerateShot(sn, storyboard, {
+                duration: 8,
+                videoProvider: videoProvider || 'veo',
+              });
+              await updateAssetBySelector(
+                projectId, { type: 'video', shotNumber: sn },
+                { mediaUrls: [result.videoUrl], data: { duration: result.duration, status: 'completed', isAnimatic: false }, bumpVersion: true },
+              );
+              okCount++;
+              send('regenerateComplete', { shotNumber: sn, videoUrl: result.videoUrl, duration: result.duration, status: 'completed' });
+            } catch (e) {
+              send('regenerateError', { shotNumber: sn, error: e instanceof Error ? e.message.slice(0, 120) : '生成失败' });
+            }
+          }
+          send('batchDone', { total: targets.length, ok: okCount, fail: targets.length - okCount });
+
+          // 有成功镜 → 自动重做剪辑合成(与 stage==='editor' 同逻辑)
+          if (okCount > 0) {
+            send('status', { message: `${okCount} 镜补渲成功,自动重新合成成片...` });
+            try {
+              const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
+              const scriptData = project?.script_data ? JSON.parse(project.script_data) : null;
+              const freshVideos = (db.prepare(
+                'SELECT * FROM project_assets WHERE project_id = ? AND type = ? ORDER BY shot_number'
+              ).all(projectId, 'video') as any[]).map((a: any) => ({
+                shotNumber: a.shot_number,
+                videoUrl: a.persistent_url || JSON.parse(a.media_urls || '[]')[0] || '',
+                duration: JSON.parse(a.data || '{}').duration || 8,
+                status: 'completed' as const,
+              }));
+              const editResult = await orchestrator.runEditor(freshVideos, scriptData);
+              send('editResult', editResult);
+            } catch (e) {
+              send('status', { message: `重合成失败(镜头视频已更新,可稍后手动重做剪辑):${e instanceof Error ? e.message.slice(0, 80) : ''}` });
+            }
+          }
+        }
+
         // ── 阶段级重做（制片人发起） ──
-        if (stage && !shotNumber) {
+        if (stage && !shotNumber && stage !== 'failed-videos') {
           send('status', { message: `正在重做 ${stage} 阶段...` });
           send('redoStageStart', { stage });
 

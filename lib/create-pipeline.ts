@@ -737,6 +737,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
             duration: v.duration || 5,
             status: v.status,
             coverImageUrl: v.coverImageUrl || null,
+            isAnimatic: !!(v as any).isAnimatic, // v12.150:降级标记落库,批量补渲据此识别
           }, mediaUrls, v.shotNumber);
         }
       }

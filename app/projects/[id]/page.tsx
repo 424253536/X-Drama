@@ -136,6 +136,49 @@ export default function ProjectDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // v12.150:失败/降级镜头批量补渲(SSE 进度;完成后重拉项目刷新资产)
+  const [rerenderBusy, setRerenderBusy] = useState(false);
+  const [rerenderMsg, setRerenderMsg] = useState('');
+  const rerenderFailedShots = async () => {
+    if (rerenderBusy) return;
+    setRerenderBusy(true);
+    setRerenderMsg('启动批量补渲…');
+    try {
+      const res = await fetch('/api/regenerate-shot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: id, stage: 'failed-videos' }),
+      });
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'status') setRerenderMsg(ev.data?.message || '');
+            if (ev.type === 'regenerateComplete') setRerenderMsg(`镜头 ${ev.data?.shotNumber} 补渲完成 ✅`);
+            if (ev.type === 'regenerateError') setRerenderMsg(`镜头 ${ev.data?.shotNumber} 失败:${ev.data?.error || ''}`);
+            if (ev.type === 'batchDone') setRerenderMsg(`补渲完成:成功 ${ev.data?.ok}/${ev.data?.total}${ev.data?.fail ? `,失败 ${ev.data.fail}(引擎仍不可用?看创作页引擎天气)` : ''}`);
+          } catch { /* 跳过坏行 */ }
+        }
+      }
+      // 重拉项目,刷新视频资产与成片
+      const d = await fetch(`/api/projects/${id}`).then((r) => r.json());
+      if (d.id) setProject(d);
+    } catch (e) {
+      setRerenderMsg('批量补渲请求失败,稍后再试');
+    } finally {
+      setRerenderBusy(false);
+    }
+  };
+
   const startEditShot = (shotIndex: number, shot: any) => {
     setEditingShot(shotIndex);
     setShotDraft({
@@ -784,6 +827,26 @@ export default function ProjectDetailPage() {
                 </button>
               </div>
             )}
+            {/* v12.150:失败/降级镜头批量补渲(isAnimatic 降级或无视频的镜;余额恢复后一键补) */}
+            {(() => {
+              const degraded = videos.filter((v: any) => v?.data?.isAnimatic === true || !v?.mediaUrls?.[0] || /animatic-\d+\.mp4/.test(String(v?.mediaUrls?.[0] || '')));
+              if (degraded.length === 0 && !rerenderMsg) return null;
+              return (
+                <div className="mb-3 flex items-center gap-3 flex-wrap" data-testid="batch-rerender-bar">
+                  {degraded.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void rerenderFailedShots()}
+                      disabled={rerenderBusy}
+                      className="cinema-btn-ghost !text-[11px] !py-1 !text-[var(--cinema-amber)] !border-[var(--cinema-amber-deep)] disabled:opacity-50"
+                    >
+                      {rerenderBusy ? '⏳ 补渲中…' : `⚡ 批量补渲 ${degraded.length} 个失败/降级镜头`}
+                    </button>
+                  )}
+                  {rerenderMsg && <span className="cinema-mono text-[10px] opacity-70">{rerenderMsg}</span>}
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {videos.length === 0 && <div className="col-span-full"><EmptyState icon={Video} title="还没有镜头视频" hint="完成分镜后,在镜头工坊或主管线生成每镜视频" /></div>}
               {videos.map((v: any) => {
