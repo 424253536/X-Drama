@@ -35,6 +35,7 @@ import { PreviewShotModal } from '@/components/create/preview-shot-modal';
 import { DemoModeBanner } from '@/components/demo-mode-banner';
 import type { ScriptDraft } from '@/lib/script-drafts';
 import { listSupportedLanguages } from '@/lib/language-detect';
+import { saveCreatePrefs, loadCreatePrefs } from '@/lib/create-prefs';
 
 // Pika-style art presets with visual indicators and color themes
 const stylePresets = [
@@ -140,6 +141,19 @@ export default function DashboardCreatePage() {
   const [scriptLanguage, setScriptLanguage] = useState('auto');
   // v12.143: 分镜草图锁(对标阅文分镜面板)—— 每镜先出构图草图再锁构图渲染,默认关
   const [sketchLock, setSketchLock] = useState(false);
+
+  // v12.145: 创作偏好跨会话记忆(Miora Agent Memory 第一步)—— 挂载时恢复上次配置
+  useEffect(() => {
+    const p = loadCreatePrefs();
+    if (!p) return;
+    if (p.style) setStyle(p.style);
+    if (p.aspect) setAspect(p.aspect);
+    if (p.cameraDefault !== undefined) setCameraDefault(p.cameraDefault);
+    if (typeof p.editStyle === 'string') setEditStyle(p.editStyle);
+    if (p.scriptLanguage) setScriptLanguage(p.scriptLanguage);
+    if (typeof p.sketchLock === 'boolean') setSketchLock(p.sketchLock);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // v2.15 G9: 草稿数 (1=直接走 Writer; 2/3=先 hit /api/script-drafts 拿对比卡, 用户选完再走完整流程)
   const [draftCount, setDraftCount] = useState<1 | 2 | 3>(1);
   // v10.5.3: 简易/专业开关 —— 默认 pro(与既有 UI 逐像素一致,验收条款);localStorage 记忆
@@ -263,6 +277,8 @@ export default function DashboardCreatePage() {
     });
 
     try {
+      // v12.145: 记住本次创作配置,下次自动恢复
+      saveCreatePrefs({ style, aspect, cameraDefault, editStyle, scriptLanguage, sketchLock });
       const response = await fetch('/api/create-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
