@@ -13,6 +13,7 @@ import { IMG_PREVIEW_DEFAULT } from '@/lib/placeholder-images';
 import { buildInitialNodes, initialEdges } from '@/components/pipeline-canvas';
 import { storyTemplates, type StoryTemplate } from '@/lib/story-templates';
 import { CharacterLockSection, type LockedCharacter } from '@/components/create/character-lock-section';
+import { EngineWeather } from '@/components/create/engine-weather';
 import { MultimodalRefShelf } from '@/components/multimodal-ref-shelf';
 import type { ReferenceAsset } from '@/lib/multimodal-ref';
 // v2.13 cinema redesign — opt-in primitives, 不影响其他页
@@ -781,6 +782,8 @@ export default function DashboardCreatePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="cinema-card p-5 flex flex-col gap-5">
+          {/* v12.149:引擎天气 —— 创作前可见哪路引擎不健康(全健康不占位) */}
+          <EngineWeather />
           <label className="block">
             <div className="flex items-center justify-between mb-2">
               <Eyebrow>Script · 创意 / 剧本</Eyebrow>

@@ -57,6 +57,15 @@ export function filterFundedAttempts<T extends { baseURL?: string }>(attempts: T
 }
 
 /** 测试用:清空配额缓存。 */
+/** v12.149(引擎天气面板):当前处于配额耗尽冷却期的网关快照(host + 剩余秒)。 */
+export function listOutOfCreditsGateways(now: number = Date.now()): Array<{ host: string; remainingSec: number }> {
+  const out: Array<{ host: string; remainingSec: number }> = [];
+  for (const [host, until] of outOfCreditsUntil) {
+    if (until > now) out.push({ host, remainingSec: Math.round((until - now) / 1000) });
+  }
+  return out;
+}
+
 export function _resetGatewayBudget(): void {
   outOfCreditsUntil.clear();
 }

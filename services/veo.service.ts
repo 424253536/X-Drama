@@ -37,6 +37,20 @@ interface VeoQueryResponse {
 
 type ProgressCallback = (progress: number, status: string) => void;
 
+
+// v12.149:失败埋点 —— 进 api-usage-tracker 告警管道,让 /api/api-status 引擎天气面板可见
+// (此前只有 minimax/midjourney 埋点,Veo 渠道 503 对用户是黑箱)。失败不反炸业务。
+function _trackVeoError(error: unknown, model: string, method: string): void {
+  const msg = error instanceof Error ? error.message : String(error);
+  void (async () => {
+    try {
+      const { recordApiCall } = await import('@/lib/api-usage-tracker');
+      const codeM = msg.match(/\((\d{3})\)/);
+      void recordApiCall({ provider: 'veo', model, method, success: false, statusCode: codeM ? parseInt(codeM[1], 10) : undefined, errorMessage: msg });
+    } catch { /* 监控失败不阻塞 */ }
+  })();
+}
+
 export class VeoService {
   private apiKey: string;
   private baseURL: string;
@@ -120,6 +134,7 @@ export class VeoService {
         if (!transient) {
           this.model = originalModel;
           this.format = originalFormat;
+          _trackVeoError(lastError, m, 'generateVideo'); // v12.149 引擎天气埋点
           throw lastError;
         }
         // 是 transient 就继续试下一个 fallback 模型
@@ -131,6 +146,7 @@ export class VeoService {
     this.format = originalFormat;
     // 所有模型都失败了, 抛出最后一个错误
     console.error('[Veo] All models exhausted:', modelChain.join(', '));
+    _trackVeoError(lastError || new Error('all fallback models failed'), modelChain.join('|'), 'generateVideo'); // v12.149
     throw lastError || new Error('Veo: all fallback models failed');
   }
 

@@ -40,8 +40,13 @@ export async function GET() {
     }
   }
 
+  // v12.149:内存网关破产快照(qingyuntop/vectorengine 配额耗尽冷却期)—— 与 DB 告警互补,
+  // 图像/LLM 网关级「余额不足」秒级可见(DB 告警只覆盖有埋点的 provider)。
+  const { listOutOfCreditsGateways } = await import('@/lib/gateway-budget');
+
   return NextResponse.json({
     alerts: Array.from(byProvider.values()),
+    gateways: listOutOfCreditsGateways(),
     timestamp: new Date().toISOString(),
   });
 }
