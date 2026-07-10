@@ -27,6 +27,7 @@
  * Writer 的每个 shot 必带的 cinematography 字段。
  * 取值范围与 director-enhance.ts ShotSpec 完全一致 — 两者用同一套电影语言。
  */
+import { canonicalMovementForPrompt, normalizeShotSize } from './shot-enums'; // v12.142 P0-2 枚举规范化
 export interface WriterShotCinema {
   /** 景别: ECU/CU/MCU/MS/MLS/LS/ELS/wide/insert */
   shotSize: string;
@@ -172,13 +173,15 @@ Veo 3 / Sora 2 / Runway Gen-4 的 prompt 最优格式:
  *   "slow push in on 85mm lens, MCU single, low-angle, rule-of-thirds:"
  */
 export function renderVeoProsePrefix(cinema: Partial<WriterShotCinema>, framing?: string): string {
+  // v12.142(P0-2):LLM 输出先过硬规范化(漂移词归枚举,归一不了原文透传)——
+  // 「slow push in」「推近」「Dolly-In」统一成 push in,引擎理解更稳、跨镜不漂。
   const parts: string[] = [];
-  if (cinema.cameraMovement) parts.push(cinema.cameraMovement.replace(/-/g, ' '));
+  if (cinema.cameraMovement) parts.push(canonicalMovementForPrompt(cinema.cameraMovement));
   if (cinema.lens) parts.push(`on ${cinema.lens} lens`);
   const move = parts.join(' ');
 
   const frameParts: string[] = [];
-  if (cinema.shotSize) frameParts.push(cinema.shotSize);
+  if (cinema.shotSize) frameParts.push(normalizeShotSize(cinema.shotSize) || cinema.shotSize);
   if (framing) frameParts.push(framing);
   if (cinema.cameraAngle) frameParts.push(`${cinema.cameraAngle.replace(/-/g, ' ')} angle`);
   if (cinema.composition) frameParts.push(cinema.composition.replace(/-/g, ' '));
