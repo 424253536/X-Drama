@@ -46,7 +46,7 @@ export async function GET() {
 
   // v12.161:各视频引擎近 10 分钟失败数(≥3 视为不稳)—— 天气条绿色时也能看引擎脉搏
   const { getRecentFailureRate } = await import('@/lib/api-usage-tracker');
-  // v12.162(对抗评审 R9):DB 规范键是 'kling'(此前误用前端别名 'keling' + as any 屏蔽了类型检查,
+  // v12.162(对抗评审 R9):DB 规范键是 'kling'(此前误用前端别名 keling + as any 屏蔽了类型检查,
   // 查询恒 0 行 → Kling 挂了脉搏也绿)。
   const engines = await Promise.all((['veo', 'minimax', 'kling'] as const).map(async (p) => {
     try {
