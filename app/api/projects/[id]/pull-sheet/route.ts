@@ -80,11 +80,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const format = request.nextUrl.searchParams.get('format');
   if (format === 'md' || format === 'pdf') {
     const { pullSheetToMarkdown, buildScriptBookHtml } = await import('@/lib/script-export');
+    // v12.160:PDF 附页取数(角色表 + 体检;md 轻量不带)
+    const origin0 = request.nextUrl.origin;
+    const charRows = format === 'pdf' ? await listAssetsByType(id, 'character') : [];
+    const characters = charRows.map((r) => {
+      const d = parseJson(r.data) || {};
+      let u = r.persistent_url || (parseJson(r.media_urls) || [])[0] || '';
+      if (u.startsWith('/')) u = `${origin0}${u}`;
+      return { name: r.name, role: d.role || d.dna?.signature?.role || '', imageUrl: u };
+    }).filter((c) => c.name);
+    let health: Array<{ label: string; status: string; detail: string }> = [];
+    if (format === 'pdf') {
+      try {
+        const { buildProjectHealth } = await import('@/lib/film-health-io');
+        health = (await buildProjectHealth(id)).items;
+      } catch { /* 体检失败不阻塞出册 */ }
+    }
     const meta = {
       title: script?.title,
       logline: typeof script?.logline === 'string' ? script.logline : undefined,
       synopsis: typeof script?.synopsis === 'string' ? script.synopsis : undefined,
       style: typeof script?.style === 'string' ? script.style : undefined,
+      characters: characters.length ? characters : undefined,
+      health: health.length ? health : undefined,
     };
     if (format === 'md') {
       return new NextResponse(pullSheetToMarkdown(sheet, meta), {

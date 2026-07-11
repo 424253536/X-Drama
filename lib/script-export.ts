@@ -14,6 +14,10 @@ export interface ScriptMeta {
   logline?: string;
   synopsis?: string;
   style?: string;
+  /** v12.160:角色表附页(名/定位/缩略) */
+  characters?: Array<{ name: string; role?: string; imageUrl?: string }>;
+  /** v12.160:体检附页(红黄绿逐维) */
+  health?: Array<{ label: string; status: string; detail: string }>;
 }
 
 const esc = (s: string): string =>
@@ -116,6 +120,21 @@ export function buildScriptBookHtml(sheet: PullSheet, meta?: ScriptMeta): string
   ${meta?.logline ? `<div class="block"><b>Logline</b> ${esc(meta.logline)}</div>` : ''}
   ${meta?.synopsis ? `<div class="block"><b>梗概</b> ${esc(meta.synopsis)}</div>` : ''}
   ${shotCards}
+  ${meta?.characters?.length ? `
+  <h2>附录 · 角色表</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:12px">
+    ${meta.characters.map((c) => `
+    <div style="width:150px;border:1px solid #ddd;border-radius:8px;padding:8px;text-align:center;page-break-inside:avoid">
+      ${c.imageUrl ? `<img src="${esc(c.imageUrl)}" onerror="this.style.display='none'" style="width:100%;height:150px;object-fit:cover;border-radius:4px" />` : ''}
+      <div style="font-weight:600;margin-top:4px">${esc(c.name)}</div>
+      ${c.role ? `<div style="color:#888;font-size:10px">${esc(c.role)}</div>` : ''}
+    </div>`).join('')}
+  </div>` : ''}
+  ${meta?.health?.length ? `
+  <h2>附录 · 成片体检</h2>
+  <table><thead><tr><th style="width:36px"></th><th style="width:90px">维度</th><th>结论</th></tr></thead><tbody>
+    ${meta.health.map((h) => `<tr><td>${h.status === 'ok' ? '🟢' : h.status === 'warn' ? '🟡' : h.status === 'fail' ? '🔴' : '⚪'}</td><td>${esc(h.label)}</td><td>${esc(h.detail)}</td></tr>`).join('')}
+  </tbody></table>` : ''}
   <h2>附录 · 分镜表</h2>
   <table><thead><tr><th>镜号</th><th>时码</th><th>景别</th><th>运镜</th><th>镜头</th><th>台词</th></tr></thead>
   <tbody>${tableRows}</tbody></table>
