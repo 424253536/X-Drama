@@ -26,6 +26,17 @@ describe('修A · 截断 JSON 救回', () => {
     expect(JSON.parse(b!).shots[0]).toEqual({ n: 1, beats: ['a', 'b'] });
     expect(completeTruncatedJson('{"done": true}')).toBeNull(); // 完整 JSON 不归本级管
   });
+  it('v12.169:日语 24KB 真 dump(截断+带正号数字数组)救回', () => {
+    const raw = fs.readFileSync('tests/fixtures/llm-writer-truncated-ja-24kb.txt', 'utf-8');
+    const v = robustJsonParse(raw);
+    expect(v).toBeTruthy();
+    expect(v.title).toBe('静寂の旅路');
+    expect(Array.isArray(v.shots)).toBe(true);
+    expect(v.shots.length).toBeGreaterThanOrEqual(1);
+  });
+  it('v12.169:字符串外 +数字 剥正号;字符串内的 + 不动', () => {
+    expect(robustJsonParse('{"curve": [-4, -3, +3, +5, +8], "t": "a+b"}')).toEqual({ curve: [-4, -3, 3, 5, 8], t: 'a+b' });
+  });
   it('Tier 3.7:中文正文里被 dequote 产生的裸引号能转义救回', () => {
     const bad = '{"synopsis": "他抬头说"你是谁",然后转身", "n": 1}';
     const v = robustJsonParse(bad);

@@ -215,6 +215,10 @@ export function repairJsonStrings(s: string): string {
       if (c === '\n') { out += '\\n'; continue; }
       if (c === '\r') { out += '\\r'; continue; }
       if (c === '\t') { out += '\\t'; continue; }
+    } else if (c === '+' && s[i + 1] >= '0' && s[i + 1] <= '9') {
+      // v12.169:LLM 在数字数组里写正号(emotionTemperature 曲线 [-4, +3, +8])—— JSON 非法,
+      // 且会毒死截断补全的所有回退候选。字符串外的 +数字 剥掉 +(合法 JSON 字符串外不会有 +)。
+      continue;
     }
     out += c;
   }
