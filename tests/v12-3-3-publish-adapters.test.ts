@@ -22,23 +22,22 @@ function headers(map: Record<string, string>) {
 }
 
 describe('v12.3.3 · 国内平台 manual 诚实降级', () => {
-  it('抖音 = manual,isConfigured 恒 false,upload 出手动指引(绝不 published)', async () => {
+  it('抖音(v12.189 升 api 适配器):未配凭据 → manual 降级带指引,绝不 published', async () => {
     const a = getPublishAdapter('douyin');
-    expect(a.mode).toBe('manual');
-    expect(a.isConfigured()).toBe(false);
-    const r = await a.upload(mkPkg());
+    expect(a.mode).toBe('api'); // v12.189:自配 DOUYIN_ACCESS_TOKEN/OPEN_ID 即直发
+    const r = await a.upload(mkPkg(), { confirmed: true }); // 无 env 凭据 → 降级
     expect(r.status).toBe('manual');
     expect(r.externalUrl).toBeNull();
     expect(r.instructions?.length).toBeGreaterThan(0);
-    expect(await a.status('x')).toBeNull();
   });
 
-  it('listAdapterInfo:youtube=api,其余=manual', () => {
+  it('listAdapterInfo:youtube/douyin=api,其余=manual', () => {
     const info = listAdapterInfo({ getAccessToken: () => undefined });
     const yt = info.find((x) => x.platform === 'youtube_shorts')!;
     expect(yt.mode).toBe('api');
     expect(yt.configured).toBe(false);
-    expect(info.filter((x) => x.platform !== 'youtube_shorts').every((x) => x.mode === 'manual')).toBe(true);
+    const apiPlatforms = new Set(['youtube_shorts', 'douyin']); // v12.189 抖音升 api
+    expect(info.filter((x) => !apiPlatforms.has(x.platform)).every((x) => x.mode === 'manual')).toBe(true);
   });
 });
 

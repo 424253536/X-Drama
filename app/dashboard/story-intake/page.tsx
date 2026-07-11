@@ -96,6 +96,22 @@ export default function StoryIntakePage() {
     seedAndGo(job.seed);
   };
 
+  // v12.194:AI 问书 —— 长文本 → 人物关系/设定/高光档案(超长三段采样)
+  const [profile, setProfile] = useState<any>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const askBook = async () => {
+    if (analyzing || text.trim().length < 500) return;
+    setAnalyzing(true); setProfile(null);
+    try {
+      const r = await fetch('/api/story-intake/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const d = await r.json();
+      setProfile(r.ok ? d.profile : { error: d?.message || '分析失败' });
+    } catch { setProfile({ error: '网络错误' }); }
+    finally { setAnalyzing(false); }
+  };
   const totalChars = text.trim().length;
 
   return (
@@ -109,6 +125,36 @@ export default function StoryIntakePage() {
         <p className="text-sm text-[var(--muted)] mt-1">
           粘贴长篇小说 / 剧本 → 自动分集 + 选叙事模式 → 逐集送入创作工坊
         </p>
+        {/* v12.194:AI 问书 */}
+        <div className="mt-3 flex items-center gap-3">
+          <button onClick={askBook} disabled={analyzing || totalChars < 500} className="px-3 py-1.5 rounded-lg text-[12px] border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 disabled:opacity-40">
+            {analyzing ? '📖 通读中…' : '📖 AI 问书(人物关系/设定/高光)'}
+          </button>
+          {profile?.sampledOnly && <span className="text-[10px] text-gray-500">超长文本已三段采样(开头/中段/结尾)</span>}
+        </div>
+        {profile && !profile.error && (
+          <div className="mt-3 grid md:grid-cols-3 gap-3 text-[11px]">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="font-medium mb-1.5">👤 人物({(profile.characters || []).length})</div>
+              {(profile.characters || []).slice(0, 8).map((c: any) => (
+                <div key={c.name} className="mb-1.5"><span className="text-amber-300">{c.name}</span> <span className="opacity-50">{c.role}</span><div className="opacity-70">{c.traits}</div><div className="opacity-50">{c.relationships}</div></div>
+              ))}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="font-medium mb-1.5">🗺 设定({(profile.settings || []).length})</div>
+              {(profile.settings || []).slice(0, 10).map((x: any) => (
+                <div key={x.term} className="mb-1"><span className="text-cyan-300">{x.term}</span> <span className="opacity-70">{x.definition}</span></div>
+              ))}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="font-medium mb-1.5">✨ 高光({(profile.highlights || []).length})</div>
+              {(profile.highlights || []).slice(0, 8).map((h: any, i: number) => (
+                <div key={i} className="mb-1.5"><div className="opacity-90">{h.scene}</div><div className="opacity-50">{h.why} · {h.positionHint}</div></div>
+              ))}
+            </div>
+          </div>
+        )}
+        {profile?.error && <div className="mt-2 text-[11px] text-red-400">{profile.error}</div>}
       </div>
 
       {/* v6.2.2: 整季批量进度 (持久化, 跨页面续跑) */}
