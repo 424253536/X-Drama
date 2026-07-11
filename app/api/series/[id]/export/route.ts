@@ -39,6 +39,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const completed = eps.filter((e) => e.status === 'completed').slice(0, MAX_EPISODES);
   if (completed.length === 0) return NextResponse.json({ error: '还没有已完成的剧集,先批量生成' }, { status: 400 });
 
+  // v12.158:导出前体检闸门 —— 有降级镜/红灯的集先提示修复,确认仍导出带 ignoreHealth:true。
+  // 不做硬阻断(用户可能就要 animatic 版),但默认别让残次品无感混进整季合集。
+  const reqBody = await request.json().catch(() => ({} as any));
+  if (reqBody?.ignoreHealth !== true) {
+    const { buildProjectHealth, mapPool } = await import('@/lib/film-health-io');
+    const checks = await mapPool(completed, 2, async (e) => ({
+      episode: e.episode_number, health: await buildProjectHealth(e.id).catch(() => null),
+    }));
+    const bad = checks.filter((c) => c.health && (c.health.overall === 'fail' || c.health.animaticShots.length > 0));
+    if (bad.length > 0) {
+      return NextResponse.json({
+        error: 'health_gate',
+        message: `${bad.length} 集有质量问题(降级镜/体检红灯),建议先在系列面板补渲;确认仍导出请重试并选择忽略`,
+        details: bad.map((c) => ({ episode: c.episode, overall: c.health!.overall, animaticShots: c.health!.animaticShots })),
+      }, { status: 409 });
+    }
+  }
+
   // 并发锁:同一系列正在导出 → 409(防多 Tab/脚本并发起多个 ffmpeg)
   if (inFlight.has(id)) return NextResponse.json({ error: '该系列正在导出中,请稍候' }, { status: 409 });
   inFlight.add(id);

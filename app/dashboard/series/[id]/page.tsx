@@ -121,8 +121,15 @@ export default function SeriesPanel() {
     if (exporting) return;
     setExporting(true); setMsg('整季合集生成中(下载各集 + 拼接重编码,最长约 5 分钟,请勿关闭页面)…');
     try {
-      const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: '{}' });
-      const body = await res.json();
+      let res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: '{}' });
+      let body = await res.json();
+      // v12.158:体检闸门 409 → 列出问题集,confirm 后带 ignoreHealth 重试
+      if (res.status === 409 && body?.error === 'health_gate') {
+        const detail = (body.details || []).map((d: any) => `第${d.episode}集(${d.animaticShots?.length || 0}镜降级)`).join('、');
+        if (!window.confirm(`${body.message}\n\n问题集:${detail}\n\n仍要导出吗?(建议先点「全季补渲降级镜」)`)) { setMsg('已取消导出 —— 可先全季补渲再导'); return; }
+        res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ignoreHealth: true }) });
+        body = await res.json();
+      }
       if (!res.ok) { setMsg(body?.error || `导出失败 ${res.status}`); return; }
       setSeasonVideo(body.videoUrl); setMsg(`整季合集已生成(${body.count} 集)`);
     } catch (e) { setMsg(e instanceof Error ? e.message : '请求失败'); }
