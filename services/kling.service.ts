@@ -15,6 +15,20 @@ function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000): P
 
 type ProgressCallback = (progress: number, status: string) => void;
 
+
+// v12.162(对抗评审 R9):失败埋点 —— Kling 此前零埋点,api_usage_events 永无 kling 行,
+// 引擎脉搏/告警对 Kling 全盲。失败不反炸业务。
+function _trackKlingError(error: unknown, model: string, method: string): void {
+  const msg = error instanceof Error ? error.message : String(error);
+  void (async () => {
+    try {
+      const { recordApiCall } = await import('@/lib/api-usage-tracker');
+      const codeM = msg.match(/\((\d{3,4})\)/);
+      void recordApiCall({ provider: 'kling', model, method, success: false, statusCode: codeM ? parseInt(codeM[1], 10) : undefined, errorMessage: msg });
+    } catch { /* 监控失败不阻塞 */ }
+  })();
+}
+
 export class KlingService {
   private apiKey: string;
   private baseURL: string;
@@ -116,6 +130,7 @@ export class KlingService {
       const videoUrl = await this.pollResult(taskId, 120, options?.onProgress);
       return videoUrl;
     } catch (error) {
+      _trackKlingError(error, 'kling-video', 'generateVideo'); // v12.162 脉搏埋点
       console.error('[Kling] Video generation error:', error);
       throw error;
     }
