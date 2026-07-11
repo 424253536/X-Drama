@@ -3625,8 +3625,11 @@ ${shots.map((s, i) => {
               // v12.15.0(Phase 2.1):给 Kling 喂角色(registry mount)+ 场景/风格参考图。
               // 之前 Kling 路径只有 first_frame、无任何角色/场景参考。Elements 多参实际生效需 KLING_ELEMENTS=1。
               const klingRefs = flattenBundleToUrls(mrBundle, 4).filter((u) => u !== firstFrameUrl);
+              // v12.163:duration 跟随剧本(可灵枚举只有 5/10 —— >5s 的镜给 10,service 层归一);
+              // 此前硬编码 5,8s 镜被剪成 5s → 成片总长明显短于剧本预期(R8 实测 18.8s vs 32s)。
+              const klingDur = (shot?.duration && shot.duration > 5) ? 10 : 5;
               return await this.klingService.generateVideo(firstFrameUrl, enhancedPrompt, {
-                duration: 5,
+                duration: klingDur,
                 aspectRatio: this.videoAspect(), // v12.14.0 横竖屏
                 subjectReferences: subjectReferencesFromMount(shotMount), // v12.15.0 Phase 2.1
                 referenceImages: klingRefs.length > 0 ? klingRefs : undefined,
