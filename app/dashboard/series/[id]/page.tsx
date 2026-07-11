@@ -6,6 +6,8 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { getSystemLanguage } from '@/lib/system-language';
+import { languageDisplayName } from '@/lib/language-detect';
 import Link from 'next/link';
 import { getToken } from '@/lib/auth';
 import { FilmStrip as Film, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, Play, ArrowLeft, Image as ImageIcon, DownloadSimple } from '@phosphor-icons/react';
@@ -101,7 +103,8 @@ export default function SeriesPanel() {
     setBusy(true); setMsg('');
     try {
       const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ force }),
+        // v12.165:整季统一制作语言(系统默认;'auto' 则按各集创意自动检测)
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ force, language: getSystemLanguage() }),
       });
       const body = await res.json();
       if (!res.ok) { setMsg(body?.error || `失败 ${res.status}`); return; }

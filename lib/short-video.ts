@@ -219,9 +219,14 @@ export function buildShortVideoMessages(opts: {
   style: string;
   durationS: number;
   rhythm: RhythmTemplate;
+  /** v12.165:制作语言(俄/日/韩等)—— 台词/旁白/标题按此语种输出 */
+  language?: string;
 }): { system: string; user: string } {
+  const langRule = opts.language
+    ? `\n══ 语言铁律 ══\n所有 title/台词/旁白/字幕文案必须使用「${opts.language}」语种输出(视觉描述字段仍用英文)。\n`
+    : '';
   const system =
-    `你是顶级短视频导演, 擅长 ${opts.durationS}s 竖屏爆款的三幕节奏 (钩子→核心→高潮)。\n` +
+    `你是顶级短视频导演, 擅长 ${opts.durationS}s 竖屏爆款的三幕节奏 (钩子→核心→高潮)。${langRule}\n` +
     `给定创意, 输出严格 JSON: { "title": string, "shots": [\n` +
     `  { "phase": "hook", "frameContent": string, "aiPrompt": string },\n` +
     `  { "phase": "body", "frameContent": string, "aiPrompt": string },\n` +

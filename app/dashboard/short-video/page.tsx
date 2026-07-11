@@ -14,6 +14,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { getSystemLanguage } from '@/lib/system-language';
 import { useRouter } from 'next/navigation';
 import { Lightning as Zap, FilmStrip as Film, FilmSlate as Clapperboard, Flame, Sparkle as Sparkles, Copy, Check, Download, CircleNotch as Loader2, WarningCircle as AlertCircle, MagicWand as Wand2, Eye, Gauge, Image as ImageUp, ShareNetwork as Share2, ArrowRight } from '@phosphor-icons/react';
 import {
@@ -35,6 +36,7 @@ export default function ShortVideoStudioPage() {
   const [durationS, setDurationS] = useState<number>(15);
   const [rhythmId, setRhythmId] = useState<string>('suspense');
   const [style, setStyle] = useState('');
+  const [language, setLanguage] = useState<string>(() => getSystemLanguage()); // v12.165 制作语言(默认继承系统)
   const [plan, setPlan] = useState<ShortVideoPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,7 +52,7 @@ export default function ShortVideoStudioPage() {
       const r = await fetch('/api/short-video/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: idea.trim(), durationS, rhythmId, style: style.trim() }),
+        body: JSON.stringify({ language: language !== 'auto' ? language : undefined, idea: idea.trim(), durationS, rhythmId, style: style.trim() }),
       });
       const j = await r.json();
       if (!r.ok) { setError(j?.error || `生成失败 (${r.status})`); setPlan(null); }
@@ -198,6 +200,19 @@ export default function ShortVideoStudioPage() {
             );
           })}
           <input className="cinema-input !py-1.5 !text-xs w-40" placeholder="画风(可选)" value={style} onChange={(e) => setStyle(e.target.value)} />
+          {/* v12.165:制作语言(台词/标题按此语种;默认继承系统语言) */}
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            title="制作语言:台词/标题文案语种(配音跟随)"
+            className="cinema-input !py-1.5 !text-xs w-28"
+            data-testid="sv-language"
+          >
+            <option value="auto">语言:自动</option>
+            {['zh', 'en', 'ja', 'ko', 'ru', 'es', 'fr', 'de', 'pt'].map((c) => (
+              <option key={c} value={c}>{c === 'zh' ? '中文' : c === 'en' ? 'English' : c === 'ja' ? '日本語' : c === 'ko' ? '한국어' : c === 'ru' ? 'Русский' : c.toUpperCase()}</option>
+            ))}
+          </select>
           <button onClick={generate} disabled={loading} className="ml-auto inline-flex items-center justify-center gap-2 bg-white text-zinc-900 hover:bg-zinc-100 font-medium text-sm rounded-sm px-5 py-2 transition disabled:opacity-50">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
             {loading ? '生成分镜中…' : '生成分镜计划'}

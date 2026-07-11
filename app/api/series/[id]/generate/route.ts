@@ -36,6 +36,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, started: 0, message: '没有待生成的剧集(都已生成或正在生成)' });
   }
 
+  // v12.165:整季统一制作语言(俄/日/韩等)—— 透传每集 CreatePipelineInput → Writer 铁律 + TTS 配音语种。
+  // 注意复用上面已读的 body(Request body 只能读一次,二次 .json() 恒拿 {})。
+  const language = typeof body?.language === 'string' && body.language !== 'auto' ? body.language : undefined;
+
   // v12.23.0(评审):预算护栏 —— 整片生成很重,批量更要拦,否则 force 反复重生会无上限超支。
   // 每集粗估 ¥6(图+视频+音),与单集管线同源预算控制。
   const { assertBudget } = await import('@/lib/budget-enforce');
@@ -51,6 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     primaryCharacterRef: ep.primary_character_ref || undefined,
     lockedCharacters: parseArr(ep.locked_characters),
     enableGates: false,
+    language, // v12.165:整季统一制作语言
   });
 
   // 先标 active —— 前端轮询立即看到「生成中」,并防重复触发

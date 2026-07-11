@@ -1088,7 +1088,7 @@ export class HybridOrchestrator {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        if (res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(apiBase);
+        if (res.status === 401 || res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(apiBase); // v12.164:401 key 失效同样冷却,别每镜撞
         throw createError('ENGINE_FAILED', `${model} 图像生成失败 (${res.status})`, {
           stage: 'storyboard',
           retryable: true,
@@ -1139,7 +1139,7 @@ export class HybridOrchestrator {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        if (res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(base);
+        if (res.status === 401 || res.status === 402 || res.status === 403 || isOutOfCreditsError(errBody)) markGatewayOutOfCredits(base); // v12.164:401 同冷却
         throw createError('ENGINE_FAILED', `flux.1-kontext-pro 失败 (${res.status})`, {
           stage: 'storyboard', retryable: true,
           details: { status: res.status, body: errBody.slice(0, 120), label },
@@ -1937,13 +1937,17 @@ export class HybridOrchestrator {
       // 注意：pass2Context 不能太长，否则输出 token 被压缩导致空结果
       // 限制 userContext 在 pass2 中的长度，优先保留 shotPlan
       const trimmedUserCtx = userContext.length > 8000 ? userContext.slice(0, 8000) + '\n[...已截断...]' : userContext;
-      const pass2Context = shotPlan
+      // v12.164:输出预算铁律 —— 网关会 clamp maxTokens(16384 实测 ~8K 截断),长英文修饰字段
+      // (visualPrompt/globalLighting/negativePrompt)是 token 大户;明示「完整 JSON > 描述丰富度」。
+      const budgetRule = `\n══ 输出预算铁律 ══\n完整闭合的 JSON 比描述丰富度更重要。visualPrompt ≤ 60 英文词;globalLighting/negativePrompt ≤ 12 英文词;禁止在任何字段里写散文式长段。若篇幅紧张,优先精简修饰字段,绝不截断 JSON 结构。`;
+      const pass2Context = (shotPlan
         ? `══ 镜头规划（严格按照此规划生成 JSON）══\n${shotPlan}\n\n══ 素材 ══\n${trimmedUserCtx}\n\n══ 指令 ══\nshots 数组必须有 ${planShotCount || minShotsRequired} 个镜头。`
-        : `${trimmedUserCtx}\n\nshots 数组必须有 ${minShotsRequired}-${maxShotsAllowed} 个镜头。`;
+        : `${trimmedUserCtx}\n\nshots 数组必须有 ${minShotsRequired}-${maxShotsAllowed} 个镜头。`) + budgetRule;
 
       console.log(`[Writer] Pass 2 开始: pass2Context=${pass2Context.length}chars`);
-      // v2.18.4: Writer Pass-2 知 known-heavy (8-10 镜 × 每镜 11+ 字段 nested) — 实测 19K chars 输出
-      const raw = await this.callLLM(prompt, pass2Context, true, true, { maxTokens: 16384 });
+      // v2.18.4: Writer Pass-2 known-heavy;v12.164 提档 24576(env WRITER_MAX_TOKENS 可覆盖)
+      const writerMax = parseInt(process.env.WRITER_MAX_TOKENS || '', 10) || 24576;
+      const raw = await this.callLLM(prompt, pass2Context, true, true, { maxTokens: writerMax });
       this.update(AgentRole.WRITER, { progress: 70 });
 
       if (!raw) {

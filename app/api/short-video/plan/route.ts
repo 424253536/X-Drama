@@ -55,7 +55,14 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'LLM 未配置, 无法生成分镜计划' }, { status: 422 });
   }
 
-  const { system, user } = buildShortVideoMessages({ idea: verdict.sanitized, style, durationS, rhythm });
+  // v12.165:制作语言下达(languageDisplayName 转成母语名注入铁律,LLM 对母语名遵从度更高)
+  const langParam = typeof body?.language === 'string' && body.language !== 'auto' ? body.language : '';
+  let langName = '';
+  if (langParam) {
+    const { normalizeLanguage, languageDisplayName } = await import('@/lib/language-detect');
+    langName = languageDisplayName(normalizeLanguage(langParam, verdict.sanitized));
+  }
+  const { system, user } = buildShortVideoMessages({ idea: verdict.sanitized, style, durationS, rhythm, language: langName || undefined });
 
   try {
     const t0 = Date.now();
