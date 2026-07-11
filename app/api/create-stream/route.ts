@@ -24,7 +24,9 @@ export async function POST(request: NextRequest) {
     const uid = getUserFromRequest(request)?.sub;
     if (uid) {
       const { assertBudget } = await import('@/lib/budget-enforce');
-      const b = await assertBudget({ userId: uid, pendingCostCny: 6 }); // 整片粗估 ~¥6
+      // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 ¥6 对 Kling 20 镜低估 5-10 倍
+      const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
+      const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }) });
       if (!b.allow) {
         return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
       }

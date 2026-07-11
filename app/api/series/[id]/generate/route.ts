@@ -43,7 +43,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // v12.23.0(评审):预算护栏 —— 整片生成很重,批量更要拦,否则 force 反复重生会无上限超支。
   // 每集粗估 ¥6(图+视频+音),与单集管线同源预算控制。
   const { assertBudget } = await import('@/lib/budget-enforce');
-  const b = await assertBudget({ userId, pendingCostCny: targets.length * 6 });
+  const { estimatePipelineCostCny } = await import('@/lib/budget-estimate'); // v12.172 动态估
+  const b = await assertBudget({ userId, pendingCostCny: targets.length * estimatePipelineCostCny({}) });
   if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
 
   // 每集 → CreatePipelineInput(premise 作创意 + 继承锚点一致性资产)
