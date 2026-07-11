@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/lib/config';
+import { voiceForLanguage } from '@/lib/tts-voice-map';
 
 export interface TTSOptions {
   voiceId?: string;
@@ -135,7 +136,10 @@ export class TTSService {
       return { audioUrl: '', duration: 0, subtitle: [] };
     }
 
-    const voiceId = options?.voiceId || DEFAULT_VOICES.narrator_male;
+    let voiceId = options?.voiceId || DEFAULT_VOICES.narrator_male;
+    // v12.170:语种专属音色(env TTS_VOICE_JA_FEMALE 等配置即换;没配保持原音色 + language_boost)
+    const langVoice = options?.language ? voiceForLanguage(options.language, voiceId) : null;
+    if (langVoice) voiceId = langVoice;
     const profile = VOICE_PROFILES[voiceId] || VOICE_PROFILES[DEFAULT_VOICES.narrator_male];
 
     // v7.0.1: 默认 speech-02-hd (实测各 Token Plan 普遍支持; t2a_v2 无需 GroupId), 可被 MINIMAX_TTS_MODEL 覆盖
