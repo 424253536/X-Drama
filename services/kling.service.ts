@@ -173,9 +173,9 @@ export class KlingService {
     console.log(`[Kling-FLF] Prompt: ${prompt.slice(0, 100)}...`);
 
     const body: Record<string, any> = {
-      model_name: 'kling-v1',
+      model_name: process.env.KELING_VIDEO_MODEL || 'kling-v3', // v12.174 补:FLF 同主模型
       prompt,
-      mode: options?.mode || 'standard',
+      mode: options?.mode === 'professional' ? 'pro' : 'std', // 官方枚举 std/pro
       duration: String(Math.min(options?.duration || 5, 10)),
       image: firstFrameUrl,
       image_tail: lastFrameUrl,
@@ -287,7 +287,7 @@ export class KlingService {
       console.log(`[Kling] Generating image: ${prompt.slice(0, 100)}...`);
 
       const body: Record<string, any> = {
-        model_name: 'kling-v1',
+        model_name: process.env.KELING_IMAGE_MODEL || 'kling-v1', // 图像模型独立 env(视频 v3 ≠ 图像枚举)
         prompt: prompt,
       };
 
