@@ -4502,7 +4502,14 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
                 console.log(`[LipSync] shot ${v.shotNumber} skipped — audio is non-http (likely local TTS)`);
                 continue;
               }
-              const r = await lipsync.syncMouthToAudio(videoUrl, v.audioUrl, { language: lipsyncLangCode(this.targetLanguage()) });
+              // v12.179:ko/ru 等音素差异过大的语种标 none —— 用 en viseme 驱动会口型-发音严重错位,
+              // 错口型比无口型更伤观感;跳过口型保留原视频(字幕/配音不受影响)。
+              const lsLang = lipsyncLangCode(this.targetLanguage());
+              if (lsLang === 'none') {
+                console.log(`[Lipsync] 语种 ${this.targetLanguage()} 无适配音素表,跳过口型(诚实降级)`);
+                continue;
+              }
+              const r = await lipsync.syncMouthToAudio(videoUrl, v.audioUrl, { language: lsLang });
               if (r.applied && r.videoUrl && r.videoUrl.startsWith('http')) {
                 videoEntry.videoUrl = r.videoUrl;
                 appliedCount++;

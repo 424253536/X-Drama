@@ -11,7 +11,7 @@ export type TargetLanguage = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'ru' | 'd
 
 interface LangMeta {
   ttsCode: string;          // TTS 语种码(MiniMax/OpenAI 兼容)
-  lipsync: 'zh' | 'en';     // 口型模型只有中/英音素,其它退回 en 近似
+  lipsync: 'zh' | 'en' | 'none'; // 口型模型只有中/英音素;差异过大的语种标 none(v12.179:错口型比无口型更伤观感)
   enName: string;           // 英文名(注入 LLM 铁律用)
   nativeName: string;       // 母语名(UI 展示 + LLM 铁律用)
   ttsReliable: boolean;     // TTS 是否可靠出声(false → 只保证剧本/字幕,配音降级)
@@ -22,10 +22,10 @@ export const SUPPORTED_LANGUAGES: Record<TargetLanguage, LangMeta> = {
   zh: { ttsCode: 'zh-CN', lipsync: 'zh', enName: 'Chinese', nativeName: '简体中文', ttsReliable: true },
   en: { ttsCode: 'en-US', lipsync: 'en', enName: 'English', nativeName: 'English', ttsReliable: true },
   ja: { ttsCode: 'ja-JP', lipsync: 'en', enName: 'Japanese', nativeName: '日本語', ttsReliable: true },
-  ko: { ttsCode: 'ko-KR', lipsync: 'en', enName: 'Korean', nativeName: '한국어', ttsReliable: true },
+  ko: { ttsCode: 'ko-KR', lipsync: 'none', enName: 'Korean', nativeName: '한국어', ttsReliable: true },
   es: { ttsCode: 'es-ES', lipsync: 'en', enName: 'Spanish', nativeName: 'Español', ttsReliable: true },
   fr: { ttsCode: 'fr-FR', lipsync: 'en', enName: 'French', nativeName: 'Français', ttsReliable: true },
-  ru: { ttsCode: 'ru-RU', lipsync: 'en', enName: 'Russian', nativeName: 'Русский', ttsReliable: true },
+  ru: { ttsCode: 'ru-RU', lipsync: 'none', enName: 'Russian', nativeName: 'Русский', ttsReliable: true },
   de: { ttsCode: 'de-DE', lipsync: 'en', enName: 'German', nativeName: 'Deutsch', ttsReliable: true },
   pt: { ttsCode: 'pt-BR', lipsync: 'en', enName: 'Portuguese', nativeName: 'Português', ttsReliable: true },
 };
@@ -73,7 +73,7 @@ export function ttsLangCode(lang: TargetLanguage): string {
 }
 
 /** 口型对齐语种码(仅 zh/en 音素;其余近似 en)。 */
-export function lipsyncLangCode(lang: TargetLanguage): 'zh' | 'en' {
+export function lipsyncLangCode(lang: TargetLanguage): 'zh' | 'en' | 'none' {
   return SUPPORTED_LANGUAGES[lang]?.lipsync ?? 'zh';
 }
 

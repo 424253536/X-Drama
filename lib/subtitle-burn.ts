@@ -67,10 +67,29 @@ export function listSubtitlePlatforms(): SubtitlePlatform[] {
   return Object.keys(PRESETS) as SubtitlePlatform[];
 }
 
-/** 取平台预设. 未知平台回退 default. 返回拷贝, 防外部 mutate. */
-export function getSubtitleStyle(platform: SubtitlePlatform | string): SubtitleStyle {
+/**
+ * v12.180:按语种/平台选跨平台字体 —— PRESETS 硬编码 PingFang SC(macOS 专有),
+ * Linux 部署烧韩/俄字幕会静默豆腐块。优先级:SUBTITLE_FONT env > 语种专属 > 平台预设原值(mac 上仍最优)。
+ * Linux 部署方需安装 fonts-noto-cjk / fonts-noto-core(README 部署节已述)。
+ */
+export function fontForLanguage(lang?: string | null, presetFont?: string, env: Record<string, string | undefined> = process.env): string | null {
+  if (env.SUBTITLE_FONT) return env.SUBTITLE_FONT;
+  const l = (lang || '').toLowerCase();
+  const isDarwin = typeof process !== 'undefined' && process.platform === 'darwin';
+  if (l === 'ko') return isDarwin ? 'Apple SD Gothic Neo' : 'Noto Sans KR';
+  if (l === 'ja') return isDarwin ? 'Hiragino Sans' : 'Noto Sans JP';
+  if (l === 'ru' || l === 'de' || l === 'fr' || l === 'es' || l === 'pt') return isDarwin ? (presetFont || null) : 'DejaVu Sans';
+  if (l === 'zh' || !l) return isDarwin ? (presetFont || null) : 'Noto Sans CJK SC';
+  return null;
+}
+
+/** 取平台预设. 未知平台回退 default. 返回拷贝, 防外部 mutate. lang 可选 —— 语种字体覆盖(v12.180). */
+export function getSubtitleStyle(platform: SubtitlePlatform | string, lang?: string | null): SubtitleStyle {
   const p = (PRESETS as Record<string, SubtitleStyle>)[platform];
-  return { ...(p ?? PRESETS.default) };
+  const style = { ...(p ?? PRESETS.default) };
+  const f = fontForLanguage(lang, style.fontName);
+  if (f) style.fontName = f;
+  return style;
 }
 
 /** 允许在预设基础上覆盖个别字段. */
@@ -113,9 +132,14 @@ export function buildSubtitlesFilter(
   srtOrAssPath: string,
   platform: SubtitlePlatform | string = 'default',
   overrides: Partial<SubtitleStyle> = {},
+  lang?: string | null, // v12.180:目标语种(字体覆盖:ko/ja/ru 等跨平台可显)
 ): string {
   if (!srtOrAssPath) throw new Error('buildSubtitlesFilter: empty subtitle path');
   const style = getSubtitleStyleWithOverrides(platform, overrides);
+  if (!overrides.fontName) { // 显式覆盖优先;否则按语种/平台选可显字体
+    const f = fontForLanguage(lang, style.fontName);
+    if (f) style.fontName = f;
+  }
   const force = styleToForceStyle(style);
   const escaped = escapeSubtitlePath(srtOrAssPath);
   return `subtitles='${escaped}':force_style='${force}'`;
