@@ -26,9 +26,18 @@ describe('v12.156 · resolveEngineOrder', () => {
     expect(parseEngineOrderEnv('kling, MINIMAX, bogus,veo')).toEqual(['kling', 'minimax', 'veo']);
     expect(resolveEngineOrder(undefined, [])).toEqual([]);
   });
+  it('v12.178:对白镜偏好 —— 有台词+env 设定才重排;偏好不可用不动', async () => {
+    const { resolveEngineOrderForShot } = await import('@/lib/engine-order');
+    const base = ['veo', 'minimax', 'kling'] as any[];
+    expect(resolveEngineOrderForShot(base as any, { dialogue: '你好世界' }, { DIALOGUE_ENGINE: 'kling' })).toEqual(['kling', 'veo', 'minimax']);
+    expect(resolveEngineOrderForShot(base as any, { dialogue: '' }, { DIALOGUE_ENGINE: 'kling' })).toEqual(base);
+    expect(resolveEngineOrderForShot(base as any, { dialogue: '你好' }, {})).toEqual(base);
+    expect(resolveEngineOrderForShot(['veo'] as any, { dialogue: '你好' }, { DIALOGUE_ENGINE: 'kling' })).toEqual(['veo']);
+  });
   it('接线锁:主管线与 regenerateShot 均走 resolveEngineOrder + env', () => {
     const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
     expect((src.match(/resolveEngineOrder\(/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain('resolveEngineOrderForShot(engineOrder');
     expect(src).toContain('parseEngineOrderEnv(process.env.VIDEO_ENGINE_ORDER)');
   });
 });

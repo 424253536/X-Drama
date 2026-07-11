@@ -3625,6 +3625,11 @@ ${shots.map((s, i) => {
           videoProvider, availableEngines as any, parseEngineOrderEnv(process.env.VIDEO_ENGINE_ORDER),
         ) as VideoEngine[];
         if (engineOrder.length === 0) engineOrder = [route.primary, ...route.fallbacks];
+        // v12.178:对白镜优先原生音视频引擎(DIALOGUE_ENGINE env,未设零影响)
+        {
+          const { resolveEngineOrderForShot } = await import('@/lib/engine-order');
+          engineOrder = resolveEngineOrderForShot(engineOrder as any, shot) as VideoEngine[];
+        }
 
         let generated = false;
 

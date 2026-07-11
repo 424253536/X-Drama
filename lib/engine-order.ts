@@ -45,3 +45,21 @@ export function resolveEngineOrder(
   }
   return dedupe(DEFAULT_ORDER);
 }
+
+/**
+ * v12.178:对白镜引擎偏好 —— 带台词的镜优先「原生音视频/口型」引擎(Vidu Q3 / Kling Omni 等),
+ * 回应「三步对齐 TTS」的方向性劣势。env `DIALOGUE_ENGINE` 指定(如 'veo' 表示走 unified 通道
+ * 的 DIALOGUE_ENGINE_MODEL,或 'kling');未设 → 原链不动。纯函数,注入 env 可测。
+ */
+export function resolveEngineOrderForShot(
+  base: VideoEngineName[],
+  shot: { dialogue?: string | null } | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): VideoEngineName[] {
+  const pref = (env.DIALOGUE_ENGINE || '').toLowerCase();
+  const hasDialogue = !!(shot?.dialogue && shot.dialogue.trim().length >= 2);
+  if (!hasDialogue || !pref) return base;
+  const p = (pref === 'keling' ? 'kling' : pref) as VideoEngineName;
+  if (!base.includes(p)) return base; // 偏好引擎不可用 → 不动
+  return [p, ...base.filter((e) => e !== p)];
+}
