@@ -72,15 +72,15 @@ export function listSubtitlePlatforms(): SubtitlePlatform[] {
  * Linux 部署烧韩/俄字幕会静默豆腐块。优先级:SUBTITLE_FONT env > 语种专属 > 平台预设原值(mac 上仍最优)。
  * Linux 部署方需安装 fonts-noto-cjk / fonts-noto-core(README 部署节已述)。
  */
-export function fontForLanguage(lang?: string | null, presetFont?: string, env: Record<string, string | undefined> = process.env): string | null {
+export function fontForLanguage(lang?: string | null, presetFont?: string, env: Record<string, string | undefined> = process.env, platform: string = typeof process !== 'undefined' ? process.platform : 'linux'): string | null {
   if (env.SUBTITLE_FONT) return env.SUBTITLE_FONT;
   const l = (lang || '').toLowerCase();
-  const isDarwin = typeof process !== 'undefined' && process.platform === 'darwin';
+  const isDarwin = platform === 'darwin';
   if (l === 'ko') return isDarwin ? 'Apple SD Gothic Neo' : 'Noto Sans KR';
   if (l === 'ja') return isDarwin ? 'Hiragino Sans' : 'Noto Sans JP';
   if (l === 'ru' || l === 'de' || l === 'fr' || l === 'es' || l === 'pt') return isDarwin ? (presetFont || null) : 'DejaVu Sans';
-  if (l === 'zh' || !l) return isDarwin ? (presetFont || null) : 'Noto Sans CJK SC';
-  return null;
+  if (l === 'zh') return isDarwin ? (presetFont || null) : 'Noto Sans CJK SC';
+  return null; // 未指定语种 → 不覆盖预设(YouTube 等西文平台的 Arial 必须保留;CI Linux 抓到的真行为 bug)
 }
 
 /** 取平台预设. 未知平台回退 default. 返回拷贝, 防外部 mutate. lang 可选 —— 语种字体覆盖(v12.180). */

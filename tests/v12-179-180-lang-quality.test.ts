@@ -29,6 +29,13 @@ describe('v12.180 · 字幕字体', () => {
     const zhF = fontForLanguage('zh', 'PingFang SC', {});
     expect(['PingFang SC', 'Noto Sans CJK SC']).toContain(zhF!);
   });
+  it('CI 等价:Linux 平台语义(darwin 本地跑不出的分支)', () => {
+    expect(fontForLanguage(undefined, 'Arial', {}, 'linux')).toBeNull();      // 未指定语种不覆盖 —— CI 抓到的真 bug
+    expect(fontForLanguage('zh', 'PingFang SC', {}, 'linux')).toBe('Noto Sans CJK SC');
+    expect(fontForLanguage('ko', 'PingFang SC', {}, 'linux')).toBe('Noto Sans KR');
+    expect(fontForLanguage('ru', 'PingFang SC', {}, 'linux')).toBe('DejaVu Sans');
+    expect(fontForLanguage(undefined, 'Arial', {}, 'darwin')).toBeNull();
+  });
   it('buildSubtitlesFilter 带 lang 参数换字体;显式 override 优先', () => {
     const ko = buildSubtitlesFilter('/tmp/a.srt', 'douyin', {}, 'ko');
     expect(ko).toMatch(/FontName=(Noto Sans KR|Apple SD Gothic Neo)/);

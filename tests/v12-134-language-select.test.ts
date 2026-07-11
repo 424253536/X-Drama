@@ -33,7 +33,7 @@ describe('v12.134 · 语种规范化', () => {
 describe('v12.134 · 语种元数据 + 降级', () => {
   it('ttsLangCode / lipsyncLangCode:非 zh/en 语种 lipsync 退回 en 近似', () => {
     expect(ttsLangCode('ru')).toBe('ru-RU');
-    expect(lipsyncLangCode('ru')).toBe('en');   // 口型近似
+    expect(lipsyncLangCode('ru')).toBe('none'); // v12.179:音素差异过大改诚实降级(跳过口型)
     expect(lipsyncLangCode('zh')).toBe('zh');
     expect(ttsLangCode('ja')).toBe('ja-JP');
   });
