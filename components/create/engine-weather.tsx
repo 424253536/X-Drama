@@ -14,20 +14,23 @@ interface Alert { provider: string; alertType: string; lastSeenAt: string; count
 interface Gateway { host: string; remainingSec: number }
 
 const PROVIDER_LABEL: Record<string, string> = {
-  minimax: 'MiniMax(视频/图)', veo: 'Veo(视频)', midjourney: 'Midjourney(图)',
+  minimax: 'MiniMax(视频/图)', veo: 'Veo(视频)', midjourney: 'Midjourney(图)', kling: '可灵(视频)',
 };
 const TYPE_LABEL: Record<string, string> = {
   exhausted: '余额/额度耗尽', auth_failed: '密钥失效', saturated: '上游饱和', rate_limited: '限流中',
 };
 
-/** 纯函数:状态 → 展示片段(可单测)。 */
-export function weatherSegments(alerts: Alert[], gateways: Gateway[]): string[] {
+/** 纯函数:状态 → 展示片段(可单测)。v12.161:引擎近10分钟失败 ≥3 也亮条。 */
+export function weatherSegments(alerts: Alert[], gateways: Gateway[], engines: Array<{ provider: string; recentFailures: number }> = []): string[] {
   const segs: string[] = [];
   for (const a of alerts) {
     segs.push(`${PROVIDER_LABEL[a.provider] || a.provider} ${TYPE_LABEL[a.alertType] || a.alertType}`);
   }
   for (const g of gateways) {
     segs.push(`网关 ${g.host} 配额冷却(约 ${Math.max(1, Math.round(g.remainingSec / 60))} 分钟)`);
+  }
+  for (const e of engines) {
+    if (e.recentFailures >= 3) segs.push(`${PROVIDER_LABEL[e.provider] || e.provider} 近10分钟失败 ${e.recentFailures} 次(不稳)`);
   }
   return segs;
 }
@@ -38,7 +41,7 @@ export function EngineWeather() {
     try {
       const res = await fetch('/api/api-status');
       const data = await res.json();
-      setSegs(weatherSegments(data.alerts || [], data.gateways || []));
+      setSegs(weatherSegments(data.alerts || [], data.gateways || [], data.engines || []));
     } catch { /* 拉不到就当晴天,不打扰 */ }
   }, []);
   useEffect(() => {

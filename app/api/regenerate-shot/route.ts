@@ -133,9 +133,13 @@ export async function POST(request: NextRequest) {
           }
 
           let okCount = 0; let animaticCount = 0; // v12.154:真视频与降级分开统计,不再谎报
-          for (const asset of targets) {
+          // v12.161:有界并发 2 —— Kling/MiniMax 双通道时并行补渲,时长近似减半;
+          // 每引擎自身的排队/限流由其 service 内处理,2 并发不至于打爆单引擎配额。
+          const { mapPool } = await import('@/lib/film-health-io');
+          let started = 0;
+          await mapPool(targets, 2, async (asset: any) => {
             const sn = asset.shot_number;
-            send('status', { message: `补渲镜头 ${sn}(${okCount + 1}/${targets.length})...` });
+            send('status', { message: `补渲镜头 ${sn}(${++started}/${targets.length})...` });
             try {
               const sbAll = await listAssetsByType(projectId, 'storyboard') as any[];
               const sbAsset = sbAll.find((x) => x.shot_number === sn);
@@ -160,7 +164,7 @@ export async function POST(request: NextRequest) {
             } catch (e) {
               send('regenerateError', { shotNumber: sn, error: e instanceof Error ? e.message.slice(0, 120) : '生成失败' });
             }
-          }
+          });
           send('batchDone', { total: targets.length, ok: okCount, animatic: animaticCount, fail: targets.length - okCount - animaticCount });
 
           // 有成功镜 → 自动重做剪辑合成(与 stage==='editor' 同逻辑)

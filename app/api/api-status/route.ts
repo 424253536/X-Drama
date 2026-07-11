@@ -44,9 +44,19 @@ export async function GET() {
   // 图像/LLM 网关级「余额不足」秒级可见(DB 告警只覆盖有埋点的 provider)。
   const { listOutOfCreditsGateways } = await import('@/lib/gateway-budget');
 
+  // v12.161:各视频引擎近 10 分钟失败数(≥3 视为不稳)—— 天气条绿色时也能看引擎脉搏
+  const { getRecentFailureRate } = await import('@/lib/api-usage-tracker');
+  const engines = await Promise.all((['veo', 'minimax', 'keling'] as const).map(async (p) => {
+    try {
+      const r = await getRecentFailureRate(p as any);
+      return { provider: p === 'keling' ? 'kling' : p, recentFailures: r.failed };
+    } catch { return { provider: p === 'keling' ? 'kling' : p, recentFailures: 0 }; }
+  }));
+
   return NextResponse.json({
     alerts: Array.from(byProvider.values()),
     gateways: listOutOfCreditsGateways(),
+    engines,
     timestamp: new Date().toISOString(),
   });
 }
