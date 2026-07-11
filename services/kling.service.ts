@@ -142,6 +142,63 @@ export class KlingService {
   }
 
   /**
+   * v12.175:Elements 多图参考生视频 —— 官方 multi-image2video 端点(零成本探测:
+   * body 形态 image_list:[{image}],**仅 kling-v1-6 支持**(v3 报 model is not supported)。
+   * 用于锁角色多参场景:角色正面图+参考图 ≤4 张,跨镜一致性优于单图 i2v。
+   */
+  async generateVideoWithElements(
+    imageUrls: string[],
+    prompt: string,
+    options?: { duration?: number; aspectRatio?: string; mode?: 'standard' | 'professional'; onProgress?: ProgressCallback },
+  ): Promise<string> {
+    if (!this.apiKey || this.apiKey.startsWith('your_')) throw new Error('KELING_API_KEY is not configured');
+    const images = imageUrls.filter((u) => u && (u.startsWith('http') || u.startsWith('data:image/'))).slice(0, 4);
+    if (images.length === 0) throw new Error('Kling Elements: 无有效参考图');
+    const body: Record<string, any> = {
+      model_name: process.env.KELING_ELEMENTS_MODEL || 'kling-v1-6',
+      prompt,
+      mode: options?.mode === 'professional' ? 'pro' : 'std',
+      duration: (options?.duration || 5) > 5 ? '10' : '5', // v1-6 只收 5/10
+      image_list: images.map((u) => ({ image: u.startsWith('data:image/') ? u.split(',')[1] : u })),
+    };
+    if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
+    console.log(`[Kling-Elements] multi-image2video: ${images.length} 参考图`);
+    const response = await fetchWithTimeout(`${this.baseURL}/v1/videos/multi-image2video`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok || (data.code !== undefined && data.code !== 0)) {
+      throw new Error(`Kling Elements error (${data.code ?? response.status}): ${data.message || 'unknown'}`);
+    }
+    const taskId = data.data?.task_id;
+    if (!taskId) throw new Error(`Kling Elements: no task_id: ${JSON.stringify(data).slice(0, 150)}`);
+    return await this.pollMultiImageResult(taskId, options?.onProgress);
+  }
+
+  /** multi-image2video 任务轮询(路径与 image2video 不同)。 */
+  private async pollMultiImageResult(taskId: string, onProgress?: ProgressCallback): Promise<string> {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const res = await fetchWithTimeout(`${this.baseURL}/v1/videos/multi-image2video/${taskId}`, {
+        headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      });
+      const d = await res.json();
+      const st = d.data?.task_status;
+      onProgress?.(Math.min(95, i * 2), st || 'processing');
+      console.log(`[Kling-Elements] Poll #${i + 1}: status=${st}`);
+      if (st === 'succeed') {
+        const url = d.data?.task_result?.videos?.[0]?.url;
+        if (url) return url;
+        throw new Error('Kling Elements: succeed 但无视频 URL');
+      }
+      if (st === 'failed') throw new Error(`Kling Elements failed: ${d.data?.task_status_msg || 'unknown'}`);
+    }
+    throw new Error('Kling Elements timeout (5 min)');
+  }
+
+  /**
    * v2.14 P0.3: 首尾帧融合 — 用户给首帧 + 尾帧, Kling 自动补中间运动。
    *
    * Kling API: POST /v1/videos/image2video, body 同 image2video, 但额外加 image_tail。

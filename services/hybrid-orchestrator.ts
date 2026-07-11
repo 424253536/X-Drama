@@ -3643,9 +3643,22 @@ ${shots.map((s, i) => {
               // v12.15.0(Phase 2.1):给 Kling 喂角色(registry mount)+ 场景/风格参考图。
               // 之前 Kling 路径只有 first_frame、无任何角色/场景参考。Elements 多参实际生效需 KLING_ELEMENTS=1。
               const klingRefs = flattenBundleToUrls(mrBundle, 4).filter((u) => u !== firstFrameUrl);
-              // v12.163:duration 跟随剧本(service 层按模型归一:v3 支持 15s,v1/v2 系 5/10);
-              // v12.174:>10s 镜传 15,v3 下不再被剪。
+              // v12.175:锁角场景优先走官方 multi-image2video(Elements 多图端点,v1-6 专属)——
+              // 首帧+角色正面图 ≤4 张同送,跨镜一致性优于单图 i2v;失败自动落回单图 v3 路径。
+              const subjRefs = subjectReferencesFromMount(shotMount);
               const klingDur = (shot?.duration && shot.duration > 10) ? 15 : (shot?.duration && shot.duration > 5) ? 10 : 5;
+              if (process.env.KLING_ELEMENTS === '1' && subjRefs.length > 0) {
+                try {
+                  const elemImages = [firstFrameUrl, ...subjRefs.map((r) => r.imageUrl)].filter(Boolean);
+                  return await this.klingService.generateVideoWithElements(elemImages, enhancedPrompt, {
+                    duration: klingDur, aspectRatio: this.videoAspect() as any,
+                    onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+                  });
+                } catch (e) {
+                  console.warn(`[Kling-Elements] 失败退回单图 i2v:`, e instanceof Error ? e.message.slice(0, 80) : e);
+                }
+              }
+              // v12.163/174:duration 跟随剧本(v3 支持 15s;声明已上移供 Elements 共用)。
               return await this.klingService.generateVideo(firstFrameUrl, enhancedPrompt, {
                 duration: klingDur,
                 aspectRatio: this.videoAspect(), // v12.14.0 横竖屏
