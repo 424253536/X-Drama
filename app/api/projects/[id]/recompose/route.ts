@@ -97,7 +97,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const musicUrl = fullUrl(musicAssets[0]?.persistent_url || parse(musicAssets[0]?.media_urls)?.[0] || '');
+  // v12.184:自定义 BGM(body.bgmUrl,http/站内)优先于项目 music 资产 —— 用户上传/外链换曲即重合成
+  const customBgm = typeof body?.bgmUrl === 'string' && /^(https?:|\/api\/serve-file)/.test(body.bgmUrl) ? body.bgmUrl : '';
+  const musicUrl = fullUrl(customBgm || musicAssets[0]?.persistent_url || parse(musicAssets[0]?.media_urls)?.[0] || '');
   const keepSet = new Set(clips.map((c) => c.shotNumber));
 
   let voiceoverClips: Array<{ shotNumber: number; audioUrl: string }> = [];

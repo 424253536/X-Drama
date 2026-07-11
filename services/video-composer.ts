@@ -930,8 +930,11 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   let beatEditInfo = '';
   if (localClips.length > 1 && localMusicPath && process.env.BEAT_EDIT_DISABLE !== '1') {
     try {
-      const { detectBeats, snapDurationsToBeatsClamped } = await import('@/lib/beat-detect');
-      const beats = await detectBeats(localMusicPath);
+      const { detectBeatsWithFallback, snapDurationsToBeatsClamped } = await import('@/lib/beat-detect');
+      // v12.184:AI BGM 无静音段致真检测 0 拍点(对齐率恒 0%)→ BPM 网格兜底,切点永远有的吸
+      const totalSec = durations.reduce((a: number, b: number) => a + b, 0);
+      const { beats, source: beatSource } = await detectBeatsWithFallback(localMusicPath, { durationSec: totalSec + 5 });
+      if (beatSource === 'bpm-grid') console.log('[Beat] 真拍点稀疏,启用 BPM 网格兜底(BGM_BPM_HINT 可调)');
       if (beats.length > 0) {
         const { durations: snapped, changed } = snapDurationsToBeatsClamped(durations, beats);
         for (let i = 0; i < durations.length; i++) durations[i] = snapped[i];

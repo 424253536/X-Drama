@@ -176,3 +176,30 @@ export function findNearestBeat(t: number, beats: number[]): number | null {
   }
   return best;
 }
+
+/**
+ * v12.184:BPM 数学网格 —— AI 生成 BGM 连续无静音段,silencedetect 检出 0 拍点
+ * (live 实测卡点对齐率 0%)。已知/假设 BPM 生成等间隔拍点网格,snap 永远有的吸。
+ */
+export function beatGridFromBpm(bpm: number, durationSec: number, phaseSec = 0): number[] {
+  if (!Number.isFinite(bpm) || bpm <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) return [];
+  const step = 60 / bpm;
+  const out: number[] = [];
+  for (let t = phaseSec; t <= durationSec + 1e-6; t += step) {
+    if (t > 0) out.push(Number(t.toFixed(3)));
+  }
+  return out;
+}
+
+/** 真检测优先;拍点稀疏(<4)→ BPM 网格兜底(相位取首个真拍点,没有则 0)。 */
+export async function detectBeatsWithFallback(
+  bgmPath: string,
+  opts: { bpmHint?: number; durationSec?: number } = {},
+): Promise<{ beats: number[]; source: 'detected' | 'bpm-grid' | 'none' }> {
+  const real = await detectBeats(bgmPath);
+  if (real.length >= 4) return { beats: real, source: 'detected' };
+  const bpm = opts.bpmHint && opts.bpmHint > 0 ? opts.bpmHint : Number(process.env.BGM_BPM_HINT) || 96;
+  const dur = opts.durationSec && opts.durationSec > 0 ? opts.durationSec : 120;
+  const grid = beatGridFromBpm(bpm, dur, real[0] ?? 0);
+  return grid.length ? { beats: grid, source: 'bpm-grid' } : { beats: [], source: 'none' };
+}
