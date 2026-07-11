@@ -30,7 +30,11 @@ export function resolveEngineOrder(
   const has = (e: VideoEngineName) => available.includes(e);
   const dedupe = (arr: VideoEngineName[]) => [...new Set(arr)].filter(has);
 
-  const p = (provider || '').toLowerCase();
+  // 别名归一:创作页可灵选项 id 是 'keling'(历史命名),veo3.1 是 Veo 的版本别名 ——
+  // 此前主管线不认 'keling',用户显式选可灵被静默忽略(v12.157 live 发现)。
+  let p = (provider || '').toLowerCase();
+  if (p === 'keling') p = 'kling';
+  if (p === 'veo3.1' || p === 'veo3') p = 'veo';
   if ((p === 'minimax' || p === 'veo' || p === 'kling') && has(p as VideoEngineName)) {
     // 显式选择打头,其余按 env 序(无 env 按默认)补位兜底
     const rest = (envOrder.length ? envOrder : DEFAULT_ORDER).filter((e) => e !== p);

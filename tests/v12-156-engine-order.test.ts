@@ -16,6 +16,10 @@ describe('v12.156 · resolveEngineOrder', () => {
   it('显式 provider + env:provider 打头,其余按 env 序', () => {
     expect(resolveEngineOrder('veo', all, ['kling', 'minimax', 'veo'])).toEqual(['veo', 'kling', 'minimax']);
   });
+  it("v12.157:'keling'/'veo3.1' 别名归一(创作页可灵选项此前被静默忽略)", () => {
+    expect(resolveEngineOrder('keling', all)).toEqual(['kling', 'veo', 'minimax']);
+    expect(resolveEngineOrder('veo3.1', all, ['kling', 'minimax', 'veo'])).toEqual(['veo', 'kling', 'minimax']);
+  });
   it('不可用引擎剔除;provider 不可用退 env/默认;未知名忽略', () => {
     expect(resolveEngineOrder('kling', ['veo', 'minimax'])).toEqual(['veo', 'minimax']);
     expect(resolveEngineOrder('sora' as any, all, ['minimax'])).toEqual(['minimax', 'veo', 'kling']);

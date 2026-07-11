@@ -961,7 +961,7 @@ export default function DashboardCreatePage() {
               {[
                 { id: 'veo', label: 'Veo 3.1', sub: 'cinematic · slow' },
                 { id: 'minimax', label: 'Minimax', sub: 'balanced · fast' },
-                { id: 'keling', label: '可灵 AI', sub: 'cn voice · ok' },
+                { id: 'keling', label: '可灵 AI', sub: '官方API · 已接入' }, // v12.157:key 已接,别名在 engine-order 归一
               ].map((v) => (
                 <button
                   key={v.id}

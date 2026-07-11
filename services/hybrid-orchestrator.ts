@@ -3527,7 +3527,11 @@ ${shots.map((s, i) => {
       const prevFrameHttp = !!prevShotLastFrame && (prevShotLastFrame.startsWith('http') || prevShotLastFrame.startsWith('/api/serve-file'));
       const continuousChain = shot?.transition === 'continuous' && prevFrameHttp
         && scenesLikelySame(shot?.sceneDescription, prevShot?.sceneDescription);
-      const firstFrameUrl = continuousChain ? prevShotLastFrame! : (mrBundle.firstFrameUrl || storyboardImage || sceneRefUrl);
+      const rawFirstFrame = continuousChain ? prevShotLastFrame! : (mrBundle.firstFrameUrl || storyboardImage || sceneRefUrl);
+      // v12.157:首帧过引擎通道 —— 上一镜真末帧/中间帧是站内 serve-file 本地路径,外部引擎取不到
+      // (MiniMax 报 2013 invalid image url);转 base64 data URI(MiniMax/Kling 官方均收),http 原样。
+      const { toEngineImage: _toEng } = await import('@/lib/first-frame');
+      const firstFrameUrl = _toEng(rawFirstFrame) || rawFirstFrame;
       if (continuousChain) {
         console.log(`[Continuity] Shot ${board.shotNumber}: continuous chain → 首帧用上一镜真末帧(无缝衔接)`);
         this.emit('consistencyStatus', { shotNumber: curShotNum, type: 'lastFrameChained', fromShot: curShotNum - 1, frameUrl: prevShotLastFrame });
