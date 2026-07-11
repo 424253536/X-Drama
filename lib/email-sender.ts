@@ -78,8 +78,16 @@ export async function sendEmail(input: EmailSendInput): Promise<EmailSendResult>
   switch (provider) {
     case 'resend': return sendViaResend(input);
     case 'sendgrid': return sendViaSendGrid(input);
-    case 'ses': return { sent: false, warning: 'EMAIL_PROVIDER=ses 需 AWS SigV4 依赖(未随包,与 Resend/SendGrid 重复故未内置);请用 resend / sendgrid,或自行接 @aws-sdk/client-sesv2' };
-    default: return { sent: false, warning: `provider ${provider} not implemented` };
+    case 'ses':
+    default: {
+      // v12.192:此前静默返回 sent:false 无任何可见告警(运营者配 ses 后邮件全丢)——
+      // 契约「永不抛」保留,但每次调用打 console.error(进日志/监控),错误配置不再隐身。
+      const msg = provider === 'ses'
+        ? 'EMAIL_PROVIDER=ses 未实现(需 AWS SigV4 依赖),邮件未发送 —— 请改用 resend/sendgrid'
+        : `EMAIL_PROVIDER=${provider} 未知,邮件未发送`;
+      console.error(`[email-sender] ⚠️ ${msg}`);
+      return { sent: false, warning: msg };
+    }
   }
 }
 
