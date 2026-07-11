@@ -113,7 +113,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const line = (c.dialogue || '').trim();
       if (!line) continue;
       try {
-        const d = await dispatchTTSGenerate({ text: line, voiceId: 'female-zh', language: ttsLangCode('zh') });
+        // v12.187:TTS 语种可传(一键多语版:翻译稿重配即该语种配音;默认 zh 保旧)
+        const { normalizeLanguage } = await import('@/lib/language-detect');
+        const ttsLang = ttsLangCode(normalizeLanguage(String(body?.language || 'zh'), line));
+        const d = await dispatchTTSGenerate({ text: line, voiceId: 'female-zh', language: ttsLang });
         if (d.result?.audioUrl) voiceoverClips.push({ shotNumber: c.shotNumber, audioUrl: d.result.audioUrl });
       } catch (e) { console.warn(`[recompose] TTS 重生失败 shot ${c.shotNumber}:`, e instanceof Error ? e.message : e); }
     }
