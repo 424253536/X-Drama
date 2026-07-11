@@ -3290,6 +3290,22 @@ ${shots.map((s, i) => {
     // 主角色参考图（用于 S2V-01 subject_reference 和无法匹配角色时的 fallback）
     const primaryCharRef = this.primaryCharacterRef || Array.from(charUrlMap.values())[0] || '';
 
+    // v12.176(KLING_MULTISHOT=1,默认关):连续镜分组 —— 组≥2 时首镜以 v3 15s 一次调用产整段,
+    // 组员镜复用组产物(mergedInto),composer 拼接时长已含。A/B 实测定去留。
+    const { groupContinuousShots } = await import('@/lib/multi-shot-merge');
+    const msGroups = process.env.KLING_MULTISHOT === '1' && script?.shots
+      ? groupContinuousShots(script.shots as any[])
+      : null;
+    const msGroupOfShot = new Map<number, { headShot: number; groupSize: number; totalSec: number }>();
+    if (msGroups) {
+      for (const g of msGroups) {
+        if (g.shots.length < 2) continue;
+        for (const sh of g.shots) msGroupOfShot.set(sh.shotNumber, { headShot: g.shots[0].shotNumber, groupSize: g.shots.length, totalSec: g.totalSec });
+      }
+    }
+    const msProducedByHead = new Map<number, string>(); // 组首镜产物,组员复用
+
+
     // 构建场景名→图片URL映射
     const sceneUrlMap = new Map<string, string>();
     if (scenes) {
@@ -3647,6 +3663,33 @@ ${shots.map((s, i) => {
               // 首帧+角色正面图 ≤4 张同送,跨镜一致性优于单图 i2v;失败自动落回单图 v3 路径。
               const subjRefs = subjectReferencesFromMount(shotMount);
               const klingDur = (shot?.duration && shot.duration > 10) ? 15 : (shot?.duration && shot.duration > 5) ? 10 : 5;
+              // v12.176:多镜合并 —— 组员镜直接复用组首产物;组首镜按组总时长 + 编号多镜 prompt 一次调用
+              const msInfo = msGroupOfShot.get(board.shotNumber ?? -1);
+              if (msInfo && msInfo.headShot !== board.shotNumber) {
+                const produced = msProducedByHead.get(msInfo.headShot);
+                if (produced) {
+                  console.log(`[Kling-MultiShot] Shot ${board.shotNumber} 复用组首 ${msInfo.headShot} 产物(时长已含)`);
+                  return produced;
+                }
+                // 组首失败/未产 → 走常规单镜(容错)
+              }
+              if (msInfo && msInfo.headShot === board.shotNumber && msInfo.groupSize >= 2) {
+                try {
+                  const { groupContinuousShots, buildMultiShotPrompt } = await import('@/lib/multi-shot-merge');
+                  const g = groupContinuousShots((script?.shots as any[]) || []).find((x) => x.shots[0]?.shotNumber === board.shotNumber);
+                  if (g && g.shots.length >= 2) {
+                    const msPrompt = buildMultiShotPrompt(g);
+                    const msDur = g.totalSec > 10 ? 15 : g.totalSec > 5 ? 10 : 5;
+                    const u = await this.klingService.generateVideo(firstFrameUrl, msPrompt, {
+                      duration: msDur, aspectRatio: this.videoAspect() as any,
+                      onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+                    });
+                    msProducedByHead.set(board.shotNumber ?? -1, u);
+                    this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `🎬 多镜合并:S${g.shots.map((x) => x.shotNumber).join('+S')} 一次 v3 调用(${msDur}s)` });
+                    return u;
+                  }
+                } catch (e) { console.warn('[Kling-MultiShot] 合并失败,退单镜:', e instanceof Error ? e.message.slice(0, 60) : e); }
+              }
               if (process.env.KLING_ELEMENTS === '1' && subjRefs.length > 0) {
                 try {
                   const elemImages = [firstFrameUrl, ...subjRefs.map((r) => r.imageUrl)].filter(Boolean);
