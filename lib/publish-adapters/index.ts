@@ -8,16 +8,19 @@ import { PLATFORM_SPECS } from '../distribution';
 import type { PublishAdapter } from './types';
 import { createManualAdapter } from './manual';
 import { createYouTubeAdapter, type YouTubeDeps } from './youtube';
+import { createDouyinAdapter } from './douyin';
 
 export type { PublishAdapter, UploadResult, UploadOptions, AdapterMode } from './types';
 export { createManualAdapter } from './manual';
 export { createYouTubeAdapter } from './youtube';
+export { createDouyinAdapter } from './douyin';
 
 const LABEL_BY_ID = new Map<string, string>(PLATFORM_SPECS.map((s) => [s.id, s.label]));
 
 /** 取某平台的发布适配器。deps 仅 youtube 用(测试注入网络/token)。 */
 export function getPublishAdapter(platform: string, deps?: YouTubeDeps): PublishAdapter {
   if (platform === 'youtube_shorts') return createYouTubeAdapter(deps);
+  if (platform === 'douyin') return createDouyinAdapter(); // v12.189:自配 token 即直发,未配 manual 降级
   const label = LABEL_BY_ID.get(platform) || platform;
   return createManualAdapter(platform, label);
 }
