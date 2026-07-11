@@ -3580,17 +3580,13 @@ ${shots.map((s, i) => {
         );
         console.log(`[P2-Route] Shot ${board.shotNumber}: ${route.primary} (${route.reason}), fallbacks: [${route.fallbacks.join(',')}]`);
 
-        // ★ 2026-04 翻转：Veo 首选 → Minimax 兜底 → Kling
-        // 用户显式请求 minimax 时仍然尊重路由,否则强制 Veo 打头
-        let engineOrder: VideoEngine[];
-        if (videoProvider === 'minimax' && this.minimaxService?.isVideoAvailable()) {
-          engineOrder = ['minimax', 'veo', 'kling'].filter(e => availableEngines.includes(e as VideoEngine)) as VideoEngine[];
-        } else if (this.veoService) {
-          engineOrder = ['veo', 'minimax', 'kling'].filter(e => availableEngines.includes(e as VideoEngine)) as VideoEngine[];
-        } else {
-          engineOrder = [route.primary, ...route.fallbacks];
-        }
-        engineOrder = [...new Set(engineOrder)]; // 去重
+        // v12.156:链序统一走 resolveEngineOrder(显式 provider > env VIDEO_ENGINE_ORDER > Veo 默认)
+        // —— MiniMax 额度紧张/Kling 充值后,主力引擎由一行 env 决定,不再改代码。
+        const { resolveEngineOrder, parseEngineOrderEnv } = await import('@/lib/engine-order');
+        let engineOrder = resolveEngineOrder(
+          videoProvider, availableEngines as any, parseEngineOrderEnv(process.env.VIDEO_ENGINE_ORDER),
+        ) as VideoEngine[];
+        if (engineOrder.length === 0) engineOrder = [route.primary, ...route.fallbacks];
 
         let generated = false;
 
@@ -5155,7 +5151,6 @@ ${characterBibleBlock}${producerContext}
     this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `重新生成第 ${shotNumber} 镜`, progress: 0 });
     let videoUrl: string;
     const provider = options?.videoProvider || 'veo';
-    const useVeo = (provider === 'veo' || provider === 'veo3.1') && this.veoService;
 
     // v2.14 P0.1: 单镜重生也吃 lockedCharacters → S2V multi-subject
     const subjectRefs = this.getLockedSubjectReferences();
@@ -5170,11 +5165,19 @@ ${characterBibleBlock}${producerContext}
     const engineFrame = toEngineImage(storyboard.imageUrl) || storyboard.imageUrl;
     const duration = options?.duration || 8;
 
-    // v12.154:真引擎链 Veo → MiniMax → Kling(此前无 Kling;且末档把分镜图当视频谎报 completed)
-    const attempts: Array<{ name: string; gen: () => Promise<string> }> = [];
-    if (useVeo) attempts.push({ name: 'Veo', gen: () => this.veoService!.generateVideo(engineFrame, storyboard.prompt, { duration, aspectRatio: this.videoAspect() }) });
-    if (this.minimaxService) attempts.push({ name: 'Minimax', gen: () => this.minimaxService!.generateVideo(engineFrame, storyboard.prompt, minimaxOpts) });
-    if (this.klingService) attempts.push({ name: 'Kling', gen: () => this.klingService!.generateVideo(engineFrame, storyboard.prompt, { duration: Math.min(duration, 10), aspectRatio: this.videoAspect() as any }) });
+    // v12.154:真引擎链(此前无 Kling;且末档把分镜图当视频谎报 completed)
+    // v12.156:链序与主管线统一(显式 provider > env VIDEO_ENGINE_ORDER > Veo 默认)
+    const { resolveEngineOrder, parseEngineOrderEnv } = await import('@/lib/engine-order');
+    const availForRegen = ([
+      this.veoService && 'veo', this.minimaxService && 'minimax', this.klingService && 'kling',
+    ].filter(Boolean)) as Array<'veo' | 'minimax' | 'kling'>;
+    const regenOrder = resolveEngineOrder(provider, availForRegen, parseEngineOrderEnv(process.env.VIDEO_ENGINE_ORDER));
+    const genByEngine: Record<string, () => Promise<string>> = {
+      veo: () => this.veoService!.generateVideo(engineFrame, storyboard.prompt, { duration, aspectRatio: this.videoAspect() }),
+      minimax: () => this.minimaxService!.generateVideo(engineFrame, storyboard.prompt, minimaxOpts),
+      kling: () => this.klingService!.generateVideo(engineFrame, storyboard.prompt, { duration: Math.min(duration, 10), aspectRatio: this.videoAspect() as any }),
+    };
+    const attempts = regenOrder.map((e) => ({ name: e, gen: genByEngine[e] }));
 
     let isAnimatic = false;
     videoUrl = '';
