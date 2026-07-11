@@ -231,7 +231,12 @@ export function detectHighlights(clips: ComposerClip[], opts: { actionMode?: boo
     } else if (isHighlight) {
       // 非动作高光:稍微降速（慢动作强调），转场更激烈
       if (score >= 70) {
-        speedMultiplier = 0.7; // 强高光：30% 慢动作
+        speedMultiplier = 0.7; // 强高光：30% 慢动作(EMOTION_RAMP_DISABLE=1 时的旧线性行为)
+        // v12.185:S 形速度曲线 —— 正常进→中段慢放强调→回速收尾,比整段线性慢更有「呼吸感」
+        if (process.env.EMOTION_RAMP_DISABLE !== '1') {
+          (clip as any).speedCurve = undefined; // 由下方统一计算(需 clip 实际时长)
+          (clip as any)._wantClimaxRamp = true;
+        }
         transition = 'fade';
         transitionDuration = 0.3;
       } else {
@@ -973,7 +978,16 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1`;
       if (speed !== 1.0 && speed > 0) {
         const pts = 1.0 / speed;
-        videoFilter += `,setpts=${pts.toFixed(3)}*PTS`;
+        {
+        // v12.185:速度曲线 —— 高潮 S 形 ramp 重塑视频内部节奏(正常进→中段慢放→回速);
+        // 音频/时长仍按线性 speed 口径(ramp 平均速与线性差 <8%,尾部由 trim 兜底),不动全链对齐。
+        const { speedCurveToSetpts, climaxRamp } = require('@/lib/speed-curve') as typeof import('@/lib/speed-curve');
+        const _c: any = validClips[0];
+        const _dur = Number(_c?.duration) || 0;
+        const _curve = _c?.speedCurve || (_c?._wantClimaxRamp && _dur >= 2.4 ? climaxRamp(_dur) : null);
+        const _expr = _curve ? speedCurveToSetpts(_curve, _dur) : null;
+        videoFilter += _expr ? `,setpts=${_expr}` : `,setpts=${pts.toFixed(3)}*PTS`;
+      }
         durations[0] = durations[0] / speed;
         console.log(`[Composer] Single clip speed=${speed}x → duration=${durations[0].toFixed(1)}s${isHL ? ' [HIGHLIGHT]' : ''}`);
       }
@@ -1062,7 +1076,16 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       // 高光变速：setpts 调整视频播放速度（<1 = 加速, >1 = 减速）
       if (speed !== 1.0 && speed > 0) {
         const pts = 1.0 / speed; // speed=0.7 → pts=1.43 (慢动作)
-        videoFilter += `,setpts=${pts.toFixed(3)}*PTS`;
+        {
+        // v12.185:速度曲线 —— 高潮 S 形 ramp 重塑视频内部节奏(正常进→中段慢放→回速);
+        // 音频/时长仍按线性 speed 口径(ramp 平均速与线性差 <8%,尾部由 trim 兜底),不动全链对齐。
+        const { speedCurveToSetpts, climaxRamp } = require('@/lib/speed-curve') as typeof import('@/lib/speed-curve');
+        const _c: any = validClips[i];
+        const _dur = Number(_c?.duration) || 0;
+        const _curve = _c?.speedCurve || (_c?._wantClimaxRamp && _dur >= 2.4 ? climaxRamp(_dur) : null);
+        const _expr = _curve ? speedCurveToSetpts(_curve, _dur) : null;
+        videoFilter += _expr ? `,setpts=${_expr}` : `,setpts=${pts.toFixed(3)}*PTS`;
+      }
         // 调整该片段的有效时长
         durations[i] = durations[i] / speed;
         console.log(`[Composer] Shot ${validClips[i]?.shotNumber}: speed=${speed}x → duration=${durations[i].toFixed(1)}s${isHighlightClip ? ' [HIGHLIGHT]' : ''}`);
