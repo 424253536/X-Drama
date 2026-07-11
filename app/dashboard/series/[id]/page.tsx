@@ -152,6 +152,15 @@ export default function SeriesPanel() {
     finally { setCoverBusy(false); }
   };
 
+  // v12.182:断点续跑 —— 卡死 active 集重置 draft
+  const resumeStuck = async () => {
+    try {
+      const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/resume`, { method: 'POST', headers: authHeaders(), body: '{}' });
+      const b = await res.json();
+      setMsg(b?.message || (res.ok ? '已检查' : `失败 ${res.status}`));
+      await load();
+    } catch { setMsg('恢复请求失败'); }
+  };
   const pending = episodes.filter((e) => e.status === 'draft' || e.status === 'failed').length; // 待生成 + 失败可重试
   const generating = episodes.filter((e) => e.status === 'active').length;
   const done = episodes.filter((e) => e.status === 'completed').length;
@@ -238,6 +247,14 @@ export default function SeriesPanel() {
             {seasonFixBusy ? '⏳ 全季补渲中…' : `⚡ 全季补渲降级镜(${Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0).length} 集受影响)`}
           </button>
           {seasonFixMsg && <span className="text-[10px] text-gray-400 font-mono">{seasonFixMsg}</span>}
+        </div>
+      )}
+      {/* v12.182:断点续跑 —— 有生成中的集时提供「恢复卡死集」(重启后 active 永卡的救生索) */}
+      {episodes.some((e) => e.status === 'active') && (
+        <div className="mb-3">
+          <button type="button" onClick={() => void resumeStuck()} className="text-[11px] px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 hover:bg-white/5">
+            🛟 恢复卡死的集(30 分钟无进展 → 重置待生成)
+          </button>
         </div>
       )}
       {loading ? (
