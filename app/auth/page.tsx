@@ -11,7 +11,7 @@ import { IMG_AUTH_BG1, IMG_AUTH_BG2 } from '@/lib/placeholder-images';
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('demo@qfmanju.ai');
-  const [password, setPassword] = useState('Qfmanju123');
+  const [password, setPassword] = useState(''); // v12.171:不再预填演示密码(仓库零明文)
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,7 +90,7 @@ export default function AuthPage() {
 
             {mode === 'login' && (
               <div className="flex justify-between items-center text-xs text-[var(--soft)]">
-                <span>演示：demo@qfmanju.ai / Qfmanju123</span>
+                <span>演示账号:demo@qfmanju.ai(密码由部署方 DEMO_PASSWORD 提供)</span>
               </div>
             )}
 

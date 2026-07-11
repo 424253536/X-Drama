@@ -7,7 +7,7 @@
 
 | 版本 | 标题 | 量级 |
 |---|---|---|
-| v12.171 | 安全双修:public/test-buttons.html 明文密码 `Qfmanju123` 移除(该页对外可访问!)+ lib/db.ts 无条件 seed demo 账号加环境开关;.env.example 补 14+ 缺失 env | S |
+| v12.171 | 安全双修:public/test-buttons.html 明文演示密码移除(该页对外可访问!)+ lib/db.ts 无条件 seed demo 账号加环境开关;.env.example 补 14+ 缺失 env | S |
 | v12.172 | 预算护栏全覆盖:assertBudget 现只盖 create-stream/series 两口,**pipeline-worker/regenerate-shot/批量补渲全绕过**;统一进 orchestrator 生成入口 + pendingCostCny 从固定 ¥6 改按「镜数 × 引擎单价表」动态估 | M |
 | v12.173 | Sora 退役迁移:veo.service modelChain 含 sora 系(2026-09-24 API 退役),从默认链摘除、文档标注迁移路径(Veo 3.1/Kling 3.0) | S |
 

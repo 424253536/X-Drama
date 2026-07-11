@@ -1,7 +1,7 @@
 # 📸 Screenshot Manifest · 实机截图清单
 
 > **v3.1.3 自动化**: 跑 `node scripts/capture-screenshots.mjs` 一键 capture 9 张主要截图到 `assets/screenshot-*-v3.1.3.png`.
-> 前置: dev server 在 :3000 (`npm run dev`), demo 用户已 seed (`demo@qfmanju.ai / Qfmanju123`).
+> 前置: dev server 在 :3000 (`npm run dev`), demo 用户已 seed(`demo@qfmanju.ai`,密码见 .env.local 的 DEMO_PASSWORD).
 > 自动化覆盖: home / dashboard / create / projects / assets / storyboard / cinema-timeline / pacing / comments / workshop (10 张).
 > **不在自动化里的**: 协作场景 (双窗口对照) / 邀请 popover / Notification bell dropdown — 这些需要人工拍 (双浏览器 + 弹层交互).
 >

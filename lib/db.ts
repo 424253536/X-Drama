@@ -838,11 +838,19 @@ export function seed() {
 
     const run = db.transaction(() => {
       const c = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-      if (c.count > 0) return;
+      if (c.count > 0) return; // 已有库:demo 密码轮换走 ensureDemoPasswordRotated(双驱动 repo,login 同源)
 
-      const passwordHash = bcrypt.hashSync('Qfmanju123', 10);
+      // v12.171(安全):demo 账号可用 SEED_DEMO_USER=0 整体关闭(公网部署建议关);
+      // 密码从 DEMO_PASSWORD env 读 —— 仓库零明文凭据;未设时生成随机密码打印一次到日志。
+      if (process.env.SEED_DEMO_USER === '0') return;
+      const demoPassword = process.env.DEMO_PASSWORD || (() => {
+        const rnd = 'Qf-' + Math.random().toString(36).slice(2, 12);
+        console.warn(`[seed] DEMO_PASSWORD 未设置,demo 账号使用一次性随机密码: ${rnd}(设 DEMO_PASSWORD 固定它)`);
+        return rnd;
+      })();
+      const passwordHash = bcrypt.hashSync(demoPassword, 10);
       const demoUserId = nanoid();
-      // demo 账号凭据是公开演示用的(登录页明示)。默认给普通 member 角色,避免公网部署时
+      // demo 账号凭据默认给普通 member 角色,避免公网部署时
       // 把 admin 接口(/api/admin/*、waitlist 管理、完整用量统计)暴露给任何人。
       // 本地若需 admin 调试:启动时设 DEMO_ADMIN=1。
       const demoRole = process.env.DEMO_ADMIN === '1' ? 'admin' : 'member';
@@ -886,6 +894,21 @@ export function seed() {
 }
 
 seed();
+
+// v12.171:demo 密码与 DEMO_PASSWORD 幂等同步 —— 必须走 user-repo(DbDriver 双驱动,
+// 与 login 的 findUserByEmail 同源);此前写 better-sqlite3 直连,登录读另一驱动轮换不生效。
+export async function ensureDemoPasswordRotated(): Promise<void> {
+  if (!process.env.DEMO_PASSWORD) return;
+  try {
+    const { findUserByEmail, updateUserPassword } = await import('./repos/user-repo');
+    const demo = await findUserByEmail('demo@qfmanju.ai');
+    if (demo && !bcrypt.compareSync(process.env.DEMO_PASSWORD, demo.password_hash)) {
+      await updateUserPassword(demo.id, bcrypt.hashSync(process.env.DEMO_PASSWORD, 10));
+      console.log('[seed] demo 密码已按 DEMO_PASSWORD 轮换(双驱动)');
+    }
+  } catch (e) { console.warn('[seed] demo 密码轮换失败:', e instanceof Error ? e.message.slice(0, 60) : e); }
+}
+void ensureDemoPasswordRotated();
 
 // dbPath 导出供 e2e 测试把"本进程实际使用的库文件"路径透传给 ws-server 子进程
 // (QFMJ_DB_PATH), 让子进程与测试进程读写同一个库. 生产环境即 data/qfmj.db.

@@ -20,7 +20,7 @@ test('片段预览:音频徽章 + 有配音的镜叠播 <audio>', async ({ page,
 
   await page.goto('/auth');
   await page.evaluate(async () => {
-    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@qfmanju.ai', password: 'Qfmanju123' }) });
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@qfmanju.ai', password: process.env.DEMO_PASSWORD || '' }) });
     const d = await r.json(); localStorage.setItem('qfmj-token', d.token); localStorage.setItem('qfmj-user', JSON.stringify(d.user));
   });
   await page.goto('/projects/qfmj-demo-showcase', { waitUntil: 'networkidle' });
@@ -64,7 +64,7 @@ test('成片音频体检:audio-check 端点 + play tab 徽章', async ({ page, r
   // play tab 徽章可见
   await page.goto('/auth');
   await page.evaluate(async () => {
-    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@qfmanju.ai', password: 'Qfmanju123' }) });
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@qfmanju.ai', password: process.env.DEMO_PASSWORD || '' }) });
     const dd = await r.json(); localStorage.setItem('qfmj-token', dd.token); localStorage.setItem('qfmj-user', JSON.stringify(dd.user));
   });
   await page.goto('/projects/qfmj-demo-showcase', { waitUntil: 'networkidle' });
