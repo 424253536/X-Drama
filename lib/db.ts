@@ -369,7 +369,13 @@ addColumnIfMissing('projects', 'style_id', 'TEXT');                           //
 addColumnIfMissing('projects', 'aspect', "TEXT DEFAULT '16:9'");              // v10.6.0 项目级画幅(竖屏优先;旧项目默认横屏=零回归)
 addColumnIfMissing('projects', 'global_asset_ids', "TEXT DEFAULT '[]'");      // JSON array
 addColumnIfMissing('projects', 'output_config', 'TEXT');                      // JSON object
-addColumnIfMissing('projects', 'series_id', 'TEXT');                          // 阶段二十六 多集:系列 id(同系列各集共享角色/画风);null=单集
+addColumnIfMissing('projects', 'series_id', 'TEXT');
+// v12.181 跨集一致性传播:series 级锚点(角色图/styleBible/上集末帧),集完成写入、下集启动注入
+db.exec(`CREATE TABLE IF NOT EXISTS series_anchors (
+  series_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL
+)`);                          // 阶段二十六 多集:系列 id(同系列各集共享角色/画风);null=单集
 addColumnIfMissing('projects', 'episode_number', 'INTEGER');                  // 集号(1 起);null=单集
 
 // v2.0 给 users 表加 invite_code_used 字段，用于审计哪个码引入了用户

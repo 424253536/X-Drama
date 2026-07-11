@@ -473,6 +473,8 @@ export class HybridOrchestrator {
    * 必须在 runStoryboardRenderer 之前调用 (通常 create-stream 入口就 set 好)。
    * 只接受 http(s) URL — data:/svg/mock 不行 (远端 API 无法消费, 也无价值)。
    */
+  /** v12.181:跨集画风锚注入(series_anchors 的 styleBible 帧;runStyleBibleArtist 成功会覆盖)。 */
+  setStyleAnchorUrl(url: string) { if (url && url.startsWith('http')) this.styleAnchorImageUrl = url; }
   setPreviewSeedImage(url: string) {
     if (!url || typeof url !== 'string') return;
     if (!url.startsWith('http')) {

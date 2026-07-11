@@ -154,6 +154,28 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       send('status', { message: '📐 分镜草图锁已开启:每镜先出构图草图,再按草图锁构图渲染' });
     }
 
+    // ── v12.181:跨集一致性注入 —— 本集属于系列且调用方未显式锁角时,从 series_anchors 读
+    // 前集沉淀(角色图/styleBible/上集末帧),对标「一处设定全剧同步」。显式传参永远优先。
+    let seriesIdOfProject: string | null = null;
+    try {
+      const proj0 = await getProject(projectId);
+      seriesIdOfProject = (proj0 as any)?.series_id || null;
+      if (seriesIdOfProject) {
+        const { getSeriesAnchor } = await import('@/lib/repos/series-repo');
+        const anchor = await getSeriesAnchor(seriesIdOfProject);
+        if (anchor) {
+          if ((!lockedCharacters || lockedCharacters.length === 0) && anchor.lockedCharacters?.length) {
+            orchestrator.setLockedCharacters(anchor.lockedCharacters as any);
+            send('status', { message: `🔗 跨集一致性:继承系列角色锚 ${anchor.lockedCharacters.map((c) => c.name).join('、')}(来自第 ${anchor.fromEpisode ?? '?'} 集)` });
+          }
+          if (anchor.styleAnchorUrl) orchestrator.setStyleAnchorUrl?.(anchor.styleAnchorUrl);
+          if (anchor.lastEpisodeEndFrame && !previewSeedImage) {
+            orchestrator.setPreviewSeedImage?.(anchor.lastEpisodeEndFrame);
+          }
+        }
+      }
+    } catch (e) { console.warn('[SeriesAnchor] 注入失败(不阻塞):', e instanceof Error ? e.message.slice(0, 60) : e); }
+
     // ── v12.134(issue #2):显式选剧本语言(覆盖自动检测)──
     // language 命中支持语种 → 用它;'auto'/空/未知 → normalizeLanguage 回退到按 idea 自动检测。
     if (language && typeof language === 'string' && language.trim() && language.trim().toLowerCase() !== 'auto') {
@@ -841,6 +863,32 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       console.error('[Stream] Editor failed:', e);
       send('status', { message: '剪辑出错，继续审核...' });
     }
+
+    // ── v12.181:跨集一致性写回 —— 本集完成后把角色锚/styleBible/末帧沉淀到 series_anchors,
+    // 下一集(queue/inline 双路径都走本函数)启动时自动继承。失败不阻塞收尾。
+    try {
+      const projRow = await getProject(projectId);
+      const sid = (projRow as any)?.series_id;
+      if (sid) {
+        const { setSeriesAnchor, getSeriesAnchor } = await import('@/lib/repos/series-repo');
+        const { listAssetsByType } = await import('@/lib/repos/asset-repo');
+        const charRows = await listAssetsByType(projectId, 'character');
+        const chars = charRows.slice(0, 3).map((r) => {
+          let urls: string[] = []; try { urls = JSON.parse(r.media_urls || '[]'); } catch { /* ignore */ }
+          const d = (() => { try { return r.data ? JSON.parse(r.data) : {}; } catch { return {}; } })();
+          return { name: r.name, imageUrl: r.persistent_url || urls[0] || '', role: d.role || 'lead', cw: d.cw || 100 };
+        }).filter((c) => c.name && c.imageUrl);
+        const prev = (await getSeriesAnchor(sid)) || {};
+        const epRow = (projRow as any)?.episode_number;
+        await setSeriesAnchor(sid, {
+          lockedCharacters: chars.length ? chars : prev.lockedCharacters,
+          styleAnchorUrl: (orchestrator as any).styleAnchorImageUrl || prev.styleAnchorUrl,
+          lastEpisodeEndFrame: (videos as any[])?.length ? undefined : prev.lastEpisodeEndFrame, // 末帧提取重,P3 再接 extractLastFrame
+          fromEpisode: typeof epRow === 'number' ? epRow : prev.fromEpisode,
+        });
+        send('status', { message: `🔗 系列锚点已更新(角色 ${chars.length} 位,供后续集继承)` });
+      }
+    } catch (e) { console.warn('[SeriesAnchor] 写回失败(不阻塞):', e instanceof Error ? e.message.slice(0, 60) : e); }
 
     // ── 8. Producer Review（制片人审核，替代原导演审核角色）──
     if (cp.review) {

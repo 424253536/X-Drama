@@ -133,3 +133,23 @@ export async function maxEpisodeNumber(seriesId: string, userId: string): Promis
   }
   return max;
 }
+
+// ── v12.181:series 级一致性锚点(跨集传播:角色图/styleBible/上集末帧)──
+export interface SeriesAnchor {
+  lockedCharacters?: Array<{ name: string; imageUrl: string; role?: string; cw?: number }>;
+  styleAnchorUrl?: string;
+  lastEpisodeEndFrame?: string;
+  fromEpisode?: number;
+}
+
+export async function getSeriesAnchor(seriesId: string): Promise<SeriesAnchor | null> {
+  const row = (await getDbDriver().get('SELECT data FROM series_anchors WHERE series_id = ?', [seriesId])) as { data?: string } | undefined;
+  try { return row?.data ? JSON.parse(row.data) : null; } catch { return null; }
+}
+
+export async function setSeriesAnchor(seriesId: string, anchor: SeriesAnchor): Promise<void> {
+  const ts = new Date().toISOString();
+  const json = JSON.stringify(anchor);
+  const r = await getDbDriver().run('UPDATE series_anchors SET data = ?, updated_at = ? WHERE series_id = ?', [json, ts, seriesId]);
+  if (!r.changes) await getDbDriver().run('INSERT INTO series_anchors (series_id, data, updated_at) VALUES (?, ?, ?)', [seriesId, json, ts]);
+}
