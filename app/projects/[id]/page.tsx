@@ -111,6 +111,15 @@ export default function ProjectDetailPage() {
       if (Array.isArray(d.items)) setHealthReport(d);
     } catch { /* 拉不到不打扰 */ }
   };
+  // v12.190:项目成本下钻(cost_log × rollupByEngine)
+  const [costReport, setCostReport] = useState<{ totalCny: number; entries: number; byEngine: Array<{ engine: string; costCny: number; count: number }> } | null>(null);
+  const [costOpen, setCostOpen] = useState(false);
+  const loadCost = async () => {
+    try {
+      const d = await fetch(`/api/projects/${id}/cost`).then((r) => r.json());
+      if (typeof d.totalCny === 'number') setCostReport(d);
+    } catch { /* 静默 */ }
+  };
   // v12.1.1 成片音频体检
   const [audioCheck, setAudioCheck] = useState<{ audible: boolean; label: string; hasAudioStream: boolean | null; healed: boolean } | null>(null);
   // v12.153:videos tab 激活拉体检(降级镜识别权威来源;play tab 面板也复用)
@@ -1053,6 +1062,21 @@ export default function ProjectDetailPage() {
           {/* 完整播放 */}
           {activeTab === 'play' && (
             <div>
+              {/* v12.190:成本下钻(点开才查;引擎逐项 + 总额) */}
+              <div className="mb-3" data-testid="cost-panel">
+                <button type="button" onClick={() => { const o = !costOpen; setCostOpen(o); if (o && !costReport) void loadCost(); }} className="cinema-btn-ghost !text-[11px] !py-1">
+                  💰 成本明细{costReport ? `(¥${costReport.totalCny})` : ''}{costOpen ? ' ▲' : ' ▼'}
+                </button>
+                {costOpen && costReport && (
+                  <div className="mt-2 cinema-card p-3 space-y-1">
+                    {costReport.byEngine.map((e) => (
+                      <div key={e.engine} className="flex justify-between text-[11px]"><span className="opacity-70">{e.engine}</span><span className="cinema-mono">¥{e.costCny}({e.count} 次)</span></div>
+                    ))}
+                    <div className="flex justify-between text-[11px] border-t border-white/10 pt-1 font-medium"><span>合计({costReport.entries} 条)</span><span className="cinema-mono">¥{costReport.totalCny}</span></div>
+                  </div>
+                )}
+                {costOpen && !costReport && <div className="mt-2 cinema-mono text-[10px] opacity-60">查询中…</div>}
+              </div>
               {/* v12.153:成片全维体检(点开才 ffprobe,红黄绿逐维) */}
               <div className="mb-3" data-testid="film-health-panel">
                 <button
