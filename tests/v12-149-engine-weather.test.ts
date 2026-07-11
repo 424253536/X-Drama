@@ -18,6 +18,12 @@ describe('v12.149 · 引擎天气', () => {
     expect(segs[1]).toContain('qingyuntop');
     expect(segs[1]).toContain('9 分钟');
   });
+  it('v12.177:qingyuntop「该令牌额度已用尽」文案命中破产判定', async () => {
+    const { isOutOfCreditsError } = await import('@/lib/gateway-budget');
+    expect(isOutOfCreditsError('该令牌额度已用尽 (request id: xxx)')).toBe(true);
+    expect(isOutOfCreditsError('quota is not enough')).toBe(true);
+    expect(isOutOfCreditsError('invalid params')).toBe(false);
+  });
   it('listOutOfCreditsGateways:冷却期内可见,过期自动消失', () => {
     _resetGatewayBudget();
     markGatewayOutOfCredits('https://api.test-gw.com/v1', 60_000, 1000);

@@ -27,7 +27,8 @@ export function isOutOfCreditsError(msg: string | undefined | null): boolean {
   const s = String(msg).toLowerCase();
   // 402 欠费、403 配额、以及各网关的文案(qingyuntop "token quota is not enough / exhausted"、"insufficient" 等)
   if (/\b402\b|\b403\b/.test(s) && /quota|credit|balance|insufficient|欠费|余额|配额/.test(s)) return true;
-  return /quota (is not enough|exhausted|exceeded)|insufficient (quota|credit|balance)|out of credit|token quota|余额不足|配额(耗尽|不足)|欠费/.test(s);
+  // v12.177:qingyuntop 实测文案「该令牌额度已用尽」此前不匹配 → 网关破产不进冷却、天气条不亮
+  return /quota (is not enough|exhausted|exceeded)|insufficient (quota|credit|balance)|out of credit|token quota|余额不足|配额(耗尽|不足)|欠费|额度已用尽|令牌额度/.test(s);
 }
 
 /** 标记某网关配额耗尽(TTL 内跳过)。 */
