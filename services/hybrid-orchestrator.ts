@@ -71,7 +71,7 @@ import { getLatestQualityScore, buildWriterFeedbackHint } from '@/lib/quality-sc
 // v12.4.0(阶段二十三):主管线视频/图像成本落库 —— 此前从不记,cost-attribution 视频/图像类目永远 0。
 import { recordCostLog, estimateVideoCostCny, estimateImageCostCny, videoRateForProvider } from '@/lib/repos/cost-log-repo';
 // v12.6.1(#2):目标语种检测 —— 锁台词/旁白/TTS/口型语种,visualPrompt 仍英文。
-import { detectLanguage, ttsLangCode, lipsyncLangCode, type TargetLanguage } from '@/lib/language-detect';
+import { detectLanguage, ttsLangCode, lipsyncLangCode, buildLanguageDirective, SUPPORTED_LANGUAGES, type TargetLanguage } from '@/lib/language-detect';
 // v12.7.0:editor TTS 走注册表(vectorengine-tts 50 > minimax-tts 100),vectorengine 进主路径。
 import { dispatchTTSGenerate, ttsEngineConfigured } from '@/lib/tts-providers/registry';
 // v12.29.0(P1):原生音画一体 —— NATIVE_AV=1 时,真由原生音频引擎出片的有台词镜跳 TTS,用成片自带音轨。
@@ -1939,7 +1939,10 @@ export class HybridOrchestrator {
       const trimmedUserCtx = userContext.length > 8000 ? userContext.slice(0, 8000) + '\n[...已截断...]' : userContext;
       // v12.164:输出预算铁律 —— 网关会 clamp maxTokens(16384 实测 ~8K 截断),长英文修饰字段
       // (visualPrompt/globalLighting/negativePrompt)是 token 大户;明示「完整 JSON > 描述丰富度」。
-      const budgetRule = `\n══ 输出预算铁律 ══\n完整闭合的 JSON 比描述丰富度更重要。visualPrompt ≤ 60 英文词;globalLighting/negativePrompt ≤ 12 英文词;禁止在任何字段里写散文式长段。若篇幅紧张,优先精简修饰字段,绝不截断 JSON 结构。`;
+      const budgetRule = `\n══ 输出预算铁律 ══\n完整闭合的 JSON 比描述丰富度更重要。visualPrompt ≤ 60 英文词;globalLighting/negativePrompt ≤ 12 英文词;禁止在任何字段里写散文式长段。若篇幅紧张,优先精简修饰字段,绝不截断 JSON 结构。`
+        // v12.166:目标语种 ≠ 中文时,user 消息末尾再注一次语言铁律 —— system 端铁律会被
+        // 大段中文素材带偏(live 实测 language=ja 出稿全中文台词);LLM 对 user 末尾指令遵从度最高。
+        + (this.targetLanguage() !== 'zh' ? buildLanguageDirective(this.targetLanguage()) : '');
       const pass2Context = (shotPlan
         ? `══ 镜头规划（严格按照此规划生成 JSON）══\n${shotPlan}\n\n══ 素材 ══\n${trimmedUserCtx}\n\n══ 指令 ══\nshots 数组必须有 ${planShotCount || minShotsRequired} 个镜头。`
         : `${trimmedUserCtx}\n\nshots 数组必须有 ${minShotsRequired}-${maxShotsAllowed} 个镜头。`) + budgetRule;
@@ -5286,7 +5289,30 @@ ${characterBibleBlock}${producerContext}
     const plan = await this.runDirector(idea);
     // v2.20 P0.1: 在角色/场景/分镜之前先渲染 1 张 Style Bible 帧, 全片视觉锚定
     await this.runStyleBibleArtist(plan);
-    const script = await this.runWriter(plan);
+    let script = await this.runWriter(plan);
+    // v12.166:语种守门 —— 台词过半不符目标语种(LLM 被中文素材带偏)→ 一次「仅翻文案字段」
+    // 修复调用(输出体量小);修复失败保留原稿(诚实降级,字幕/配音仍走原语种)。
+    if (this._targetLanguage && this._targetLanguage !== 'zh') {
+      try {
+        const { needsLanguageFix, buildLanguageFixPrompt } = await import('@/lib/language-guard');
+        if (needsLanguageFix(script, this._targetLanguage)) {
+          const meta = SUPPORTED_LANGUAGES[this._targetLanguage];
+          this.emit('agentTalk', { role: AgentRole.WRITER, text: `🌐 检测到台词语种偏离,正在本地化为 ${meta.nativeName}…` });
+          const fixedRaw = await this.callLLM(
+            buildLanguageFixPrompt(meta.enName, meta.nativeName),
+            JSON.stringify(script),
+            true, false, { maxTokens: 16384 },
+          );
+          const fixed = robustJsonParse(fixedRaw);
+          if (fixed && Array.isArray(fixed.shots) && fixed.shots.length === (script as any).shots?.length) {
+            script = fixed as typeof script;
+            this.emit('agentTalk', { role: AgentRole.WRITER, text: `✅ 台词已本地化为 ${meta.nativeName}` });
+          } else {
+            console.warn('[LangGuard] 修复稿结构不符,保留原稿');
+          }
+        }
+      } catch (e) { console.warn('[LangGuard] 语种守门失败(保留原稿):', e instanceof Error ? e.message.slice(0, 80) : e); }
+    }
     // v12.146(P1-④):情绪节拍→运镜自动标注 —— 只补 Writer 漏填运镜的镜;
     // 用户在创作页选了全局运镜默认 → 不介入(显式选择优先,由 getCameraDefaultPromptFragment 生效)。
     if (!this.cameraDefault && Array.isArray((script as any)?.shots)) {
