@@ -66,13 +66,18 @@ export class KlingService {
       console.log(`[Kling] Starting video generation: ${hasRealImage ? 'image-to-video' : 'text-to-video'}`);
       console.log(`[Kling] Prompt: ${prompt.slice(0, 100)}...`);
 
+      // v12.174:模型 env 化,默认 kling-v3(账号零成本探测确认可用:v1/v1-6/v2-1/v2-1-master/v3;
+      // v2/v2-5/v3-pro 无效)。v3 支持 15s(pro 实测过参数校验),v1/v2 系仍 5/10。
+      const model = process.env.KELING_VIDEO_MODEL || 'kling-v3';
+      const wantSec = options?.duration || 5;
+      const maxSec = model.startsWith('kling-v3') ? 15 : 10;
+      const duration = wantSec > 10 && maxSec >= 15 ? '15' : wantSec > 5 ? '10' : '5';
       const body: Record<string, any> = {
-        model_name: 'kling-v1',
+        model_name: model,
         prompt: prompt,
         // 可灵官方 mode 枚举是 'std' | 'pro'(v12.154 live 实测:'standard' 报 1201 invalid)
         mode: options?.mode === 'professional' ? 'pro' : 'std',
-        // 可灵官方 duration 枚举只收 '5' | '10'(live 实测 '8' 报 1201)
-        duration: (options?.duration || 5) > 5 ? '10' : '5',
+        duration,
       };
 
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
