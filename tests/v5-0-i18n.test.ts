@@ -59,7 +59,7 @@ describe('v5.0 · normalizeLocale', () => {
     ['zh-TW', 'zh-TW'], ['zh-Hant', 'zh-TW'], ['zh-HK', 'zh-TW'], ['ZH-tw', 'zh-TW'],
     ['en', 'en'], ['en-US', 'en'], ['EN-GB', 'en'],
     ['ja', 'ja'], ['ja-JP', 'ja'],
-    ['', 'zh-CN'], ['fr', 'zh-CN'], ['de-DE', 'zh-CN'],
+    ['', 'zh-CN'], ['fr', 'en'], ['de-DE', 'en'], // v12.186:未知语言回退 en(非中文用户不再看全中文)
   ];
   for (const [input, expected] of cases) {
     it(`"${input}" → ${expected}`, () => expect(normalizeLocale(input)).toBe(expected));
@@ -77,7 +77,7 @@ describe('v5.0 · resolveLocaleFromHeader', () => {
     expect(resolveLocaleFromHeader('zh-TW,zh;q=0.9')).toBe('zh-TW');
   });
   it('unsupported-only → zh-CN', () => {
-    expect(resolveLocaleFromHeader('fr,de;q=0.8')).toBe('zh-CN');
+    expect(resolveLocaleFromHeader('fr,de;q=0.8')).toBe('en'); // v12.186 同上
   });
   it('empty → zh-CN', () => {
     expect(resolveLocaleFromHeader('')).toBe('zh-CN');

@@ -1,6 +1,6 @@
 // 国际化 (i18n) 基础设施
 
-export type Locale = 'zh-CN' | 'zh-TW' | 'en' | 'ja';
+export type Locale = 'zh-CN' | 'zh-TW' | 'en' | 'ja' | 'ko' | 'ru'; // v12.186:ko/ru 就位(文案先以 en 兜底渐进补)
 
 export interface Translations {
   collab: {
@@ -1214,10 +1214,13 @@ const translations: Record<Locale, Translations> = {
   'zh-TW': zhTW,
   'en': en,
   'ja': ja,
+  // v12.186:ko/ru 文案包未成 —— 结构上先指向 en(getTranslations 同语义;补真文案时替换此两行)
+  'ko': en,
+  'ru': en,
 };
 
 /** 支持的全部 locale (有序: 简/繁/英/日). */
-export const LOCALES: Locale[] = ['zh-CN', 'zh-TW', 'en', 'ja'];
+export const LOCALES: Locale[] = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'ru'];
 
 /** 语言切换器显示名 (各用自身语言写). */
 export const LOCALE_LABELS: Record<Locale, string> = {
@@ -1225,6 +1228,8 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   'zh-TW': '繁體中文',
   'en': 'English',
   'ja': '日本語',
+  'ko': '한국어',
+  'ru': 'Русский',
 };
 
 /**
@@ -1237,8 +1242,12 @@ export function normalizeLocale(input: string | null | undefined): Locale {
   if (s.startsWith('zh-tw') || s.startsWith('zh-hant') || s.startsWith('zh-hk') || s.startsWith('zh-mo')) return 'zh-TW';
   if (s.startsWith('zh')) return 'zh-CN';
   if (s.startsWith('ja')) return 'ja';
+  if (s.startsWith('ko')) return 'ko';
+  if (s.startsWith('ru')) return 'ru';
   if (s.startsWith('en')) return 'en';
-  return 'zh-CN';
+  // v12.186:未知语言标签回退 en(此前回 zh-CN —— 俄语等非中文用户看全中文 UI);
+  // 空输入仍回 zh-CN(无信号维持主用户群默认)。
+  return 'en';
 }
 
 /** 解析 Accept-Language 头, 按 q 权重挑第一个我们支持的语言. */
@@ -1269,7 +1278,9 @@ function deepMergeFallback(base: any, over: any): any {
 }
 
 export function getTranslations(locale: Locale): Translations {
-  const t = translations[locale];
+  // v12.186:ko/ru 文案包未成 —— 以 en 字典兜底(键级渐进补真文案零结构改动)
+  const effective = (locale === 'ko' || locale === 'ru') ? 'en' : locale;
+  const t = translations[effective as keyof typeof translations];
   if (!t) return translations['zh-CN'];
   // 以 zhCN 为底回退, 防某 locale 漏 key 时出现 undefined
   return deepMergeFallback(zhCN, t) as Translations;
