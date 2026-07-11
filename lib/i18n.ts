@@ -1261,9 +1261,10 @@ export function resolveLocaleFromHeader(acceptLanguage: string | null | undefine
     const loc = normalizeLocale(tag);
     // normalizeLocale 兜底总返 zh-CN; 只有真匹配上才提前返回
     const s = tag.toLowerCase();
-    if (s.startsWith('zh') || s.startsWith('en') || s.startsWith('ja')) return loc;
+    if (s.startsWith('zh') || s.startsWith('en') || s.startsWith('ja') || s.startsWith('ko') || s.startsWith('ru')) return loc;
   }
-  return 'zh-CN';
+  // v12.186:头里全是我们不支持的语言 → 该用户显然非中文用户,回退 en(原 zh-CN)
+  return 'en';
 }
 
 /** 深合并: 用 locale 覆盖 zhCN base, 缺的 key 自动回退简中 (未来部分翻译也安全). */

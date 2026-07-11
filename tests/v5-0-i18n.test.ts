@@ -76,7 +76,7 @@ describe('v5.0 · resolveLocaleFromHeader', () => {
     expect(resolveLocaleFromHeader('fr;q=0.9,en;q=0.8')).toBe('en'); // 跳过不支持的 fr
     expect(resolveLocaleFromHeader('zh-TW,zh;q=0.9')).toBe('zh-TW');
   });
-  it('unsupported-only → zh-CN', () => {
+  it('unsupported-only → en(v12.186:非中文用户回退英文)', () => {
     expect(resolveLocaleFromHeader('fr,de;q=0.8')).toBe('en'); // v12.186 同上
   });
   it('empty → zh-CN', () => {
