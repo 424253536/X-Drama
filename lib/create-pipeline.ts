@@ -185,6 +185,20 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       send('status', { message: `🌐 剧本语言:${languageDisplayName(lang)}${ttsReliable(lang) ? '' : '(配音降级:仅字幕/近似音色)'}` });
     }
 
+    // ── v12.193:题材镜头包 —— 按 idea 检测题材,一键注入「运镜+剪辑风格+BGM 风格」组合拳;
+    // 用户显式选了 cameraDefault/editStyle 的项不动(显式优先,与情绪运镜同哲学)。
+    try {
+      const { detectShotPack } = await import('@/lib/genre-shot-packs');
+      const pack = detectShotPack(idea);
+      if (pack) {
+        const applied: string[] = [];
+        if (!cameraDefault) { orchestrator.setCameraDefault(pack.cameraDefault); applied.push('运镜'); }
+        if (!editStyle) { orchestrator.setEditStyle(pack.editStyle); applied.push('剪辑'); }
+        (orchestrator as any).bgmStyleHint = pack.bgmStyleHint; // BGM prompt 侧读取(软注入)
+        if (applied.length) send('status', { message: `🎬 题材镜头包「${pack.label}」已注入(${applied.join('/')};显式选择不受影响)` });
+      }
+    } catch { /* 包注入失败不阻塞 */ }
+
     // v2.14 P1.1: 全局默认镜头语言 — 影响所有镜头的运镜默认值。
     // 用户在 chip picker 选了某个预设, 透到 orchestrator, runComposeOrders 会
     // 把对应的专业 prompt 拼进每个 shot 的 cameraMovement / visualPrompt 后段。
