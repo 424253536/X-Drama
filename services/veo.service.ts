@@ -99,6 +99,11 @@ export class VeoService {
     // 如果主模型报"整池饱和"类错误, 立刻换 fallback 模型重试,
     // 避免用户看到"整条 Veo 引擎都坏了"的假象 (其实只是 sora-2 池子满了)
     const modelChain = [this.model, ...this.fallbackModels.filter(m => m !== this.model)];
+    // v12.173:Sora-2 API 2026-09-24 退役 —— 默认链已摘除;用户显式配置仍可用到停服日,但每次告警。
+    const soraModels = modelChain.filter((m) => m.toLowerCase().startsWith('sora'));
+    if (soraModels.length > 0) {
+      console.warn(`[Veo] ⚠️ 模型链含即将退役的 Sora 系(${soraModels.join(',')}):OpenAI Sora-2 API 将于 2026-09-24 停服,请迁移到 veo3.1 / kling(改 VEO_MODEL / VEO_FALLBACK_MODELS)`);
+    }
     const originalModel = this.model;
     const originalFormat = this.format;
     let lastError: Error | null = null;
