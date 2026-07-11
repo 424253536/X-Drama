@@ -83,7 +83,21 @@ Three views of the same engine. **Open on GitHub to watch them animate** — flo
 
 ---
 
-## 🆕 New in v6 → v10 — from *demo* to *production platform*
+## 🆕 New in v12 — the quality loop era
+
+**Sketch-Lock storyboarding** — every shot first renders a B/W composition sketch, then the final frame is generated *locked to that composition* (toggle at creation time, or per-shot in the Shot Workshop). Camera language finally survives the diffusion lottery.
+
+**Emotion-driven camera** — shots missing camera movement get one derived from story beats (hook→push-in, chase→handheld, reveal→zoom-in, farewell→pull-out, emotion temperature → push/orbit/crane). Even the Ken Burns degradation follows the intended move.
+
+**Engine matrix, honestly** — Veo · MiniMax (Hailuo) · Kling (official Beijing API) with a one-line env priority (`VIDEO_ENGINE_ORDER=kling,minimax,veo`), base64 first-frame channel for local assets, and an *honest* fallback chain: a failed shot becomes a labeled animatic, never a still image masquerading as video.
+
+**The quality loop** — ffprobe-powered film health report (aspect/duration/fps/bitrate/audio/degraded shots) per project *and* per series; batch re-render of degraded shots (2-way concurrent); a season-export health gate so no broken episode sneaks into the compilation; an engine weather bar so you know *before* you hit generate.
+
+**Round-trip storyboards** — export the pull sheet as CSV / Markdown / print-ready PDF (with character sheet + health appendix), edit in Excel, import it back — changed visual fields offer one-click re-render of exactly the affected shots.
+
+**Writer resilience** — truncated or quote-mangled LLM scripts are salvaged (bracket-stack completion + content-quote escaping) instead of being silently replaced by a template. The real 23KB incident dump lives in the test fixtures.
+
+## 🆕 Earlier: v6 → v10 — from *demo* to *production platform*
 
 > v3 shipped the pipeline. **v6 turned it into a production studio; v7–v9 hardened it into a platform; v10 closed the lip-sync, template-market, and cost loops.** Reusable characters, a prompt IDE, novel→season auto-splitting with real voiceover, a 60-style gallery, a director's control room, team credit budgets, an industry-grade script audit (**Polish Pro**, v7.1), a **premium design pass** (v8.3), a **fully-migrated Postgres backend** (v9), a **lip-sync delivery pipeline + template market + cost observability** (v10), and a live API health board — every screen below is a **real capture of the running app**.
 
@@ -412,7 +426,7 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 
 We're open to PRs. Two things matter most:
 1. **Don't break the multi-agent contracts.** Each agent has explicit input/output shapes — see `types/agents.ts`.
-2. **Tests gate everything.** Vitest 2802/2802 must stay green. Add tests for new lib/service files.
+2. **Tests gate everything.** Vitest 2894/2894 must stay green. Add tests for new lib/service files.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repo's contribution guide.
 
