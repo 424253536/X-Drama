@@ -46,6 +46,14 @@ describe('v12.154 · 回灌 merge', () => {
     expect(target.shots[0].duration).toBe(5);      // 'abc' 不合法不覆盖
     expect(r.unknownShots).toEqual([9]);
   });
+  it('v12.159:affectedShots(视觉字段变更镜)+ 一键重渲接线', () => {
+    const api = fs.readFileSync('app/api/projects/[id]/pull-sheet/import/route.ts', 'utf-8');
+    expect(api).toContain('VISUAL_LABELS');
+    expect(api).toContain('affectedShots');
+    const ui = fs.readFileSync('components/project/pull-sheet-table.tsx', 'utf-8');
+    expect(ui).toContain('重渲受影响的');
+    expect(ui).toContain('setAffectedShots(Array.isArray(d.affectedShots)');
+  });
   it('接线锁:import API(repo 双写)+ 拉片 tab 上传按钮', () => {
     const api = fs.readFileSync('app/api/projects/[id]/pull-sheet/import/route.ts', 'utf-8');
     expect(api).toContain('updateProjectById(id, { script_data');

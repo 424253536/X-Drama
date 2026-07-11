@@ -77,6 +77,29 @@ function cell(v: unknown): string {
 
 export function PullSheetTable({ projectId }: { projectId: string }) {
   const [importMsg, setImportMsg] = useState('');
+  // v12.159:回灌后受影响镜(视觉字段变更)一键重渲
+  const [affectedShots, setAffectedShots] = useState<number[]>([]);
+  const [rerenderBusy, setRerenderBusy] = useState(false);
+  const rerenderAffected = async () => {
+    if (rerenderBusy || affectedShots.length === 0) return;
+    setRerenderBusy(true);
+    let ok = 0;
+    for (const sn of affectedShots) {
+      setImportMsg(`重渲镜头 ${sn}(${ok + 1}/${affectedShots.length})…`);
+      try {
+        const res = await fetch('/api/regenerate-shot', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, shotNumber: sn }),
+        });
+        await new Response(res.body).text(); // 排干 SSE 等完成
+        ok++;
+      } catch { /* 单镜失败继续 */ }
+    }
+    setImportMsg(`重渲完成 ${ok}/${affectedShots.length} 镜`);
+    setAffectedShots([]);
+    setRerenderBusy(false);
+    void load();
+  };
   const [sheet, setSheet] = useState<PullSheet | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -154,12 +177,24 @@ export function PullSheetTable({ projectId }: { projectId: string }) {
                 if (d.unknownShots?.length) parts.push(`未知镜号跳过:${d.unknownShots.join(',')}`);
                 if (d.badLines) parts.push(`坏行 ${d.badLines}`);
                 setImportMsg(parts.join(';'));
+                setAffectedShots(Array.isArray(d.affectedShots) ? d.affectedShots : []); // v12.159
                 if (d.applied > 0) void load(); // 重拉表格显示新值
               } catch { setImportMsg('回灌失败:网络或文件读取错误'); }
             }}
           />
         </label>
         {importMsg && <span className="cinema-mono text-[10px] opacity-70">{importMsg}</span>}
+        {/* v12.159:视觉字段改动的镜,一键按新剧本重渲(每镜真视频成本,按需点) */}
+        {affectedShots.length > 0 && (
+          <button
+            type="button"
+            disabled={rerenderBusy}
+            onClick={() => void rerenderAffected()}
+            className="cinema-btn-ghost !text-[11px] !py-1 !text-[var(--cinema-amber)] !border-[var(--cinema-amber-deep)] disabled:opacity-50"
+          >
+            {rerenderBusy ? '⏳ 重渲中…' : `🎬 重渲受影响的 ${affectedShots.length} 镜(S${affectedShots.join('、S')})`}
+          </button>
+        )}
       </div>
 
       <SheetView sheet={sheet} />

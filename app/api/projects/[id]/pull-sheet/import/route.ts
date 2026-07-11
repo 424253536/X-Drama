@@ -58,9 +58,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await updateProjectById(id, { script_data: JSON.stringify(merged) });
   }
 
+  // v12.159:视觉字段(改了会影响画面)变更的镜 → 前端提供「一键重渲受影响镜」
+  const VISUAL_LABELS = new Set(['画面内容', '景别', '构图', '机位角度', '运镜方法', '焦距与景深', '光影与色调']);
+  const affectedShots = [...new Set(changes.filter((c) => VISUAL_LABELS.has(c.field)).map((c) => c.shotNumber))].sort((a, b) => a - b);
+
   return NextResponse.json({
     applied: changes.length,
     changes: changes.slice(0, 100),
+    affectedShots,
     unknownShots,
     badLines,
     rowsParsed: rows.length,
