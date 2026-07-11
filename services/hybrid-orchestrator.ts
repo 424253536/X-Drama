@@ -2662,9 +2662,10 @@ ${shots.map((s, i) => {
       }
     }
 
-    // Fallback: 如果 LLM 没有返回或解析失败，使用专业分镜规则引擎生成描述
-    if (storyboardPlans.length === 0) {
-      storyboardPlans = shots.map((shot, i) => {
+    // Fallback: LLM 没返回/解析失败/部分截断,用专业分镜规则引擎生成描述。
+    // v12.167:此前只有**全空**才兜底 —— plans JSON 截断被救回只剩前缀(如 1/4)时会静默
+    // 只渲 1 镜(live 实测成片 4.4s/预期 26s)。改为「缺多少补多少」,任何缺口都规则补齐。
+    const buildRulePlans = () => shots.map((shot, i) => {
         const totalShots = shots.length;
         const position = i / Math.max(1, totalShots - 1); // 0→1 归一化位置
 
@@ -2729,6 +2730,16 @@ ${shots.map((s, i) => {
           transitionNote: i === 0 ? '开场淡入' : i === totalShots - 1 ? '淡出黑场' : '匹配切',
         };
       });
+
+    // v12.167:任何缺口(全空或部分截断)都用规则引擎补齐缺失镜
+    if (storyboardPlans.length < shots.length) {
+      const have = new Set(storyboardPlans.map((p: any) => p.shotNumber));
+      const added = buildRulePlans().filter((p: any) => !have.has(p.shotNumber));
+      if (storyboardPlans.length > 0 && added.length > 0) {
+        console.warn(`[Storyboard] plans 截断 ${storyboardPlans.length}/${shots.length},规则引擎补齐镜:`, added.map((p: any) => p.shotNumber).join(','));
+        this.emit('agentTalk', { role: AgentRole.STORYBOARD, text: `⚠️ 分镜规划输出被截断(${storyboardPlans.length}/${shots.length}),缺失镜已按专业规则引擎补齐` });
+      }
+      storyboardPlans = [...storyboardPlans, ...added].sort((a: any, b: any) => (a.shotNumber ?? 0) - (b.shotNumber ?? 0));
     }
 
     // 输出纯文本分镜（imageUrl 暂时留空，后续渲染阶段填充）
