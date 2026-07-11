@@ -51,7 +51,7 @@ function getFixtures() {
   return { demo, projectId: project?.id };
 }
 
-async function login(page, email = 'demo@qfmanju.ai', password = 'Qfmanju123') {
+async function login(page, email = 'demo@qfmanju.ai', password = process.env.DEMO_PASSWORD || '') {
   await page.goto(`${BASE}/auth`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(async ({ email, password }) => {
     const r = await fetch('/api/auth/login', {

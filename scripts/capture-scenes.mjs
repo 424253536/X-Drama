@@ -116,7 +116,7 @@ async function shoot(page, name) {
     console.log('\n[scenes] === invite popover ===');
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-    await loginViaLocalStorage(page, demo.email, 'Qfmanju123');
+    await loginViaLocalStorage(page, demo.email, process.env.DEMO_PASSWORD || '');
     await page.goto(`${BASE}/projects/${projectId}`, { waitUntil: 'networkidle2', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 3500));
     // Radix Popover trigger 可能不带 title 属性 — 用 UserPlus icon SVG 路径作 selector
@@ -170,7 +170,7 @@ async function shoot(page, name) {
     console.log('\n[scenes] === notification bell ===');
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-    await loginViaLocalStorage(page, demo.email, 'Qfmanju123');
+    await loginViaLocalStorage(page, demo.email, process.env.DEMO_PASSWORD || '');
     await page.goto(`${BASE}/dashboard`, { waitUntil: 'networkidle2', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 2000));
     // The bell is in dashboard layout absolute top-4 right-5 — title="通知"
@@ -198,7 +198,7 @@ async function shoot(page, name) {
     console.log('\n[scenes] === storyboard regen modal ===');
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-    await loginViaLocalStorage(page, demo.email, 'Qfmanju123');
+    await loginViaLocalStorage(page, demo.email, process.env.DEMO_PASSWORD || '');
     await page.goto(`${BASE}/projects/${projectId}`, { waitUntil: 'networkidle2', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 2500));
     // Switch to workshop tab
@@ -220,7 +220,7 @@ async function shoot(page, name) {
     // Owner page
     const ownerPage = await browser.newPage();
     await ownerPage.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-    await loginViaLocalStorage(ownerPage, demo.email, 'Qfmanju123');
+    await loginViaLocalStorage(ownerPage, demo.email, process.env.DEMO_PASSWORD || '');
     await ownerPage.goto(`${BASE}/projects/${projectId}`, { waitUntil: 'networkidle2', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 2500));
     await clickByText(ownerPage, 'Cinema 时间线');

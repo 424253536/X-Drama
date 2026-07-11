@@ -152,7 +152,7 @@ async function loginIfNeeded(page) {
     const r = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'demo@qfmanju.ai', password: 'Qfmanju123' }),
+      body: JSON.stringify({ email: 'demo@qfmanju.ai', password: process.env.DEMO_PASSWORD || '' }),
     });
     if (!r.ok) return { ok: false, status: r.status };
     const data = await r.json();
