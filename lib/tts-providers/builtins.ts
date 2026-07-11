@@ -29,7 +29,7 @@ registerTTSProvider({
   supportsCloning: false,
   supportsStreaming: false,
   maxTextLen: 5_000,
-  supportedLanguages: ['zh-CN', 'en-US'],  // T2A-v2 实际支持更多, 这里列常用两个
+  supportedLanguages: [],  // v12.168:[] = 任意语种(T2A-v2 多语模型;此前只列 zh/en 导致 ja/ko/ru 被 registry 过滤掉)
   available: () => !!process.env.MINIMAX_API_KEY,
   async generate(input: TTSGenerateInput) {
     const svc = await getTTSService();
@@ -40,6 +40,7 @@ registerTTSProvider({
       volume: input.volume,
       pitch: input.pitch,
       emotion: input.emotion,
+      language: input.language, // v12.168:语种直达 language_boost
     });
     if (!r || !r.audioUrl) throw new Error('Minimax TTS returned empty audioUrl');
     // r.subtitle 可能没有 character — 补一下方便调用方拼字幕

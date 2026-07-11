@@ -6,7 +6,15 @@ export interface TTSOptions {
   volume?: number;
   pitch?: number;
   emotion?: string;
+  /** v12.168:TTS 语种码('ja-JP' 等)→ MiniMax language_boost,配音即该语种 */
+  language?: string;
 }
+
+// v12.168:ttsCode → MiniMax t2a_v2 language_boost 枚举名
+const LANGUAGE_BOOST: Record<string, string> = {
+  'zh-CN': 'Chinese', 'en-US': 'English', 'ja-JP': 'Japanese', 'ko-KR': 'Korean',
+  'ru-RU': 'Russian', 'es-ES': 'Spanish', 'fr-FR': 'French', 'de-DE': 'German', 'pt-BR': 'Portuguese',
+};
 
 export interface TTSResult {
   audioUrl: string;
@@ -147,8 +155,12 @@ export class TTSService {
         format: 'mp3',
       },
     };
+    // v12.168:多语配音 —— 目标语种下达 language_boost(此前 body 无语种参数,
+    // 日语台词按默认中文语音读,发音失真);未知语种码不传(让模型自动)。
+    const boost = options?.language ? LANGUAGE_BOOST[options.language] : undefined;
+    if (boost) body.language_boost = boost;
 
-    console.log(`[TTS] Generating voiceover for: "${text.slice(0, 50)}..." voice=${voiceId}`);
+    console.log(`[TTS] Generating voiceover for: "${text.slice(0, 50)}..." voice=${voiceId} lang=${boost || 'auto'}`);
 
     const response = await fetch(`${this.baseURL}/v1/t2a_v2`, {
       method: 'POST',
