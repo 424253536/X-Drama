@@ -9,6 +9,7 @@ import { ArrowLeft, FileText, Users, Mountains as Mountain, FilmStrip as Film, V
 import { CameoPanel } from '@/components/CameoPanel';
 import { CharacterCastPanel } from '@/components/project/character-cast-panel';
 import { DistributionPanel } from '@/components/project/distribution-panel';
+import { LocalizePanel } from '@/components/project/localize-panel';
 import { CoverCandidatesPanel } from '@/components/project/cover-candidates-panel';
 import { DirectorConsole } from '@/components/director-console';
 import LatestPolishBanner from '@/components/polish/LatestPolishBanner';
@@ -1061,6 +1062,7 @@ export default function ProjectDetailPage() {
           {/* v9.1.2 多平台分发 + v9.1.3 AI 竖屏封面候选 (发布前置: 文案 + 封面) */}
           {activeTab === 'distribution' && (
             <div className="flex flex-col gap-4">
+              <LocalizePanel projectId={id} />
               <DistributionPanel projectId={id} />
               <CoverCandidatesPanel projectId={id} title={project.title} />
             </div>
