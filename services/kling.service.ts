@@ -53,6 +53,9 @@ export class KlingService {
       // 仅 KLING_ELEMENTS=1 启用(默认关,零回归;需 kling-v1-6 Elements 套餐)。
       subjectReferences?: Array<{ imageUrl: string; name?: string; refImageUrls?: string[] }>;
       referenceImages?: string[];
+      // v12.201:导演级运镜 —— camera_control 仅 kling-v1-5+pro+5s 可用(探测),故配 modelOverride 一起降级
+      cameraControl?: import('@/lib/kling-camera').KlingCameraControl;
+      modelOverride?: string;
       onProgress?: ProgressCallback;
     }
   ): Promise<string> {
@@ -68,10 +71,11 @@ export class KlingService {
 
       // v12.174:模型 env 化,默认 kling-v3(账号零成本探测确认可用:v1/v1-6/v2-1/v2-1-master/v3;
       // v2/v2-5/v3-pro 无效)。v3 支持 15s(pro 实测过参数校验),v1/v2 系仍 5/10。
-      const model = process.env.KELING_VIDEO_MODEL || 'kling-v3';
+      const model = options?.modelOverride || process.env.KELING_VIDEO_MODEL || 'kling-v3';
       const wantSec = options?.duration || 5;
       const maxSec = model.startsWith('kling-v3') ? 15 : 10;
-      const duration = wantSec > 10 && maxSec >= 15 ? '15' : wantSec > 5 ? '10' : '5';
+      // camera_control 硬限 5s(探测),强制;否则按模型上限
+      const duration = options?.cameraControl ? '5' : (wantSec > 10 && maxSec >= 15 ? '15' : wantSec > 5 ? '10' : '5');
       // v12.197:官方硬限 prompt ≤2500 字(1201 报错实测)——超长裁断优于整镜失败
       if (prompt.length > 2450) { console.warn(`[Kling] prompt 超长 ${prompt.length} → 裁至 2450`); prompt = prompt.slice(0, 2450); }
       const body: Record<string, any> = {
@@ -84,6 +88,17 @@ export class KlingService {
 
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
+
+      // v12.201:运镜控制 —— 仅探测确认的 v1-5+pro 才注入(其余模型注入必 1201,忽略+warn)
+      if (options?.cameraControl) {
+        const { cameraControlSupported } = require('@/lib/kling-camera') as typeof import('@/lib/kling-camera');
+        if (cameraControlSupported(model, body.mode)) {
+          body.camera_control = options.cameraControl;
+          console.log(`[Kling] camera_control 注入(${model}/${body.mode}): ${JSON.stringify(options.cameraControl.config)}`);
+        } else {
+          console.warn(`[Kling] camera_control 忽略:${model}/${body.mode} 不支持(仅 kling-v1-5+pro)`);
+        }
+      }
 
       if (hasRealImage) {
         // 可灵官方 image 字段:URL 或**纯 base64**(不带 data: 前缀)

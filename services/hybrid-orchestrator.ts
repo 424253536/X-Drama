@@ -3725,6 +3725,23 @@ ${shots.map((s, i) => {
                   console.warn(`[Kling-FLF] S${board.shotNumber} tailFrameUrl 无法转引擎图,忽略尾帧`);
                 }
               }
+              // v12.201:导演级运镜(预备态)—— 仅当运营者设 KLING_CAMERA_MODEL(=kling-v1-5)
+              // 且该镜运镜可映射时,以画质换 camera_control(降 v1-5 pro 5s,诚实标注)。默认不设 → 不介入 v3 主路径。
+              const camModel = process.env.KLING_CAMERA_MODEL;
+              if (camModel) {
+                const { mapCameraMovement } = await import('@/lib/kling-camera');
+                const cc = mapCameraMovement((shot as any)?.cameraMovement);
+                if (cc) {
+                  try {
+                    this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `🎥 S${board.shotNumber} 运镜控制(${camModel} pro 5s,以画质换运镜)` });
+                    return await this.klingService.generateVideo(firstFrameUrl, enhancedPrompt, {
+                      modelOverride: camModel, mode: 'professional', cameraControl: cc,
+                      aspectRatio: this.videoAspect(),
+                      onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+                    });
+                  } catch (e) { console.warn('[Kling-Camera] 运镜生成失败,退回默认 i2v:', e instanceof Error ? e.message.slice(0, 80) : e); }
+                }
+              }
               // v12.163/174:duration 跟随剧本(v3 支持 15s;声明已上移供 Elements 共用)。
               return await this.klingService.generateVideo(firstFrameUrl, enhancedPrompt, {
                 duration: klingDur,
