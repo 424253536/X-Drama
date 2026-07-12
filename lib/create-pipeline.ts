@@ -13,6 +13,7 @@ import { HybridOrchestrator } from '@/services/hybrid-orchestrator';
 import { db, now } from '@/lib/db';
 import { updateAssetBySelector, listAssetsByType, upsertAsset } from '@/lib/repos/asset-repo';
 import { getProject, insertProjectFull, updateProjectById, upsertLockedCharacters } from '@/lib/repos/project-repo';
+import { sanitizeLockedCharacters } from '@/lib/locked-characters';
 import { createUser } from '@/lib/repos/user-repo';
 import { storyTemplates } from '@/lib/story-templates';
 import { toSsePayload } from '@/lib/pipeline-error';
@@ -243,36 +244,8 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     //   (兜底现有单角色编排链路;Phase 2 会做 per-shot 角色路由,根据
     //    Writer 标的角色名匹配对应 cref)
     let effectiveCameoRef = primaryCharacterRef || '';
-    const sanitizedLocked = Array.isArray(lockedCharacters)
-      ? lockedCharacters
-          .filter((c: any) => c && typeof c.imageUrl === 'string' && c.imageUrl && typeof c.name === 'string' && c.name.trim())
-          .slice(0, 3) // 硬上限 3 个,与前端 UI 一致
-          .map((c: any) => {
-            // v2.12 Sprint A.2: 透传 traits — 严格白名单校验,挡掉任意 JSON 注入
-            const t = c?.traits;
-            const safeTraits = (t && typeof t === 'object' && !Array.isArray(t))
-              ? {
-                  name: typeof t.name === 'string' ? t.name.slice(0, 40) : '',
-                  gender: ['male', 'female', 'unknown'].includes(t.gender) ? t.gender : 'unknown',
-                  ageGroup: ['童年', '少年', '青年', '中年', '老年', '未明示'].includes(t.ageGroup) ? t.ageGroup : '未明示',
-                  build: typeof t.build === 'string' ? t.build.slice(0, 60) : '未明示',
-                  skinTone: typeof t.skinTone === 'string' ? t.skinTone.slice(0, 30) : '未明示',
-                  appearance: typeof t.appearance === 'string' ? t.appearance.slice(0, 100) : '未明示',
-                  costume: typeof t.costume === 'string' ? t.costume.slice(0, 100) : '未明示',
-                  personality: typeof t.personality === 'string' ? t.personality.slice(0, 60) : '未明示',
-                  signature: typeof t.signature === 'string' ? t.signature.slice(0, 60) : '未明示',
-                  confident: t.confident === true,
-                }
-              : undefined;
-            return {
-              name: String(c.name).trim().slice(0, 40),
-              role: ['lead', 'antagonist', 'supporting', 'cameo'].includes(c.role) ? c.role : 'lead',
-              cw: Number.isFinite(c.cw) ? Math.max(25, Math.min(125, Math.round(c.cw))) : 100,
-              imageUrl: String(c.imageUrl),
-              ...(safeTraits ? { traits: safeTraits } : {}),
-            };
-          })
-      : [];
+    // v12.198:净化抽为纯函数 lib/locked-characters(与项目详情页「角色档案」API 共用同一语义)
+    const sanitizedLocked = sanitizeLockedCharacters(lockedCharacters);
     if (!effectiveCameoRef && sanitizedLocked.length > 0) {
       effectiveCameoRef = sanitizedLocked[0].imageUrl;
     }

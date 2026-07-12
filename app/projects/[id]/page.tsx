@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, FileText, Users, Mountains as Mountain, FilmStrip as Film, Video, Play, Scissors, Star, CheckCircle as CheckCircle2, Warning as AlertTriangle, Pencil, FloppyDisk as Save, X, ChatCircle as MessageCircle, ChartBar as BarChart3, FilmSlate as Clapperboard, Scan as ScanEye, MonitorPlay, LinkSimple as Link2, Gauge, BracketsCurly as Braces, Megaphone, MagicWand, SpeakerHigh, ArrowsOut as Maximize, ArrowsIn as Minimize } from '@phosphor-icons/react';
 import { CameoPanel } from '@/components/CameoPanel';
+import { CharacterCastPanel } from '@/components/project/character-cast-panel';
 import { DistributionPanel } from '@/components/project/distribution-panel';
 import { CoverCandidatesPanel } from '@/components/project/cover-candidates-panel';
 import { DirectorConsole } from '@/components/director-console';
@@ -499,6 +500,9 @@ export default function ProjectDetailPage() {
           initialUrl={project.primaryCharacterRef}
           onChange={(nextUrl) => setProject((prev: any) => ({ ...prev, primaryCharacterRef: nextUrl }))}
         />
+
+        {/* v12.198:多角色档案(建成后补/改配角人脸,写 locked_characters → 每镜注入 subject_reference) */}
+        <CharacterCastPanel projectId={id} />
 
         {/* Tabs — v12.42 两级工作流主轴(创作 → 精修 → 审校 → 交付),收敛 18 个平铺 Tab */}
         <div className="mb-6 flex flex-col gap-2">
