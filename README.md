@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.203</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.204</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -234,7 +234,8 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 
 ## 🥊 vs. competitors
 
-> 阵容核验 2026-07-06:Artificial Analysis 盲投竞技场(**带音频文生视频榜**,口径与上轮无音频榜不同)—— **Dreamina Seedance 2.0 720p 榜首(Elo 1223)**;**阿里双线爆发:Wan2.7-260612 次席(1161,新入榜)**、HappyHorse-1.1 第三(1154);**SkyReels V4(Skywork,1109)首次入榜**,与 Kling 3.0 1080p Pro(1109)并列;Wan 2.7 / Kling 3.0 Omni 紧随(1104/1100)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 被多家评为「性价比冠军」(多语对白+lip sync);**Runway Gen-4.5** 控制面最强;**Sora 2** 关停时间线再确认(App 2026-04-26 已下线、API 2026-09-24 关停,勿作依赖)。**广告垂直层新对标**:Creatify(商品 URL→批量变体+ROAS 分析,$33/mo 起)与 Arcads(拟真 AI 演员 UGC)双雄互补 —— Wind Comic 广告工厂对位:brief/URL→成片→Hook A/B 变体→发布包全链自托管+BYO,正是这两家闭源 SaaS 的开源合体路线。
+> 阵容核验 2026-07-12(Artificial Analysis 盲投竞技场):格局较 07-06 稳定 —— **带音频文生视频榜:Dreamina Seedance 2.0 720p 仍榜首(Elo 1226)**、Wan2.7-260612 次席(1160)、HappyHorse-1.1 第三(1152)、Kling 3.0 1080p Pro(1112);**无音频榜 HappyHorse-1.0 登顶(1287)**、HappyHorse-1.1(1277)、Seedance 2.0(1272)、Kling 3.0 Pro(1245);**图生视频 Seedance 2.0 榜首(Elo 1345)**。**Seedance 2.5** 已进入主流对比梯队(我方 v12.177 预备态待网关额度激活)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 性价比冠军(多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。
+> **本轮 v12.195–204 全部落在护城河「制作/平台层」**(生成层红海不硬拼):多引擎色调统一 + 转场多样性、可灵首尾帧锁定接主链(image_tail,live 末帧逐像素一致)、角色档案多主体人脸库(对标即梦角色管理)、出海多语版一键译制(对标阅文 ToonScroll)、AI 作曲免版权 BGM、角色音色性别/年龄纠偏、决策日志/成本下钻。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
 | Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
@@ -252,6 +253,11 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 | Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ⚠️ | ✅ video-edit 端点 | **✅ + reference image upload** |
 | Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
 | Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
+| First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ (v1.5 only) | ⚠️ | ❌ | ❌ | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
+| Multi-character face cast library (post-build editable) | ❌ | ✅ 主体库 | ✅ 角色管理 | ⚠️ | ❌ | ❌ | **✅ 3-slot cast + cross-shot subject_reference injection** |
+| One-click localization (script + re-voice) | ❌ | ⚠️ dub only | ❌ | ❌ | ❌ | ❌ | **✅ 8-lang translate → apply → re-TTS, honest degradation** |
+| Royalty-free AI BGM per story | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MiniMax music-2.6, style-prompt → project BGM** |
+| Per-shot auditable decision log (engine/cost/consistency) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ decision log + cost drill-down + quality score** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
 
