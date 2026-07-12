@@ -12,6 +12,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import path from 'path';
+import { audioBitrateForPlatform } from '@/lib/audio-encode';
 import fs from 'fs';
 import { audioUrlLoadKind } from '@/lib/audio-url';
 import { impactSfxNode } from '@/lib/impact-sfx'; // v12.13.1 打击音效程序化合成
@@ -471,7 +472,7 @@ export async function concatVideos(
     }
     filters.push(`${labels.join('')}concat=n=${locals.length}:v=1:a=1[vout][aout]`);
     cmd.complexFilter(filters)
-      .outputOptions(['-map', '[vout]', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'])
+      .outputOptions(['-map', '[vout]', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', audioBitrateForPlatform(undefined), '-movflags', '+faststart'])
       .output(outputPath)
       .on('end', () => resolve({ outputPath, count: locals.length }))
       .on('error', reject)
@@ -541,7 +542,7 @@ export async function attachTextCard(
       `[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo[a1];` +
       `[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]` +
       (renorm ? `;${buildLoudnormFilter('[a]', '[anorm]')}` : '');
-    sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "${renorm ? '[anorm]' : '[a]'}" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`);
+    sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "${renorm ? '[anorm]' : '[a]'}" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a ${audioBitrateForPlatform(undefined)} -movflags +faststart "${outputPath}"`);
     console.log(`[Card] ${position === 'start' ? 'Hook 片头卡' : '片尾卡'}已拼接 → ${outputPath}`);
     return { outputPath, appended: true };
   } finally {
@@ -824,6 +825,9 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   // 业界做法: 让模型只画"角色在说话"的动作, 真字幕走 ffmpeg subtitles filter
   // (libass + .srt + 系统 CJK 字体).
   let subtitlesFilterFragment = '';
+  // v12.195:标准 SRT 在情绪调速/卡点/变速之前生成,时间轴用的是 ORIGINAL 时长 ——
+  // durations[] 定稿后必须按终值重写此文件,否则慢放镜字幕提前消失(偏移可达 30%)。
+  let srtResyncPath: string | null = null;
   try {
     const hasAnyDialogue = validClips.some((c) => (c?.dialogue || '').trim().length > 0);
     if (hasAnyDialogue) {
@@ -863,6 +867,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         if (srtContent.trim().length > 0) {
           const srtPath = path.join(tmpDir, 'subtitles.srt');
           fs.writeFileSync(srtPath, srtContent, 'utf-8');
+          srtResyncPath = srtPath; // v12.195:durations 定稿后重写
           // libass subtitles filter — 必须 escape colon (Windows path 兼容) + 内部单引号
           const escapedPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
           // v12.52.0 字幕风格预设(clean 与旧硬编码逐字符一致;social 给电商/广告大字抬高)
@@ -991,6 +996,12 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         durations[0] = durations[0] / speed;
         console.log(`[Composer] Single clip speed=${speed}x → duration=${durations[0].toFixed(1)}s${isHL ? ' [HIGHLIGHT]' : ''}`);
       }
+      if (srtResyncPath) {
+        try {
+          const { buildSrt: srtF } = require('@/lib/text-control') as typeof import('@/lib/text-control');
+          fs.writeFileSync(srtResyncPath, srtF([{ dialogue: validClips[0]?.dialogue || '', duration: durations[0] }]), 'utf-8');
+        } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
+      }
       // 添加淡入淡出效果
       videoFilter += `,fade=t=in:st=0:d=0.8,fade=t=out:st=${Math.max(0, durations[0] - 1)}:d=1`;
       // v2.22 fix #2: 烧 CJK 字幕 (在 fade 之后, 避免字幕被淡出)
@@ -1008,7 +1019,9 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       // 之前没循环, 60s BGM 后剩下时间静音; 而且 amix=shortest 还会把整段视频截短到 BGM 长度。
       // 修法: aloop=-1 让 BGM 无限循环, amix=duration=first 用第一个输入(视频原音 [va]) 作 master length。
       if (localMusicPath) {
-        filters.push(`[1:a]aloop=loop=-1:size=2e+09,volume=${musicVolume}[ma]`);
+        // v12.195:BGM 被 amix=duration=first 硬截 → 结尾"刹车感",按成片终点提前 2.5s 淡出
+        const bgmFadeSt = Math.max(0, (durations[0] || 8) - 2.5).toFixed(2);
+        filters.push(`[1:a]aloop=loop=-1:size=2e+09,volume=${musicVolume},afade=t=out:st=${bgmFadeSt}:d=2.5[ma]`);
         mixInputs += '[ma]';
         mixCount++;
       }
@@ -1027,7 +1040,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
 
       cmd
         .complexFilter(filters)
-        .outputOptions(['-map', '[vout]', '-map', '[outa]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-movflags', '+faststart'])
+        .outputOptions(['-map', '[vout]', '-map', '[outa]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', audioBitrateForPlatform(options.platform), '-movflags', '+faststart'])
         .output(outputPath)
         .on('progress', (p) => onProgress?.(50 + Math.round((p.percent || 0) * 0.5), '合成中...'))
         .on('end', () => {
@@ -1092,6 +1105,15 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       }
 
       filters.push(`${videoFilter}[v${i}]`);
+    }
+
+    // v12.195:durations[] 至此定稿(情绪调速→卡点吸附→逐镜变速全部落账)→ 重写 SRT 时间轴
+    if (srtResyncPath) {
+      try {
+        const { buildSrt: srtF } = require('@/lib/text-control') as typeof import('@/lib/text-control');
+        fs.writeFileSync(srtResyncPath, srtF(validClips.map((c, k) => ({ dialogue: c?.dialogue || '', duration: durations[k] }))), 'utf-8');
+        console.log('[Composer] v12.195 SRT 时间轴按终值时长重写(变速/卡点后不漂移)');
+      } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
     }
 
     // 链式 xfade
@@ -1160,7 +1182,9 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       const musicIdx = nextInputIdx;
       nextInputIdx++;
       // v2.14 P1.2: BGM 必须 aloop, 否则 60s 之后整段视频静音
-      filters.push(`[${musicIdx}:a]aloop=loop=-1:size=2e+09,volume=${musicVolume}[musicvol]`);
+      // v12.195:+尾淡出,免 amix=duration=first 硬截的"刹车感"
+      const bgmFadeSt = Math.max(0, cumulativeDuration - 2.5).toFixed(2);
+      filters.push(`[${musicIdx}:a]aloop=loop=-1:size=2e+09,volume=${musicVolume},afade=t=out:st=${bgmFadeSt}:d=2.5[musicvol]`);
       audioMixParts.push('[musicvol]');
       audioMixCount++;
     }
@@ -1220,7 +1244,9 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         // 变速镜配音同比 atempo(在 adelay 之前),让台词跟随被拉伸/压缩的画面与口型
         const voSpeed = validClips[myIdx]?.speedMultiplier || 1.0;
         const atempoChain = buildAtempoChain(voSpeed);
-        const voChain = atempoChain ? `${atempoChain},adelay=${delay}` : `adelay=${delay}`;
+        // v12.195:TTS 常见 <80Hz 底噪轰鸣 + >12kHz 数字齿音 → 带通清理(人声频段不动)
+        const voEq = process.env.VOICE_EQ_DISABLE === '1' ? '' : 'highpass=f=80,lowpass=f=12000,';
+        const voChain = atempoChain ? `${atempoChain},${voEq}adelay=${delay}` : `${voEq}adelay=${delay}`;
         filters.push(`[${voIdx}:a]${voChain},volume=${voiceoverVolume}[${lbl}]`);
         voSubInputs.push(`[${lbl}]`);
         voCount++;
@@ -1326,7 +1352,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         '-preset', 'fast',
         '-crf', '23',
         '-c:a', 'aac',
-        '-b:a', '128k',
+        '-b:a', audioBitrateForPlatform(options.platform),
         '-movflags', '+faststart',
         '-shortest',
       ])
@@ -1599,7 +1625,7 @@ export async function stillFrameToVideo(
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
-        '-b:a', '128k',
+        '-b:a', audioBitrateForPlatform(undefined),
         '-shortest',
         '-movflags', '+faststart',
       ])

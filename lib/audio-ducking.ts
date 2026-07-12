@@ -14,16 +14,30 @@ export interface DuckingPlan {
   voOut: string;    // 供 amix 的配音标签(asplit 复制)
 }
 
+/** env 数值解析:非法/越界回默认(闪避参数配错不该炸合成)。 */
+function envNum(raw: string | undefined, min: number, max: number, dflt: number): number {
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= min && v <= max ? v : dflt;
+}
+
 /**
  * @param musicLabel 已就绪的 BGM 流标签(如 '[musicvol]')
  * @param voLabel    已就绪的配音流标签(如 '[vomix]' 或 '[vo0]')
- * 参数:threshold 0.02(人声一出即触发)/ ratio 6(压得明显但不突兀)/
- * attack 120ms(入场柔)/ release 600ms(停顿回升自然)/ makeup 1(不额外抬)。
+ * v12.195:attack 120→20ms(旧值人声开口后 BGM 还赖 1/8 秒,首字被糊)、
+ * release 600→350ms(短对白间隙 BGM 能回来但不抢)、ratio 6→4(压得自然)。
+ * env BGM_DUCK_ATTACK / BGM_DUCK_RELEASE / BGM_DUCK_RATIO 可调(供不同题材试听微调)。
  */
-export function buildDuckingFilters(musicLabel: string, voLabel: string): DuckingPlan {
+export function buildDuckingFilters(
+  musicLabel: string,
+  voLabel: string,
+  env: NodeJS.ProcessEnv = process.env,
+): DuckingPlan {
+  const attack = envNum(env.BGM_DUCK_ATTACK, 5, 500, 20);
+  const release = envNum(env.BGM_DUCK_RELEASE, 50, 2000, 350);
+  const ratio = envNum(env.BGM_DUCK_RATIO, 2, 20, 4);
   const filters = [
     `${voLabel}asplit=2[duck_sc][duck_vo]`,
-    `${musicLabel}[duck_sc]sidechaincompress=threshold=0.02:ratio=6:attack=120:release=600:makeup=1[duck_music]`,
+    `${musicLabel}[duck_sc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=${attack}:release=${release}:makeup=1[duck_music]`,
   ];
   return { filters, musicOut: '[duck_music]', voOut: '[duck_vo]' };
 }
