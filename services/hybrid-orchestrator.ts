@@ -4234,6 +4234,8 @@ ${shots.map((s, i) => {
         emotion,
         act,
         dialogue: shot?.dialogue || '',
+        // v12.203:说话角色名(出场角色首个)→ TTS prosody 性别/年龄纠偏
+        speaker: (shot as any)?.characters?.[0] || '',
         // 高光检测元数据
         emotionTemperature,
         tensionLevel,
@@ -4420,6 +4422,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
             const prosody = deriveProsody({
               emotion: t.emotion,
               emotionTemperature: t.emotionTemperature,
+              character: (t as any).speaker, // v12.203:角色名性别/年龄纠偏(legacy #5 落地)
             });
             // v12.87.0 台词-镜长适配:说不完就在合法区间提速(≤1.3),仍溢出记账告警(不擅自删词)
             {

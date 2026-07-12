@@ -88,15 +88,38 @@ export function deriveProsody(input: ProsodyInput = {}): ProsodyParams {
   // 2) emotionTemperature ±20% 幅度细调
   //    t ∈ [-1, +1] 之后:speed ±0.08 / pitch ±3 半音 / vol ±0.05
   const t = Math.max(-10, Math.min(10, temperature)) / 10;
-  const speed = clamp(base.speed + t * 0.08, 0.5, 2.0);
-  const pitch = clampInt(base.pitch + t * 3, -12, 12);
+  let speed = clamp(base.speed + t * 0.08, 0.5, 2.0);
+  let pitch = clampInt(base.pitch + t * 3, -12, 12);
   const vol = clamp(base.vol + t * 0.05, 0.3, 1.0);
+
+  // 3) v12.203:角色名性别/年龄线索微调(legacy #5「character 暂未使用」落地)——
+  //    男角默认女声语调、老者用少年语速的廉价感,低成本靠角色名纠偏。保守幅度,叠加后 clamp。
+  const bias = characterProsodyBias(input.character);
+  speed = clamp(speed * bias.speedMul, 0.5, 2.0);
+  pitch = clampInt(pitch + bias.pitchDelta, -12, 12);
 
   return {
     speed: round2(speed),
     pitch,
     vol: round2(vol),
   };
+}
+
+/**
+ * v12.203:角色名 → prosody 偏置(纯函数,可测)。中英线索松匹配;无线索 → 零偏置。
+ * 年龄优先级高于性别(老者/孩童的语速特征比音高更显著)。
+ */
+export function characterProsodyBias(name?: string | null): { pitchDelta: number; speedMul: number } {
+  const n = (name || '').toLowerCase();
+  if (!n.trim()) return { pitchDelta: 0, speedMul: 1.0 };
+  let pitchDelta = 0, speedMul = 1.0;
+  // 性别线索
+  if (/[男叔爷伯汉][^女]?|先生|大爷|老汉|父亲|爸|哥|\bmr\b|\bsir\b|\bboy\b|\bhe\b|\bhim\b/.test(n)) { pitchDelta -= 2; speedMul *= 0.98; }
+  else if (/女|姐|妹|婆|娘|母亲|妈|小姐|夫人|\bmrs\b|\bms\b|\bmiss\b|\bgirl\b|\blady\b|\bshe\b|\bher\b/.test(n)) { pitchDelta += 1; }
+  // 年龄线索(覆盖性别的语速)
+  if (/老|爷|婆|翁|叟|年迈|大爷|奶奶|爷爷|\bold\b|\belder\b/.test(n)) { pitchDelta -= 1; speedMul = 0.92; }
+  else if (/孩|童|娃|幼|少年|\bkid\b|\bchild\b|\bboy\b|\bgirl\b/.test(n)) { pitchDelta += 2; speedMul = Math.max(speedMul, 1.02); }
+  return { pitchDelta, speedMul };
 }
 
 function clamp(v: number, lo: number, hi: number): number {
