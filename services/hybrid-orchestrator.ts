@@ -3708,6 +3708,23 @@ ${shots.map((s, i) => {
                   console.warn(`[Kling-Elements] 失败退回单图 i2v:`, e instanceof Error ? e.message.slice(0, 80) : e);
                 }
               }
+              // v12.197:分镜显式尾帧 → 首尾帧融合(image_tail)锁切镜构图;失败退单图 i2v。
+              const tailRaw = (shot as any)?.tailFrameUrl;
+              if (typeof tailRaw === 'string' && tailRaw.trim() && firstFrameUrl) {
+                const { toEngineImage: tailEng } = await import('@/lib/first-frame');
+                const tailImg = tailEng(tailRaw.trim());
+                if (tailImg) {
+                  try {
+                    this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `🎯 S${board.shotNumber} 首尾帧锁定生成(image_tail)` });
+                    return await this.klingService.generateFirstLastFrame(firstFrameUrl, tailImg, enhancedPrompt, {
+                      duration: Math.min(klingDur, 10), // FLF 上限 10s
+                      onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+                    });
+                  } catch (e) { console.warn('[Kling-FLF] 尾帧融合失败,退回单图 i2v:', e instanceof Error ? e.message.slice(0, 80) : e); }
+                } else {
+                  console.warn(`[Kling-FLF] S${board.shotNumber} tailFrameUrl 无法转引擎图,忽略尾帧`);
+                }
+              }
               // v12.163/174:duration 跟随剧本(v3 支持 15s;声明已上移供 Elements 共用)。
               return await this.klingService.generateVideo(firstFrameUrl, enhancedPrompt, {
                 duration: klingDur,
@@ -5242,7 +5259,7 @@ ${characterBibleBlock}${producerContext}
   }
 
   // 单个分镜重生成（优先 Veo 3.1）
-  async regenerateShot(shotNumber: number, storyboard: Storyboard, options?: { duration?: number; videoProvider?: string }): Promise<VideoClip> {
+  async regenerateShot(shotNumber: number, storyboard: Storyboard, options?: { duration?: number; videoProvider?: string; tailFrameUrl?: string }): Promise<VideoClip> {
     this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `重新生成第 ${shotNumber} 镜`, progress: 0 });
     let videoUrl: string;
     const provider = options?.videoProvider || 'veo';
@@ -5270,7 +5287,13 @@ ${characterBibleBlock}${producerContext}
     const genByEngine: Record<string, () => Promise<string>> = {
       veo: () => this.veoService!.generateVideo(engineFrame, storyboard.prompt, { duration, aspectRatio: this.videoAspect() }),
       minimax: () => this.minimaxService!.generateVideo(engineFrame, storyboard.prompt, minimaxOpts),
-      kling: () => this.klingService!.generateVideo(engineFrame, storyboard.prompt, { duration: Math.min(duration, 10), aspectRatio: this.videoAspect() as any }),
+      kling: () => {
+        // v12.197:显式尾帧 → 首尾帧融合(锁切镜构图);无尾帧走单图 i2v
+        const tailImg = options?.tailFrameUrl ? toEngineImage(options.tailFrameUrl) : null;
+        return tailImg
+          ? this.klingService!.generateFirstLastFrame(engineFrame, tailImg, storyboard.prompt, { duration: Math.min(duration, 10) })
+          : this.klingService!.generateVideo(engineFrame, storyboard.prompt, { duration: Math.min(duration, 10), aspectRatio: this.videoAspect() as any });
+      },
     };
     const attempts = regenOrder.map((e) => ({ name: e, gen: genByEngine[e] }));
 

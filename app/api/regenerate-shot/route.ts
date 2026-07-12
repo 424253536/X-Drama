@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  *   - stage: 'video' | 'editor' | 'storyboard' 等，重新执行某个阶段
  */
 export async function POST(request: NextRequest) {
-  const { projectId, shotNumber, stage, videoProvider, cameraMovement, dryRun, force } = await request.json();
+  const { projectId, shotNumber, stage, videoProvider, cameraMovement, dryRun, force, tailFrameUrl: bodyTailFrameUrl } = await request.json();
 
   if (!projectId) {
     return new Response(JSON.stringify({ error: '缺少 projectId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -93,9 +93,20 @@ export async function POST(request: NextRequest) {
           }
 
           try {
+            // v12.197:尾帧锁定 —— body 显式传入优先,否则读剧本该镜的 tailFrameUrl
+            let tailFrameUrl: string | undefined = typeof bodyTailFrameUrl === 'string' && bodyTailFrameUrl.trim() ? bodyTailFrameUrl.trim() : undefined;
+            if (!tailFrameUrl) {
+              try {
+                const sd = JSON.parse((db.prepare('SELECT script_data FROM projects WHERE id = ?').get(projectId) as any)?.script_data || '{}');
+                const sh = (sd?.shots || []).find((x: any) => x?.shotNumber === shotNumber);
+                if (typeof sh?.tailFrameUrl === 'string' && sh.tailFrameUrl.trim()) tailFrameUrl = sh.tailFrameUrl.trim();
+              } catch { /* 剧本读不出就不带尾帧 */ }
+            }
+            if (tailFrameUrl) console.log(`[regenerate-shot] v12.197 尾帧锁定: ${tailFrameUrl.slice(0, 60)}`);
             const result = await orchestrator.regenerateShot(shotNumber, storyboard, {
               duration: 8,
               videoProvider: videoProvider || 'veo',
+              tailFrameUrl,
             });
 
             // 更新DB(v12.154:如实存降级标记)

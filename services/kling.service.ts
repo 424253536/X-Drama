@@ -72,6 +72,8 @@ export class KlingService {
       const wantSec = options?.duration || 5;
       const maxSec = model.startsWith('kling-v3') ? 15 : 10;
       const duration = wantSec > 10 && maxSec >= 15 ? '15' : wantSec > 5 ? '10' : '5';
+      // v12.197:官方硬限 prompt ≤2500 字(1201 报错实测)——超长裁断优于整镜失败
+      if (prompt.length > 2450) { console.warn(`[Kling] prompt 超长 ${prompt.length} → 裁至 2450`); prompt = prompt.slice(0, 2450); }
       const body: Record<string, any> = {
         model_name: model,
         prompt: prompt,
@@ -220,22 +222,23 @@ export class KlingService {
     if (!firstFrameUrl || !lastFrameUrl) {
       throw new Error('Kling FLF: 首帧 + 尾帧都必须有');
     }
-    if (firstFrameUrl.startsWith('data:') || lastFrameUrl.startsWith('data:')) {
-      throw new Error('Kling FLF: 不接受 data URI, 请先落盘成 http URL');
-    }
+    // v12.197:官方 image/image_tail 均收「URL 或纯 base64」(零成本探测:v3/v2-1 都校验 image_tail)
+    // —— data: URI 剥前缀即纯 base64,与 generateVideo 同口径,不再一刀切拒绝。
+    const normFrame = (u: string) => (u.startsWith('data:image/') ? u.split(',')[1] : u);
 
     console.log('[Kling-FLF] 首尾帧融合视频生成');
     console.log(`[Kling-FLF] First: ${firstFrameUrl.slice(0, 80)}`);
     console.log(`[Kling-FLF] Last:  ${lastFrameUrl.slice(0, 80)}`);
     console.log(`[Kling-FLF] Prompt: ${prompt.slice(0, 100)}...`);
 
+    if (prompt.length > 2450) { console.warn(`[Kling-FLF] prompt 超长 ${prompt.length} → 裁至 2450`); prompt = prompt.slice(0, 2450); }
     const body: Record<string, any> = {
       model_name: process.env.KELING_VIDEO_MODEL || 'kling-v3', // v12.174 补:FLF 同主模型
       prompt,
       mode: options?.mode === 'professional' ? 'pro' : 'std', // 官方枚举 std/pro
       duration: String(Math.min(options?.duration || 5, 10)),
-      image: firstFrameUrl,
-      image_tail: lastFrameUrl,
+      image: normFrame(firstFrameUrl),
+      image_tail: normFrame(lastFrameUrl),
     };
 
     const response = await fetchWithTimeout(

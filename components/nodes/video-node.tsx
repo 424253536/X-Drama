@@ -36,6 +36,8 @@ function VideoNodeComponent({ data }: NodeProps) {
 
   // v12.141(P0-1):每镜运镜选择(auto=跟随剧本);重生时传给 regenerate-shot
   const [shotCamera, setShotCamera] = useState<Record<number, string>>({});
+  // v12.197:每镜尾帧参考(可灵首尾帧融合,锁切镜构图);重生时传给 regenerate-shot
+  const [shotTail, setShotTail] = useState<Record<number, string>>({});
 
   // ═══ 重新生成单个镜头视频 ═══
   const handleRegenerateShot = useCallback(async (shotNumber: number, e: React.MouseEvent) => {
@@ -58,7 +60,7 @@ function VideoNodeComponent({ data }: NodeProps) {
       const response = await fetch('/api/regenerate-shot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, shotNumber, cameraMovement: shotCamera[shotNumber] || undefined }),
+        body: JSON.stringify({ projectId, shotNumber, cameraMovement: shotCamera[shotNumber] || undefined, tailFrameUrl: (shotTail[shotNumber] || '').trim() || undefined }),
       });
 
       if (!response.ok) throw new Error('请求失败');
@@ -223,6 +225,16 @@ function VideoNodeComponent({ data }: NodeProps) {
                         <option key={p.id} value={p.id}>{p.label}</option>
                       ))}
                     </select>
+                    {/* v12.197:尾帧参考(可灵 image_tail 首尾帧融合;贴图片 URL,重生时生效) */}
+                    <input
+                      value={shotTail[sn] || ''}
+                      onChange={(e) => { e.stopPropagation(); setShotTail((prev) => ({ ...prev, [sn]: e.target.value })); }}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={isRegenerating}
+                      placeholder="尾帧URL"
+                      className="opacity-0 group-hover:opacity-100 transition-all bg-black/50 border border-white/10 rounded text-[9px] text-gray-300 px-1 py-0.5 w-[64px] focus:outline-none focus:border-pink-400/40"
+                      title="尾帧参考图 URL(可灵首尾帧融合,锁定切镜构图;重生该镜时生效)"
+                    />
                     <button
                       onClick={(e) => handleRegenerateShot(sn, e)}
                       disabled={isRegenerating}
