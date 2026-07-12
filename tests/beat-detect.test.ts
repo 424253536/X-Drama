@@ -259,7 +259,7 @@ describe('v12.0.4 · 风格调制确定性管线(compressionBias / cutBias)', ()
     const soft = selectTransitions(clips, undefined, -0.6).slice(1);
     expect(hard).toContain('cut');                              // 快剪 variety 池含硬切
     expect(soft.every((t) => t !== 'cut')).toBe(true);          // 慢叙柔池无硬切
-    expect(soft.every((t) => ['dissolve', 'fade', 'fadeblack'].includes(t))).toBe(true);
+    expect(soft.every((t) => ['dissolve', 'fade', 'fadeblack', 'radial', 'circleopen'].includes(t))).toBe(true); // v12.200 柔池扩充
   });
 
   it('cutBias 收紧/放宽张力升→cut 阈值', async () => {

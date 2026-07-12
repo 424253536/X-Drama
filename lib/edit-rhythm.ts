@@ -85,9 +85,10 @@ export interface TransitionClip {
  */
 export function selectTransitions(clips: TransitionClip[], keyShots?: Set<number>, cutBias = 0): string[] {
   // v12.0.4 风格偏置:cutBias>0(快剪)硬切池 + 张力阈值放宽;<0(慢叙)柔池 + 阈值收紧
-  const VARIETY = cutBias > 0.3 ? ['cut', 'fadeblack', 'dissolve']
-    : cutBias < -0.3 ? ['dissolve', 'fade', 'fadeblack']
-    : ['dissolve', 'fadeblack', 'wipeleft'];
+  // v12.200:转场多样性扩池(每档 5-6 种,配 mapTransition 新增 pixelize/radial/wiperight/slideleft)
+  const VARIETY = cutBias > 0.3 ? ['cut', 'fadeblack', 'dissolve', 'pixelize', 'wiperight']
+    : cutBias < -0.3 ? ['dissolve', 'fade', 'fadeblack', 'radial', 'circleopen']
+    : ['dissolve', 'fadeblack', 'wipeleft', 'slideleft', 'radial', 'pixelize'];
   const riseThresh = cutBias > 0.3 ? 2 : cutBias < -0.3 ? 4 : 3;   // 张力升→硬切的阈值
   const out: string[] = clips.length ? [''] : [];
   let varietyIdx = 0;

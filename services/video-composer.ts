@@ -13,6 +13,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import path from 'path';
 import { audioBitrateForPlatform } from '@/lib/audio-encode';
+import { buildColorGradeFilter, detectGradeGenre } from '@/lib/color-grade';
 import fs from 'fs';
 import { audioUrlLoadKind } from '@/lib/audio-url';
 import { impactSfxNode } from '@/lib/impact-sfx'; // v12.13.1 打击音效程序化合成
@@ -636,6 +637,10 @@ function mapTransition(transition: string): string {
     'l-cut': 'fade',              // 音延续 (同上)
     'push': 'slideleft',
     'slide': 'slideleft',
+    // v12.200:转场多样性扩池(ffmpeg xfade 原生),告别全片三连 dissolve
+    'pixelize': 'pixelize',
+    'radial': 'radial',
+    'slideleft': 'slideleft',
   };
   return map[transition] || 'dissolve';
 }
@@ -980,7 +985,8 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       const isHL = validClips[0]?.isHighlight || false;
       // v12.13.0:单镜也按设计时长裁切(designed 未给则 = 源时长,无裁切)
       const trimTo0 = Math.min(durations[0], sourceDurations[0]);
-      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1`;
+      const _grade1 = buildColorGradeFilter(detectGradeGenre(options.editStyle));
+      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_grade1 ? ',' + _grade1 : ''}`;
       if (speed !== 1.0 && speed > 0) {
         const pts = 1.0 / speed;
         {
@@ -1078,13 +1084,17 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     const n = localClips.length;
     const td = Math.min(transitionDuration, Math.min(...durations) / 2); // 确保转场不超过最短片段的一半
 
+    // v12.200:多引擎拼接色调统一 —— 全片挂同一层基础调色(题材从 editStyle 推),抹平 Kling暖/MiniMax冷跳变
+    const _gradeGenre = detectGradeGenre(options.editStyle);
+    const _grade = buildColorGradeFilter(_gradeGenre);
+    if (_grade) console.log(`[Composer] v12.200 基础调色: ${_gradeGenre}`);
     // 视频预处理链：统一分辨率 + 高光变速
     for (let i = 0; i < n; i++) {
       const speed = validClips[i]?.speedMultiplier || 1.0;
       const isHighlightClip = validClips[i]?.isHighlight || false;
       // v12.13.0:按设计时长真裁切源片(trim=0:T + 重置时间戳)—— 杜绝 8s 源整段流出,快切节奏落地。
       const trimTo = Math.min(durations[i], sourceDurations[i]);
-      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1`;
+      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_grade ? ',' + _grade : ''}`;
 
       // 高光变速：setpts 调整视频播放速度（<1 = 加速, >1 = 减速）
       if (speed !== 1.0 && speed > 0) {
