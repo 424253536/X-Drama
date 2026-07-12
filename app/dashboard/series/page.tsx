@@ -49,7 +49,7 @@ export default function MySeriesPage() {
       ) : series.length === 0 ? (
         <div className="text-center py-16 text-gray-500 text-sm">
           还没有系列剧。<br />
-          <span className="text-gray-600 text-xs">用 <code className="text-cyan-300/80">POST /api/series</code> 把一个项目设为锚点集,即可生成续集系列。</span>
+          <span className="text-gray-600 text-xs">在任一项目里「设为系列锚点」,后续集数将自动继承它的角色、画风与锁脸设定,保持整季一致。</span>
         </div>
       ) : (
         <div className="space-y-2">

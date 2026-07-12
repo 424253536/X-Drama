@@ -29,6 +29,7 @@ import dynamic from 'next/dynamic';
 import { VisionAuditTab } from '@/components/project/vision-audit-tab';
 import { OneClickFilmPanel } from '@/components/project/oneclick-film-panel';
 import { CostAttributionPanel } from '@/components/project/cost-attribution-panel';
+import { DecisionLogPanel } from '@/components/project/decision-log-panel';
 import { SaveTemplateButton } from '@/components/project/save-template-button';
 import { InviteProjectButton } from '@/components/project/invite-project-button';
 import { ShotCinematographyModal } from '@/components/project/shot-cinematography-modal';
@@ -990,6 +991,8 @@ export default function ProjectDetailPage() {
               <MonitorTab projectId={id} storyboards={storyboards} />
               {/* v9.6.5 T3 性能成本:项目级成本归因 */}
               <CostAttributionPanel projectId={id} />
+              {/* v12.199:逐镜决策日志(decision-log API 此前无前端入口) */}
+              <DecisionLogPanel projectId={id} />
               {/* v9.6.8 T2 模板市场:把这个项目存为可复用模板 */}
               <SaveTemplateButton projectId={id} />
             </div>

@@ -76,6 +76,32 @@ export function DirectorConsole({
     ? (nextStage.status === 'empty' ? `下一步 · 生成「${nextStage.label}」` : `建议 · 重生「${nextStage.label}」`)
     : '全链路就绪 · 可导出成片';
 
+  // v12.199:变体选胜 —— POST ab-variant/choose,成功后本地把 chosen 标记切到该变体并刷新主成片
+  const [choosingVariant, setChoosingVariant] = useState<number | null>(null);
+  const chooseVariant = async (variant: number) => {
+    if (!projectId || choosingVariant !== null) return;
+    setChoosingVariant(variant);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/ab-variant/choose`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variant }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || '选定失败');
+      setWorkshopResult((prev) => prev ? {
+        ...prev,
+        finalVideoUrl: d.finalVideoUrl || prev.finalVideoUrl,
+        variants: prev.variants.map((v) => ({ ...v, chosen: v.variant === variant })),
+      } : prev);
+      setWorkshopMsg(`✓ 变体${variant} 已设为正式成片`);
+      onReran?.();
+    } catch (e: unknown) {
+      setWorkshopMsg(e instanceof Error ? e.message : '选定失败');
+    } finally {
+      setChoosingVariant(null);
+    }
+  };
+
   const doWorkshop = async () => {
     if (!projectId || workshopBusy) return;
     setWorkshopBusy(true); setWorkshopMsg('包装中…(hook→变体→文案→并包,约 1-3 分钟)');
@@ -175,11 +201,24 @@ export function DirectorConsole({
               <a href={workshopResult.finalVideoUrl} target="_blank" rel="noreferrer" className="cinema-chip cinema-chip-green hover:brightness-110">▶ 主成片</a>
             )}
             {workshopResult.variants.filter((v) => v.url).map((v) => (
-              <a key={v.variant} href={v.url as string} target="_blank" rel="noreferrer"
-                 className={`cinema-chip hover:brightness-110 ${v.chosen ? 'cinema-chip-amber' : ''}`}
-                 title={v.hookTitle || ''}>
-                {v.chosen ? '★' : '▶'} 变体{v.variant}{v.hookTitle ? ` · ${v.hookTitle.slice(0, 10)}` : ''}
-              </a>
+              <span key={v.variant} className="inline-flex items-center gap-0.5">
+                <a href={v.url as string} target="_blank" rel="noreferrer"
+                   className={`cinema-chip hover:brightness-110 ${v.chosen ? 'cinema-chip-amber' : ''}`}
+                   title={v.hookTitle || ''}>
+                  {v.chosen ? '★' : '▶'} 变体{v.variant}{v.hookTitle ? ` · ${v.hookTitle.slice(0, 10)}` : ''}
+                </a>
+                {/* v12.199:选为正片 —— ab-variant/choose API 此前无前端入口 */}
+                {!v.chosen && (
+                  <button
+                    onClick={() => chooseVariant(v.variant)}
+                    disabled={choosingVariant !== null}
+                    className="cinema-chip text-[10px] opacity-70 hover:opacity-100 disabled:opacity-30"
+                    title="把该变体设为正式成片"
+                  >
+                    {choosingVariant === v.variant ? '…' : '选为正片'}
+                  </button>
+                )}
+              </span>
             ))}
             {typeof workshopResult.healthScore === 'number' && (
               <span className="cinema-mono text-[11px] tabular-nums" style={{ color: healthTone(workshopResult.healthScore).color }}>
