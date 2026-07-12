@@ -21,14 +21,17 @@ export function buildCaptionForceStyle(
   opts?: { vertical?: boolean },
 ): string {
   const vertical = !!opts?.vertical;
+  // 注意:此串走 SRT 默认坐标系(libass PlayResY=288),数值均为 288 空间设计值 ——
+  // MarginV=40 即 14%H。v12.196:clean 竖屏抬到 58(≈20%H,抖音进度条/文案区之上)。
   switch (preset) {
     case 'social':
-      return `FontName=${fontName},FontSize=${vertical ? 30 : 26},Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00101010&,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=${vertical ? 120 : 56}`;
+      // v12.196:BorderStyle=4 半透明底板(libass 原生),复杂画面上可读性远超纯描边
+      return `FontName=${fontName},FontSize=${vertical ? 30 : 26},Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00101010&,BackColour=&H99000000&,BorderStyle=4,Outline=3,Shadow=1,Alignment=2,MarginV=${vertical ? 120 : 56}`;
     case 'bold':
-      return `FontName=${fontName},FontSize=${vertical ? 32 : 28},Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00202020&,BorderStyle=1,Outline=4,Shadow=0,Alignment=2,MarginV=${vertical ? 100 : 48}`;
+      return `FontName=${fontName},FontSize=${vertical ? 32 : 28},Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00202020&,BackColour=&H99000000&,BorderStyle=4,Outline=4,Shadow=0,Alignment=2,MarginV=${vertical ? 100 : 48}`;
     case 'clean':
     default:
-      return `FontName=${fontName},FontSize=24,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,Outline=2,Shadow=1,Alignment=2,MarginV=40`;
+      return `FontName=${fontName},FontSize=24,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,Outline=2,Shadow=1,Alignment=2,MarginV=${vertical ? 58 : 40}`;
   }
 }
 

@@ -140,7 +140,10 @@ export function buildSubtitlesFilter(
     const f = fontForLanguage(lang, style.fontName);
     if (f) style.fontName = f;
   }
-  const force = styleToForceStyle(style);
+  // v12.196 live 截帧抓到的真 bug:SRT 走 libass 默认 PlayResY=288 坐标系,而 PRESETS
+  // 按 1080 设计 —— FontSize=56 渲成 37% 屏高巨字,MarginV=120+ 直接把字幕顶到画面上部。
+  // 显式声明 PlayResY=1080 后,预设值在任何输出分辨率下按比例正确落位(libass 字号/边距均按 Y 轴缩放)。
+  const force = `${styleToForceStyle(style)},PlayResY=1080`;
   const escaped = escapeSubtitlePath(srtOrAssPath);
   return `subtitles='${escaped}':force_style='${force}'`;
 }

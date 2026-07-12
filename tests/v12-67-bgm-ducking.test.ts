@@ -10,7 +10,7 @@ describe('v12.67 · BGM ducking', () => {
     expect(d.filters[0]).toBe('[vomix]asplit=2[duck_sc][duck_vo]');
     expect(d.filters[1]).toContain('[musicvol][duck_sc]sidechaincompress=');
     expect(d.filters[1]).toContain('threshold=0.02');
-    expect(d.filters[1]).toContain('ratio=6');
+    expect(d.filters[1]).toContain('ratio=4'); // v12.195:6→4 收紧后的新默认
     expect(d.musicOut).toBe('[duck_music]');
     expect(d.voOut).toBe('[duck_vo]');
   });

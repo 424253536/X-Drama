@@ -7,12 +7,12 @@ import { fontForLanguage, buildSubtitlesFilter } from '@/lib/subtitle-burn';
 import fs from 'fs';
 
 describe('v12.179 · 口型语种', () => {
-  it('ko/ru → none(错口型比无口型更伤);zh/en/ja 保留', () => {
+  it('ko/ru/ja → none(错口型比无口型更伤);zh/en 保留', () => {
     expect(lipsyncLangCode('ko')).toBe('none');
     expect(lipsyncLangCode('ru')).toBe('none');
+    expect(lipsyncLangCode('ja')).toBe('none'); // v12.196:日语音素差距不亚于韩俄,跟进降级
     expect(lipsyncLangCode('zh')).toBe('zh');
     expect(lipsyncLangCode('en')).toBe('en');
-    expect(lipsyncLangCode('ja')).toBe('en'); // 日语元音近似可接受
   });
   it('接线锁:orchestrator none 跳过口型', () => {
     const o = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');

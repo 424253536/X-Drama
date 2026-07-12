@@ -21,7 +21,7 @@ interface LangMeta {
 export const SUPPORTED_LANGUAGES: Record<TargetLanguage, LangMeta> = {
   zh: { ttsCode: 'zh-CN', lipsync: 'zh', enName: 'Chinese', nativeName: '简体中文', ttsReliable: true },
   en: { ttsCode: 'en-US', lipsync: 'en', enName: 'English', nativeName: 'English', ttsReliable: true },
-  ja: { ttsCode: 'ja-JP', lipsync: 'en', enName: 'Japanese', nativeName: '日本語', ttsReliable: true },
+  ja: { ttsCode: 'ja-JP', lipsync: 'none', enName: 'Japanese', nativeName: '日本語', ttsReliable: true }, // v12.196:日语音素与英语差距不亚于韩俄,错口型比无口型更伤 → 与 ko/ru 同策略
   ko: { ttsCode: 'ko-KR', lipsync: 'none', enName: 'Korean', nativeName: '한국어', ttsReliable: true },
   es: { ttsCode: 'es-ES', lipsync: 'en', enName: 'Spanish', nativeName: 'Español', ttsReliable: true },
   fr: { ttsCode: 'fr-FR', lipsync: 'en', enName: 'French', nativeName: 'Français', ttsReliable: true },
@@ -108,4 +108,22 @@ export function buildLanguageDirective(lang: TargetLanguage): string {
 ## 🌐 OUTPUT LANGUAGE = ${meta.enName.toUpperCase()} (${meta.nativeName}) — hard rule
 All \`dialogue\`, narration, \`sceneDescription\`, \`subtext\`, \`action\` and any on-screen text MUST be natural ${meta.enName} (${meta.nativeName}). Do NOT output Chinese or any other language in these fields.
 Exception: \`visualPrompt\` and \`beats[].action\`/\`camera\` stay English (they feed the video engine).`;
+}
+
+/**
+ * v12.196:按字符分布嗅探文本语种(SRT 烧录选字体用,零 LLM)。
+ * 只认置信度高的三类非拉丁文种;分不清 → null(调用方保持原字体)。
+ */
+export function sniffTextLanguage(text: string | null | undefined): 'ja' | 'ko' | 'ru' | 'zh' | null {
+  const t = (text || '').slice(0, 4000);
+  if (!t.trim()) return null;
+  const kana = (t.match(/[\u3040-\u30ff]/g) || []).length;
+  const hangul = (t.match(/[\uac00-\ud7af]/g) || []).length;
+  const cyr = (t.match(/[\u0400-\u04ff]/g) || []).length;
+  const cjk = (t.match(/[\u4e00-\u9fff]/g) || []).length;
+  if (kana >= 4) return 'ja';           // 有假名基本必是日语
+  if (hangul >= 4) return 'ko';
+  if (cyr >= 8) return 'ru';
+  if (cjk >= 8) return 'zh';
+  return null;
 }

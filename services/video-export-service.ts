@@ -14,6 +14,7 @@ import path from 'path';
 import { resolveFFmpegPath } from './video-composer';
 import { buildAspectFilter, type ExportAspect, type FitMode } from '@/lib/video-export';
 import { buildSubtitlesFilter, escapeSubtitlePath, type SubtitlePlatform } from '@/lib/subtitle-burn';
+import { audioBitrateForPlatform } from '@/lib/audio-encode';
 
 export interface PlatformExportOptions {
   /** 输入成片绝对路径. */
@@ -30,6 +31,8 @@ export interface PlatformExportOptions {
   subtitlePath?: string;
   /** 输出文件名 (不含扩展名). 默认 input 名 + 平台后缀. */
   outName?: string;
+  /** v12.196:字幕语种(ja/ko/ru 选跨平台可显字体;不传 = 按 SRT 内容嗅探). */
+  lang?: string | null;
 }
 
 export interface PlatformExportResult {
@@ -77,7 +80,16 @@ export async function exportForPlatform(opts: PlatformExportOptions): Promise<Pl
 
   let subFilter = '';
   if (opts.subtitlePlatform && opts.subtitlePath && fs.existsSync(opts.subtitlePath)) {
-    subFilter = buildSubtitlesFilter(opts.subtitlePath, opts.subtitlePlatform);
+    // v12.196:语种字体覆盖此前从未接入烧录路径(ja/ko/ru 在 Linux 上豆腐块)——
+    // 显式 lang 优先,否则按字幕内容嗅探;canvasH 让 marginV 等比落安全区
+    let lang = opts.lang ?? null;
+    if (!lang) {
+      try {
+        const { sniffTextLanguage } = require('@/lib/language-detect') as typeof import('@/lib/language-detect');
+        lang = sniffTextLanguage(fs.readFileSync(opts.subtitlePath, 'utf-8'));
+      } catch { /* 嗅探失败保持原字体 */ }
+    }
+    subFilter = buildSubtitlesFilter(opts.subtitlePath, opts.subtitlePlatform, {}, lang);
   }
 
   if (aspectFilter.filterComplex) {
@@ -94,7 +106,7 @@ export async function exportForPlatform(opts: PlatformExportOptions): Promise<Pl
 
   args.push(
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-    '-c:a', 'aac', '-b:a', '128k',
+    '-c:a', 'aac', '-b:a', audioBitrateForPlatform(opts.subtitlePlatform),
     '-movflags', '+faststart',
     outputPath,
   );
