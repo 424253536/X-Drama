@@ -54,10 +54,17 @@ describe('KlingService.generateFirstLastFrame', () => {
     ).rejects.toThrow(/首帧.*尾帧.*都必须有/);
   });
 
-  it('throws when frame is data URI', async () => {
+  it('v12.197:data: URI 不再一刀切拒绝(剥前缀成纯 base64,与 generateVideo 同口径)', async () => {
+    // 官方 image/image_tail 均收「URL 或纯 base64」——零成本探测确认 v3/v2-1 都校验 image_tail。
+    // 有真 key 的环境会走到网络(下一断言覆盖);无 key 环境走配置校验分支。此处只锁「不再抛 data URI 拒绝」。
     const svc = new KlingService();
-    await expect(
-      svc.generateFirstLastFrame('data:image/png;base64,abc', 'http://a/2.png', 'p'),
-    ).rejects.toThrow(/不接受 data URI/);
+    let threw: string | null = null;
+    try {
+      await svc.generateFirstLastFrame('data:image/png;base64,abc', 'http://a/2.png', 'p');
+    } catch (e) {
+      threw = e instanceof Error ? e.message : String(e);
+    }
+    // 允许「未配置 key」或真实 API 报错,但绝不能再是旧的「不接受 data URI」
+    expect(threw).not.toMatch(/不接受 data URI/);
   });
 });
