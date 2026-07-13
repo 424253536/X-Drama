@@ -1262,7 +1262,9 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         // v12.195:TTS 常见 <80Hz 底噪轰鸣 + >12kHz 数字齿音 → 带通清理(人声频段不动)
         const voEq = process.env.VOICE_EQ_DISABLE === '1' ? '' : 'highpass=f=80,lowpass=f=12000,';
         const voChain = atempoChain ? `${atempoChain},${voEq}adelay=${delay}` : `${voEq}adelay=${delay}`;
-        filters.push(`[${voIdx}:a]${voChain},volume=${voiceoverVolume}[${lbl}]`);
+        // v12.206:句末补 120ms 静音气口,消除多角色对话「连读没换气/末字被截」的廉价感(VOICE_APAD_DISABLE=1 关)
+        const voPad = process.env.VOICE_APAD_DISABLE === '1' ? '' : ',apad=pad_dur=0.12';
+        filters.push(`[${voIdx}:a]${voChain},volume=${voiceoverVolume}${voPad}[${lbl}]`);
         voSubInputs.push(`[${lbl}]`);
         voCount++;
       }
@@ -1386,7 +1388,13 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
           try { fs.unlinkSync(localMusicPath); } catch {}
         }
 
-        resolve({
+        // v12.206:EBU R128 双遍精确归一(opt-in,AUDIO_LOUDNORM_2PASS=1)——就地替换成片音频
+        void (async () => {
+          try {
+            const { shouldTwoPassLoudnorm } = await import('@/lib/audio-ducking');
+            if (shouldTwoPassLoudnorm()) await applyTwoPassLoudnorm(outputPath);
+          } catch (e) { console.warn('[Composer] 双遍响度归一跳过:', e instanceof Error ? e.message : e); }
+        })().finally(() => resolve({
           outputPath,
           totalDuration,
           clipCount: n,
@@ -1395,7 +1403,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
           highlights: highlightShots,
           beatEdit: beatEditInfo || undefined,
           emotionPacing: pacingInfo || undefined,
-        });
+        }));
       })
       .on('error', (err) => {
         console.error('[Composer] FFmpeg error:', err.message);
@@ -1552,6 +1560,36 @@ export function kenBurnsFilter(
     `zoompan=z=${zoomExpr}:x=${xExpr}:y=${yExpr}:d=${totalFrames}:s=${w}x${h}:fps=${fps}`,
     `format=yuv420p`,
   ].join(',');
+}
+
+/**
+ * v12.206:成片 EBU R128 双遍精确归一(就地替换)。第一遍测 measured 值,第二遍 linear 应用。
+ * 拿不到测量值或第二遍失败 → 保留原文件(单遍已归过一次,不倒退)。返回是否真做了二遍。
+ */
+export async function applyTwoPassLoudnorm(inputPath: string): Promise<boolean> {
+  const ff = resolvedFFmpegPath;
+  const { buildLoudnormMeasureFilter, parseLoudnormJson, buildLoudnormApplyFilter } = await import('@/lib/audio-ducking');
+  // 第一遍:测量(-f null,读 stderr JSON)
+  let stderr = '';
+  try {
+    execSync(`"${ff}" -hide_banner -i "${inputPath}" -af "${buildLoudnormMeasureFilter()}" -f null - 2>"${inputPath}.ln.log"`, { stdio: 'pipe' });
+  } catch { /* -f null 正常退出码非 0 也无妨,日志已落 */ }
+  try { stderr = fs.readFileSync(`${inputPath}.ln.log`, 'utf-8'); } catch { /* ignore */ }
+  try { fs.unlinkSync(`${inputPath}.ln.log`); } catch { /* ignore */ }
+  const measured = parseLoudnormJson(stderr);
+  if (!measured) { console.warn('[Loudnorm-2pass] 测量值解析失败,保留单遍结果'); return false; }
+  // 第二遍:linear 应用(视频流 copy,只重编码音频)
+  const tmp = `${inputPath}.2pass.mp4`;
+  try {
+    execSync(`"${ff}" -y -hide_banner -v error -i "${inputPath}" -af "${buildLoudnormApplyFilter(measured)}" -c:v copy -c:a aac -movflags +faststart "${tmp}"`, { stdio: 'pipe' });
+    fs.renameSync(tmp, inputPath);
+    console.log(`[Loudnorm-2pass] EBU R128 双遍归一完成(measured_I=${measured.input_i})`);
+    return true;
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    console.warn('[Loudnorm-2pass] 第二遍失败,保留单遍结果:', e instanceof Error ? e.message.slice(0, 80) : e);
+    return false;
+  }
 }
 
 export async function stillFrameToVideo(

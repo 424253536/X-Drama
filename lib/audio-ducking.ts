@@ -59,3 +59,39 @@ export function buildLoudnormFilter(inLabel: string, outLabel: string = '[anorm]
 export function shouldLoudnorm(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.AUDIO_LOUDNORM_DISABLE !== '1';
 }
+
+/**
+ * v12.206 EBU R128 双遍响度归一(纯函数三件套 + opt-in 后处理)。
+ *
+ * 单遍 loudnorm 是「估算」增益,含 TTS+BGM+打击音的成片误差可达 ±2 LUFS(平台会二次压缩伤音质)。
+ * 双遍:①第一遍 print_format=json 测出真实 measured_I/TP/LRA/thresh;②第二遍 linear=true 喂测量值,
+ * 做真正的 EBU R128 线性归一(误差 <0.5 LUFS)。侵入主合成代价大 → 做成成片后 opt-in 后处理
+ * (AUDIO_LOUDNORM_2PASS=1),纯函数便于单测。
+ */
+
+/** 第一遍探测滤镜:输出带 JSON 统计(ffmpeg 走这个 filter + -f null,stderr 尾部含 JSON)。 */
+export function buildLoudnormMeasureFilter(): string {
+  return 'loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json';
+}
+
+/** 从第一遍 ffmpeg stderr 解析 measured 值;拿不全 → null(调用方回退单遍)。 */
+export function parseLoudnormJson(stderr: string): { input_i: string; input_tp: string; input_lra: string; input_thresh: string } | null {
+  try {
+    // ffmpeg 把 JSON 打在 stderr 末尾的 { ... } 块
+    const m = stderr.match(/\{[\s\S]*?"input_i"[\s\S]*?\}/);
+    if (!m) return null;
+    const j = JSON.parse(m[0]);
+    const need = ['input_i', 'input_tp', 'input_lra', 'input_thresh'];
+    if (need.some((k) => j[k] == null || !Number.isFinite(Number(j[k])))) return null;
+    return { input_i: String(j.input_i), input_tp: String(j.input_tp), input_lra: String(j.input_lra), input_thresh: String(j.input_thresh) };
+  } catch { return null; }
+}
+
+/** 第二遍应用滤镜:喂第一遍测量值做线性精确归一。 */
+export function buildLoudnormApplyFilter(m: { input_i: string; input_tp: string; input_lra: string; input_thresh: string }): string {
+  return `loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:linear=true`;
+}
+
+export function shouldTwoPassLoudnorm(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.AUDIO_LOUDNORM_2PASS === '1';
+}
