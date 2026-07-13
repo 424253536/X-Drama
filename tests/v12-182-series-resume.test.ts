@@ -15,7 +15,9 @@ describe('v12.182 · 断点续跑', () => {
   it('面板:有 active 集时提供恢复按钮', () => {
     const ui = fs.readFileSync('app/dashboard/series/[id]/page.tsx', 'utf-8');
     expect(ui).toContain('resumeStuck');
-    expect(ui).toContain('恢复卡死的集');
+    // v12.209 i18n:中文文案移到 lib/i18n.ts,页面用 t.seriesDetail.resumeStuckBtn
+    expect(ui).toContain('t.seriesDetail.resumeStuckBtn');
+    expect(fs.readFileSync('lib/i18n.ts', 'utf-8')).toContain('恢复卡死的集');
     expect(ui).toContain("episodes.some((e) => e.status === 'active')");
   });
 });

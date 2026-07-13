@@ -11,19 +11,29 @@ import { languageDisplayName } from '@/lib/language-detect';
 import Link from 'next/link';
 import { getToken } from '@/lib/auth';
 import { FilmStrip as Film, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, Play, ArrowLeft, Image as ImageIcon, DownloadSimple } from '@phosphor-icons/react';
+import { useLocale } from '@/hooks/use-locale';
 
 interface Episode { id: string; title: string; status: string; episode_number: number | null; aspect: string | null }
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: '待生成', cls: 'text-gray-400 bg-white/5 border-white/10' },
-  active: { label: '生成中', cls: 'text-amber-300 bg-amber-500/10 border-amber-500/30' },
-  completed: { label: '已完成', cls: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' },
-  failed: { label: '失败·可重试', cls: 'text-red-300 bg-red-500/10 border-red-500/30' },
+const STATUS_CLS: Record<string, string> = {
+  draft: 'text-gray-400 bg-white/5 border-white/10',
+  active: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+  completed: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
+  failed: 'text-red-300 bg-red-500/10 border-red-500/30',
 };
 
 export default function SeriesPanel() {
   const params = useParams();
   const seriesId = String(params?.id || '');
+  const { t } = useLocale();
+
+  const STATUS: Record<string, { label: string; cls: string }> = {
+    draft: { label: t.seriesDetail.statusDraft, cls: STATUS_CLS.draft },
+    active: { label: t.seriesDetail.statusActive, cls: STATUS_CLS.active },
+    completed: { label: t.seriesDetail.statusCompleted, cls: STATUS_CLS.completed },
+    failed: { label: t.seriesDetail.statusFailed, cls: STATUS_CLS.failed },
+  };
+
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   // v12.155:逐集体检(后台拉,徽章渐进);全季补渲(逐集调 failed-videos,串行防抢引擎额度)
   const [healthMap, setHealthMap] = useState<Record<string, any> | null>(null);
@@ -46,7 +56,7 @@ export default function SeriesPanel() {
     const targets = Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0);
     let done = 0;
     for (const h of targets as any[]) {
-      setSeasonFixMsg(`第 ${h.episodeNumber ?? '?'} 集补渲中(${done + 1}/${targets.length})…`);
+      setSeasonFixMsg(t.seriesDetail.seasonFixProgressMsg.replace('{episode}', String(h.episodeNumber ?? '?')).replace('{current}', String(done + 1)).replace('{total}', String(targets.length)));
       try {
         await fetch('/api/regenerate-shot', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -55,7 +65,7 @@ export default function SeriesPanel() {
       } catch { /* 单集失败继续下一集 */ }
       done++;
     }
-    setSeasonFixMsg(`全季补渲完成(${done} 集),重新体检…`);
+    setSeasonFixMsg(t.seriesDetail.seasonFixDoneMsg.replace('{n}', String(done)));
     await loadSeriesHealth();
     setSeasonFixMsg('');
     setSeasonFixBusy(false);
@@ -70,8 +80,8 @@ export default function SeriesPanel() {
   const [coverBusy, setCoverBusy] = useState(false);
 
   const authHeaders = useCallback((): Record<string, string> => {
-    const t = getToken();
-    return t ? { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` } : { 'Content-Type': 'application/json' };
+    const tok = getToken();
+    return tok ? { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` } : { 'Content-Type': 'application/json' };
   }, []);
 
   const load = useCallback(async () => {
@@ -83,10 +93,10 @@ export default function SeriesPanel() {
         setSeasonCover(body.seasonCover ?? null);
         setSeasonVideo(body.seasonVideo ?? null);
       } else if (!res.ok) {
-        setMsg(body?.error || `加载失败 ${res.status},请刷新重试`); // v12.26.0:加载失败不再静默
+        setMsg(body?.error || t.seriesDetail.loadFailStatus.replace('{status}', String(res.status))); // v12.26.0:加载失败不再静默
       }
-    } catch { setMsg('加载失败,请检查网络后刷新'); } finally { setLoading(false); }
-  }, [seriesId, authHeaders]);
+    } catch { setMsg(t.seriesDetail.loadFailNetwork); } finally { setLoading(false); }
+  }, [seriesId, authHeaders, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -94,8 +104,8 @@ export default function SeriesPanel() {
   const hasActive = episodes.some((e) => e.status === 'active');
   useEffect(() => {
     if (!hasActive) return;
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
   }, [hasActive, load]);
 
   const batchGenerate = async (force = false) => {
@@ -111,44 +121,44 @@ export default function SeriesPanel() {
       // v12.23.0:队列模式无 concurrency 字段,按 mode 分支文案(不再显示「并发 undefined」)
       setMsg(body.started > 0
         ? (body.mode === 'queue'
-            ? `已入队批量生成 ${body.started} 集(持久队列,逐集进行中…)`
-            : `已开始批量生成 ${body.started} 集(并发 ${body.concurrency},逐集进行中…)`)
-        : (body.message || '没有待生成的剧集'));
+            ? t.seriesDetail.batchQueuedMsg.replace('{n}', String(body.started))
+            : t.seriesDetail.batchStartedMsg.replace('{n}', String(body.started)).replace('{concurrency}', String(body.concurrency)))
+        : (body.message || t.seriesDetail.noPendingEpisodes));
       await load();
-    } catch (e) { setMsg(e instanceof Error ? e.message : '请求失败'); }
+    } catch (e) { setMsg(e instanceof Error ? e.message : t.seriesDetail.requestFailed); }
     finally { setBusy(false); }
   };
 
   // v12.25.0:导出整季合集
   const exportSeason = async () => {
     if (exporting) return;
-    setExporting(true); setMsg('整季合集生成中(下载各集 + 拼接重编码,最长约 5 分钟,请勿关闭页面)…');
+    setExporting(true); setMsg(t.seriesDetail.exportingSeasonMsg);
     try {
       let res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: '{}' });
       let body = await res.json();
       // v12.158:体检闸门 409 → 列出问题集,confirm 后带 ignoreHealth 重试
       if (res.status === 409 && body?.error === 'health_gate') {
-        const detail = (body.details || []).map((d: any) => `第${d.episode}集(${d.animaticShots?.length || 0}镜降级)`).join('、');
-        if (!window.confirm(`${body.message}\n\n问题集:${detail}\n\n仍要导出吗?(建议先点「全季补渲降级镜」)`)) { setMsg('已取消导出 —— 可先全季补渲再导'); return; }
+        const detail = (body.details || []).map((d: any) => t.seriesDetail.healthGateEpisodeDetail.replace('{ep}', String(d.episode)).replace('{shots}', String(d.animaticShots?.length || 0))).join('、');
+        if (!window.confirm(`${body.message}\n\n${t.seriesDetail.healthGateIssuePrefix}${detail}\n\n${t.seriesDetail.healthGateConfirmHint}`)) { setMsg(t.seriesDetail.exportCanceledMsg); return; }
         res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/export`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ignoreHealth: true }) });
         body = await res.json();
       }
-      if (!res.ok) { setMsg(body?.error || `导出失败 ${res.status}`); return; }
-      setSeasonVideo(body.videoUrl); setMsg(`整季合集已生成(${body.count} 集)`);
-    } catch (e) { setMsg(e instanceof Error ? e.message : '请求失败'); }
+      if (!res.ok) { setMsg(body?.error || t.seriesDetail.exportFailedStatus.replace('{status}', String(res.status))); return; }
+      setSeasonVideo(body.videoUrl); setMsg(t.seriesDetail.exportDoneMsg.replace('{n}', String(body.count)));
+    } catch (e) { setMsg(e instanceof Error ? e.message : t.seriesDetail.requestFailed); }
     finally { setExporting(false); }
   };
 
   // v12.25.0:生成季封面
   const genCover = async () => {
     if (coverBusy) return;
-    setCoverBusy(true); setMsg('季封面生成中…');
+    setCoverBusy(true); setMsg(t.seriesDetail.coverGeneratingMsg);
     try {
       const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/cover`, { method: 'POST', headers: authHeaders(), body: '{}' });
       const body = await res.json();
-      if (!res.ok) { setMsg(body?.error || `封面生成失败 ${res.status}`); return; }
-      setSeasonCover(body.coverUrl); setMsg('季封面已生成');
-    } catch (e) { setMsg(e instanceof Error ? e.message : '请求失败'); }
+      if (!res.ok) { setMsg(body?.error || t.seriesDetail.coverFailedStatus.replace('{status}', String(res.status))); return; }
+      setSeasonCover(body.coverUrl); setMsg(t.seriesDetail.coverDoneMsg);
+    } catch (e) { setMsg(e instanceof Error ? e.message : t.seriesDetail.requestFailed); }
     finally { setCoverBusy(false); }
   };
 
@@ -157,9 +167,9 @@ export default function SeriesPanel() {
     try {
       const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/resume`, { method: 'POST', headers: authHeaders(), body: '{}' });
       const b = await res.json();
-      setMsg(b?.message || (res.ok ? '已检查' : `失败 ${res.status}`));
+      setMsg(b?.message || (res.ok ? t.seriesDetail.resumeCheckedMsg : t.seriesDetail.resumeFailStatus.replace('{status}', String(res.status))));
       await load();
-    } catch { setMsg('恢复请求失败'); }
+    } catch { setMsg(t.seriesDetail.resumeFailedMsg); }
   };
   const pending = episodes.filter((e) => e.status === 'draft' || e.status === 'failed').length; // 待生成 + 失败可重试
   const generating = episodes.filter((e) => e.status === 'active').length;
@@ -169,23 +179,23 @@ export default function SeriesPanel() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white mb-6">
-        <ArrowLeft className="w-4 h-4" /> 返回
+        <ArrowLeft className="w-4 h-4" /> {t.seriesDetail.backLink}
       </Link>
 
       <div className="flex items-center gap-3 mb-1">
         <div className="w-10 h-10 rounded-xl bg-cyan-500/15 grid place-items-center"><Film className="w-6 h-6 text-cyan-400" /></div>
         <div>
-          <h1 className="text-xl font-bold text-white">系列剧 · 批量生成</h1>
+          <h1 className="text-xl font-bold text-white">{t.seriesDetail.pageTitle}</h1>
           <p className="text-xs text-gray-500 font-mono">{seriesId}</p>
         </div>
       </div>
 
       <div className="flex items-center gap-4 text-xs text-gray-400 mt-3 mb-5">
-        <span>共 {episodes.length} 集</span>
-        <span className="text-emerald-400">已完成 {done}</span>
-        <span className="text-amber-300">生成中 {generating}</span>
-        {failed > 0 && <span className="text-red-300">失败 {failed}</span>}
-        <span>待生成 {pending}</span>
+        <span>{t.seriesDetail.statTotal.replace('{n}', String(episodes.length))}</span>
+        <span className="text-emerald-400">{t.seriesDetail.statCompleted.replace('{n}', String(done))}</span>
+        <span className="text-amber-300">{t.seriesDetail.statGenerating.replace('{n}', String(generating))}</span>
+        {failed > 0 && <span className="text-red-300">{t.seriesDetail.statFailed.replace('{n}', String(failed))}</span>}
+        <span>{t.seriesDetail.statPending.replace('{n}', String(pending))}</span>
       </div>
 
       <div className="flex items-center gap-2 mb-5">
@@ -194,12 +204,12 @@ export default function SeriesPanel() {
           disabled={busy || pending === 0}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium disabled:opacity-40">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          一键批量生成{pending > 0 ? `(${pending} 集待生成)` : ''}
+          {t.seriesDetail.batchGenerateBtn}{pending > 0 ? t.seriesDetail.batchGeneratePendingHint.replace('{n}', String(pending)) : ''}
         </button>
         {done > 0 && (
           <button onClick={() => batchGenerate(true)} disabled={busy}
             className="px-3 py-2 rounded-xl border border-white/15 text-gray-300 text-xs hover:text-white disabled:opacity-40">
-            全部重生
+            {t.seriesDetail.regenerateAll}
           </button>
         )}
       </div>
@@ -209,29 +219,29 @@ export default function SeriesPanel() {
       {/* v12.25.0 季级产物:封面 + 整季合集 */}
       <div className="flex items-start gap-4 mb-6 bg-white/5 border border-white/10 rounded-xl p-4">
         <div className="w-20 shrink-0 rounded-lg overflow-hidden bg-black/30 aspect-[3/4] grid place-items-center">
-          {seasonCover ? <img src={seasonCover} alt="季封面" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-600" />}
+          {seasonCover ? <img src={seasonCover} alt={t.seriesDetail.seasonCoverAlt} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-600" />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-white mb-2">季级产物</div>
+          <div className="text-sm font-medium text-white mb-2">{t.seriesDetail.seasonAssetsTitle}</div>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={genCover} disabled={coverBusy}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-gray-200 text-xs hover:text-white disabled:opacity-40">
               {coverBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-              {seasonCover ? '重生季封面' : '生成季封面'}
+              {seasonCover ? t.seriesDetail.regenCoverBtn : t.seriesDetail.genCoverBtn}
             </button>
             <button onClick={exportSeason} disabled={exporting || done === 0}
-              title={done === 0 ? '先生成至少一集' : ''}
+              title={done === 0 ? t.seriesDetail.exportFirstEpisodeHint : ''}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-gray-200 text-xs hover:text-white disabled:opacity-40">
               {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadSimple className="w-3.5 h-3.5" />}
-              {seasonVideo ? '重导整季合集' : '导出整季合集'}
+              {seasonVideo ? t.seriesDetail.reexportSeasonBtn : t.seriesDetail.exportSeasonBtn}
             </button>
             {seasonVideo && (
               <a href={seasonVideo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-cyan-300 hover:text-cyan-200">
-                <Play className="w-3.5 h-3.5" /> 看整季合集
+                <Play className="w-3.5 h-3.5" /> {t.seriesDetail.watchSeasonVideo}
               </a>
             )}
           </div>
-          <p className="text-[10px] text-gray-500 mt-2">合集 = 已完成各集成片按集号拼接(归一画幅 + 重编码)。</p>
+          <p className="text-[10px] text-gray-500 mt-2">{t.seriesDetail.seasonVideoDesc}</p>
         </div>
       </div>
 
@@ -244,7 +254,7 @@ export default function SeriesPanel() {
             onClick={() => void seasonFixAll()}
             className="text-[11px] px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
           >
-            {seasonFixBusy ? '⏳ 全季补渲中…' : `⚡ 全季补渲降级镜(${Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0).length} 集受影响)`}
+            {seasonFixBusy ? t.seriesDetail.seasonFixBusyLabel : t.seriesDetail.seasonFixLabel.replace('{n}', String(Object.values(healthMap).filter((h: any) => h.animaticShots?.length > 0).length))}
           </button>
           {seasonFixMsg && <span className="text-[10px] text-gray-400 font-mono">{seasonFixMsg}</span>}
         </div>
@@ -253,31 +263,31 @@ export default function SeriesPanel() {
       {episodes.some((e) => e.status === 'active') && (
         <div className="mb-3">
           <button type="button" onClick={() => void resumeStuck()} className="text-[11px] px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 hover:bg-white/5">
-            🛟 恢复卡死的集(30 分钟无进展 → 重置待生成)
+            {t.seriesDetail.resumeStuckBtn}
           </button>
         </div>
       )}
       {loading ? (
-        <div className="text-center py-12 text-gray-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline mr-2" />加载中…</div>
+        <div className="text-center py-12 text-gray-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline mr-2" />{t.seriesDetail.loading}</div>
       ) : episodes.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 text-sm">该系列暂无剧集</div>
+        <div className="text-center py-12 text-gray-500 text-sm">{t.seriesDetail.noEpisodes}</div>
       ) : (
         <div className="space-y-2">
           {episodes.map((ep) => {
             const st = STATUS[ep.status] || STATUS.draft;
             return (
               <div key={ep.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-                <span className="text-cyan-400 font-bold text-sm w-12 shrink-0">第{ep.episode_number ?? '?'}集</span>
+                <span className="text-cyan-400 font-bold text-sm w-12 shrink-0">{t.seriesDetail.episodeLabel.replace('{n}', String(ep.episode_number ?? '?'))}</span>
                 <span className="flex-1 text-sm text-white truncate">{ep.title}</span>
                 {ep.aspect && <span className="text-[10px] text-gray-500 font-mono">{ep.aspect}</span>}
                 {/* v12.155:该集体检徽章(🟢🟡🔴;降级镜数一眼可见) */}
                 {healthMap?.[ep.id] && (
                   <span
                     className="text-[11px]"
-                    title={[...(healthMap[ep.id].failItems || []), ...(healthMap[ep.id].warnItems || [])].join(' · ') || '体检全绿'}
+                    title={[...(healthMap[ep.id].failItems || []), ...(healthMap[ep.id].warnItems || [])].join(' · ') || t.seriesDetail.healthCheckAllGreen}
                   >
                     {({ ok: '🟢', warn: '🟡', fail: '🔴', unknown: '⚪' } as any)[healthMap[ep.id].overall] || '⚪'}
-                    {healthMap[ep.id].animaticShots?.length > 0 && <span className="text-amber-400/80 ml-0.5">{healthMap[ep.id].animaticShots.length}镜降级</span>}
+                    {healthMap[ep.id].animaticShots?.length > 0 && <span className="text-amber-400/80 ml-0.5">{t.seriesDetail.shotsDowngradedLabel.replace('{n}', String(healthMap[ep.id].animaticShots.length))}</span>}
                   </span>
                 )}
                 <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border ${st.cls}`}>
@@ -286,7 +296,7 @@ export default function SeriesPanel() {
                   {ep.status === 'draft' && <Clock className="w-3 h-3" />}
                   {st.label}
                 </span>
-                <Link href={`/projects/${ep.id}`} className="text-[11px] text-cyan-300 hover:text-cyan-200 shrink-0">打开 →</Link>
+                <Link href={`/projects/${ep.id}`} className="text-[11px] text-cyan-300 hover:text-cyan-200 shrink-0">{t.seriesDetail.openEpisodeLink}</Link>
               </div>
             );
           })}

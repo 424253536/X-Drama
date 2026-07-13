@@ -28,12 +28,13 @@ export interface ProviderHealth {
 }
 
 export const STATUS_META: Record<HealthStatus, { label: string; tone: 'ok' | 'warn' | 'bad' | 'muted'; action?: string }> = {
-  ok: { label: '正常', tone: 'ok' },
-  out_of_credits: { label: '额度用尽', tone: 'bad', action: '去充值' },
-  auth_error: { label: '鉴权失败', tone: 'bad', action: '检查 Key' },
-  misconfigured: { label: '配置缺失', tone: 'warn', action: '补配置' },
-  down: { label: '不可达', tone: 'bad', action: '检查网络/服务' },
-  not_configured: { label: '未配置', tone: 'muted', action: '可选接入' },
+  // v12.209:label/action 存 i18n key(消费方页面用 t.providerHealth[key] 翻译),lib 层零中文
+  ok: { label: 'ok', tone: 'ok' },
+  out_of_credits: { label: 'outOfCredits', tone: 'bad', action: 'recharge' },
+  auth_error: { label: 'authError', tone: 'bad', action: 'checkKey' },
+  misconfigured: { label: 'misconfigured', tone: 'warn', action: 'addConfig' },
+  down: { label: 'down', tone: 'bad', action: 'checkNetwork' },
+  not_configured: { label: 'notConfigured', tone: 'muted', action: 'optionalSetup' },
 };
 
 const PLACEHOLDER_RE = /^(your_|sk-xxx|<|changeme|placeholder|test[-_]?key|todo)/i;

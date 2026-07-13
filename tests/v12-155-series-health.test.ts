@@ -25,8 +25,10 @@ describe('v12.155 · 系列质量中枢', () => {
     const proj = fs.readFileSync('app/api/projects/[id]/health/route.ts', 'utf-8');
     expect(proj).toContain('buildProjectHealth');
     const ui = fs.readFileSync('app/dashboard/series/[id]/page.tsx', 'utf-8');
-    expect(ui).toContain('全季补渲降级镜');
-    expect(ui).toContain('镜降级');
+    // v12.209 i18n:中文文案移到 lib/i18n.ts,页面用 t.seriesDetail.seasonFixLabel
+    expect(ui).toContain('t.seriesDetail.seasonFixLabel');
+    expect(fs.readFileSync('lib/i18n.ts', 'utf-8')).toContain('全季补渲降级镜');
+    expect(ui).toContain('t.seriesDetail.shotsDowngradedLabel'); // v12.209 i18n
     expect(ui).toContain("stage: 'failed-videos'");
   });
 });

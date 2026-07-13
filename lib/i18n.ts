@@ -239,6 +239,157 @@ export interface Translations {
     ctaDesc: string;
     ctaButton: string;
   };
+
+  visionAudit: {
+    verdictExcellent: string;
+    verdictGood: string;
+    verdictNeedsWork: string;
+    verdictPoor: string;
+    noDataMessage: string;
+    panelTitle: string;
+    avgScore: string;
+    shotUnit: string;
+    passLabel: string;
+    warnLabel: string;
+    failLabel: string;
+    weakestShotsTitle: string;
+    rebirthPlanPrefix: string;
+    rebirthPlanSuffix: string;
+    reshootButton: string;
+    dimScene: string;
+    dimAction: string;
+    dimMood: string;
+    dimComposition: string;
+  };
+  usagePage: {
+    eyebrow: string;
+    headline: string;
+    budgetLabel: string;
+    budgetPlaceholder: string;
+    nearDays: string;
+    daySuffix: string;
+    daysCostSuffix: string;
+    refreshTitle: string;
+    loading: string;
+    loadFailed: string;
+    activeAlertsBanner: string;
+    goBilling: string;
+    statusOk: string;
+    statusWarn: string;
+    statusOver: string;
+    statusNone: string;
+    alertExhausted: string;
+    alertSaturated: string;
+    alertRateLimited: string;
+    alertAuthFailed: string;
+    alertModelUnavailable: string;
+    thisMonthBudget: string;
+    projectedEndPrefix: string;
+    noCapSuffix: string;
+    statGenerations: string;
+    statEngines: string;
+    engineCostPrefix: string;
+    engineNoData: string;
+    dailyTrendTitle: string;
+    dailyNoData: string;
+    countSuffix: string;
+  };
+  healthPage: {
+    title: string;
+    subtitle: string;
+    refreshBtn: string;
+    loadFailed: string;
+    kindLlm: string;
+    kindTts: string;
+    kindVideo: string;
+    kindImage: string;
+    kindGateway: string;
+    overallHealthy: string;
+    overallWarning: string;
+    overallCritical: string;
+    balanceUsed: string;
+    balanceAbundant: string;
+    balanceRemaining: string;
+    balanceLimit: string;
+    radarTitle: string;
+    radarDesc: string;
+    scanBtn: string;
+    upgradeBtn: string;
+    statusUpgradable: string;
+    statusUpToDate: string;
+    statusFamilyN: string;
+    statusSourceUnavail: string;
+    overridesTitle: string;
+    rollbackBtn: string;
+    rollbackDefault: string;
+    checkedAt: string;
+    cachedNote: string;
+    footer: string;
+    scanFailed: string;
+    upgradeFailed: string;
+    upgradeFailedLogin: string;
+    upgradeNone: string;
+    upgradedSummary: string;
+    upgradeSkippedNote: string;
+    upgradeSomeSkipped: string;
+    rolledBack: string;
+  };
+  seriesDetail: {
+    statusDraft: string;
+    statusActive: string;
+    statusCompleted: string;
+    statusFailed: string;
+    backLink: string;
+    pageTitle: string;
+    statTotal: string;
+    statCompleted: string;
+    statGenerating: string;
+    statFailed: string;
+    statPending: string;
+    batchGenerateBtn: string;
+    batchGeneratePendingHint: string;
+    regenerateAll: string;
+    seasonAssetsTitle: string;
+    seasonCoverAlt: string;
+    genCoverBtn: string;
+    regenCoverBtn: string;
+    exportSeasonBtn: string;
+    reexportSeasonBtn: string;
+    exportFirstEpisodeHint: string;
+    watchSeasonVideo: string;
+    seasonVideoDesc: string;
+    seasonFixBusyLabel: string;
+    seasonFixLabel: string;
+    seasonFixProgressMsg: string;
+    seasonFixDoneMsg: string;
+    resumeStuckBtn: string;
+    loading: string;
+    noEpisodes: string;
+    episodeLabel: string;
+    healthCheckAllGreen: string;
+    shotsDowngradedLabel: string;
+    openEpisodeLink: string;
+    loadFailStatus: string;
+    loadFailNetwork: string;
+    requestFailed: string;
+    exportingSeasonMsg: string;
+    exportCanceledMsg: string;
+    exportFailedStatus: string;
+    exportDoneMsg: string;
+    coverGeneratingMsg: string;
+    coverFailedStatus: string;
+    coverDoneMsg: string;
+    resumeCheckedMsg: string;
+    resumeFailedMsg: string;
+    resumeFailStatus: string;
+    batchQueuedMsg: string;
+    batchStartedMsg: string;
+    noPendingEpisodes: string;
+    healthGateIssuePrefix: string;
+    healthGateEpisodeDetail: string;
+    healthGateConfirmHint: string;
+  };
+  providerHealth: Record<string, string>;
 }
 
 const zhCN: Translations = {
@@ -493,6 +644,169 @@ const zhCN: Translations = {
     ctaTitle: '准备好创作你的作品了吗？',
     ctaDesc: '加入数千位创作者，开始你的 AI 漫剧创作之旅',
     ctaButton: '立即开始创作',
+  },
+
+    visionAudit: {
+      verdictExcellent: "优秀",
+      verdictGood: "良好",
+      verdictNeedsWork: "待优化",
+      verdictPoor: "需重做",
+      noDataMessage: "还没有成片质检数据。生成成片后即可对每镜画面做「是否对得上剧本」的 AI 评分。",
+      panelTitle: "成片质检 · 画面 vs 剧本",
+      avgScore: "平均分",
+      shotUnit: "镜",
+      passLabel: "通过",
+      warnLabel: "偏差",
+      failLabel: "跑题",
+      weakestShotsTitle: "最需关注 (优先重生):",
+      rebirthPlanPrefix: "重生计划 · ",
+      rebirthPlanSuffix: " 个弱镜建议重拍",
+      reshootButton: "一键去工坊重拍",
+      dimScene: "场景",
+      dimAction: "动作",
+      dimMood: "情绪",
+      dimComposition: "构图",
+    },
+    usagePage: {
+      eyebrow: "用量与成本",
+      headline: "成本可观测",
+      budgetLabel: "月预算 ¥",
+      budgetPlaceholder: "不限",
+      nearDays: "近",
+      daySuffix: "天",
+      daysCostSuffix: "天花费",
+      refreshTitle: "刷新",
+      loading: "加载中…",
+      loadFailed: "加载失败",
+      activeAlertsBanner: "活跃配额告警 · 近 1 小时",
+      goBilling: "去计费",
+      statusOk: "预算健康",
+      statusWarn: "接近上限",
+      statusOver: "已超预算",
+      statusNone: "未设上限",
+      alertExhausted: "额度耗尽",
+      alertSaturated: "上游饱和",
+      alertRateLimited: "限流",
+      alertAuthFailed: "鉴权失败",
+      alertModelUnavailable: "模型不可用",
+      thisMonthBudget: "本月预算",
+      projectedEndPrefix: "预计月末",
+      noCapSuffix: " · 未设上限",
+      statGenerations: "生成次数",
+      statEngines: "引擎数",
+      engineCostPrefix: "引擎花费 · 近",
+      engineNoData: "该窗口暂无成本记录。",
+      dailyTrendTitle: "每日成本趋势",
+      dailyNoData: "暂无每日数据。",
+      countSuffix: "次",
+    },
+    healthPage: {
+      title: "API 健康",
+      subtitle: "各模型 / 网关实时状态 · 一眼看谁欠费或掉线",
+      refreshBtn: "重新探测",
+      loadFailed: "探测失败",
+      kindLlm: "大模型",
+      kindTts: "语音",
+      kindVideo: "视频",
+      kindImage: "图像",
+      kindGateway: "网关",
+      overallHealthy: "全部正常",
+      overallWarning: "有警告",
+      overallCritical: "有故障 / 欠费",
+      balanceUsed: "已用",
+      balanceAbundant: "额度充裕(充值制)",
+      balanceRemaining: "剩余",
+      balanceLimit: "上限",
+      radarTitle: "模型雷达",
+      radarDesc: "扫描各 API 支持的最新模型 · 同家族才升级 · LLM 先 1-token 实测 · 留回滚 · 免重启生效",
+      scanBtn: "扫描最新模型",
+      upgradeBtn: "一键升级到最新最强",
+      statusUpgradable: "可升级",
+      statusUpToDate: "已最新",
+      statusFamilyN: "· 家族 {n} 款",
+      statusSourceUnavail: "来源不可用",
+      overridesTitle: "现行覆盖(可回滚到升级前):",
+      rollbackBtn: "回滚",
+      rollbackDefault: "(回代码默认)",
+      checkedAt: "探测于",
+      cachedNote: "· 缓存结果 (点「重新探测」强制刷新)",
+      footer: "· 仪表盘只读各家额度,不存储/不回传任何 API Key。",
+      scanFailed: "扫描失败",
+      upgradeFailed: "升级失败",
+      upgradeFailedLogin: "升级失败(需登录)",
+      upgradeNone: "没有可升级项",
+      upgradedSummary: "已升级 {n} 项:{list}{skipped} — 免重启已生效",
+      upgradeSkippedNote: "({n} 项实测未过维持原值)",
+      upgradeSomeSkipped: "{n} 项候选实测未通过,维持现配置",
+      rolledBack: "{envKey} 已回滚",
+    },
+    seriesDetail: {
+      statusDraft: "待生成",
+      statusActive: "生成中",
+      statusCompleted: "已完成",
+      statusFailed: "失败·可重试",
+      backLink: "返回",
+      pageTitle: "系列剧 · 批量生成",
+      statTotal: "共 {n} 集",
+      statCompleted: "已完成 {n}",
+      statGenerating: "生成中 {n}",
+      statFailed: "失败 {n}",
+      statPending: "待生成 {n}",
+      batchGenerateBtn: "一键批量生成",
+      batchGeneratePendingHint: "({n} 集待生成)",
+      regenerateAll: "全部重生",
+      seasonAssetsTitle: "季级产物",
+      seasonCoverAlt: "季封面",
+      genCoverBtn: "生成季封面",
+      regenCoverBtn: "重生季封面",
+      exportSeasonBtn: "导出整季合集",
+      reexportSeasonBtn: "重导整季合集",
+      exportFirstEpisodeHint: "先生成至少一集",
+      watchSeasonVideo: "看整季合集",
+      seasonVideoDesc: "合集 = 已完成各集成片按集号拼接(归一画幅 + 重编码)。",
+      seasonFixBusyLabel: "⏳ 全季补渲中…",
+      seasonFixLabel: "⚡ 全季补渲降级镜({n} 集受影响)",
+      seasonFixProgressMsg: "第 {episode} 集补渲中({current}/{total})…",
+      seasonFixDoneMsg: "全季补渲完成({n} 集),重新体检…",
+      resumeStuckBtn: "🛟 恢复卡死的集(30 分钟无进展 → 重置待生成)",
+      loading: "加载中…",
+      noEpisodes: "该系列暂无剧集",
+      episodeLabel: "第{n}集",
+      healthCheckAllGreen: "体检全绿",
+      shotsDowngradedLabel: "{n}镜降级",
+      openEpisodeLink: "打开 →",
+      loadFailStatus: "加载失败 {status},请刷新重试",
+      loadFailNetwork: "加载失败,请检查网络后刷新",
+      requestFailed: "请求失败",
+      exportingSeasonMsg: "整季合集生成中(下载各集 + 拼接重编码,最长约 5 分钟,请勿关闭页面)…",
+      exportCanceledMsg: "已取消导出 —— 可先全季补渲再导",
+      exportFailedStatus: "导出失败 {status}",
+      exportDoneMsg: "整季合集已生成({n} 集)",
+      coverGeneratingMsg: "季封面生成中…",
+      coverFailedStatus: "封面生成失败 {status}",
+      coverDoneMsg: "季封面已生成",
+      resumeCheckedMsg: "已检查",
+      resumeFailedMsg: "恢复请求失败",
+      resumeFailStatus: "失败 {status}",
+      batchQueuedMsg: "已入队批量生成 {n} 集(持久队列,逐集进行中…)",
+      batchStartedMsg: "已开始批量生成 {n} 集(并发 {concurrency},逐集进行中…)",
+      noPendingEpisodes: "没有待生成的剧集",
+      healthGateIssuePrefix: "问题集:",
+      healthGateEpisodeDetail: "第{ep}集({shots}镜降级)",
+      healthGateConfirmHint: "仍要导出吗?(建议先点「全季补渲降级镜」)",
+    },
+  providerHealth: {
+    ok: "正常",
+    outOfCredits: "额度用尽",
+    authError: "鉴权失败",
+    misconfigured: "配置缺失",
+    down: "不可达",
+    notConfigured: "未配置",
+    recharge: "去充值",
+    checkKey: "检查 Key",
+    addConfig: "补配置",
+    checkNetwork: "检查网络/服务",
+    optionalSetup: "可选接入",
   },
 };
 
@@ -749,6 +1063,169 @@ const en: Translations = {
     ctaDesc: 'Join thousands of creators and start your AI comic journey',
     ctaButton: 'Start Creating Now',
   },
+
+    visionAudit: {
+      verdictExcellent: "Excellent",
+      verdictGood: "Good",
+      verdictNeedsWork: "Needs Work",
+      verdictPoor: "Poor",
+      noDataMessage: "No quality check data yet. After generating the final video, each shot will be AI-scored on how well it matches the script.",
+      panelTitle: "Quality Check · Visual vs Script",
+      avgScore: "Avg Score",
+      shotUnit: "Shot",
+      passLabel: "Pass",
+      warnLabel: "Warn",
+      failLabel: "Off-script",
+      weakestShotsTitle: "Priority shots (needs attention):",
+      rebirthPlanPrefix: "Rebirth Plan · ",
+      rebirthPlanSuffix: " weak shots suggested for reshoot",
+      reshootButton: "Go to Workshop for Reshoot",
+      dimScene: "Scene",
+      dimAction: "Action",
+      dimMood: "Mood",
+      dimComposition: "Comp",
+    },
+    usagePage: {
+      eyebrow: "Usage & Cost",
+      headline: "Cost Observability",
+      budgetLabel: "Monthly Budget ¥",
+      budgetPlaceholder: "Unlimited",
+      nearDays: "Last",
+      daySuffix: "days",
+      daysCostSuffix: "day spend",
+      refreshTitle: "Refresh",
+      loading: "Loading…",
+      loadFailed: "Failed to load",
+      activeAlertsBanner: "Active quota alerts · Last 1 hour",
+      goBilling: "Go to billing",
+      statusOk: "Budget healthy",
+      statusWarn: "Near limit",
+      statusOver: "Over budget",
+      statusNone: "No limit set",
+      alertExhausted: "Quota exhausted",
+      alertSaturated: "Upstream saturated",
+      alertRateLimited: "Rate limited",
+      alertAuthFailed: "Auth failed",
+      alertModelUnavailable: "Model unavailable",
+      thisMonthBudget: "This month's budget",
+      projectedEndPrefix: "Projected month-end",
+      noCapSuffix: " · No cap set",
+      statGenerations: "Generations",
+      statEngines: "Engines",
+      engineCostPrefix: "Engine spend · Last",
+      engineNoData: "No cost records in this window.",
+      dailyTrendTitle: "Daily cost trend",
+      dailyNoData: "No daily data available.",
+      countSuffix: "calls",
+    },
+    healthPage: {
+      title: "API Health",
+      subtitle: "Real-time status of models / gateways · spot quota issues and outages at a glance",
+      refreshBtn: "Re-probe",
+      loadFailed: "Probe failed",
+      kindLlm: "LLM",
+      kindTts: "TTS",
+      kindVideo: "Video",
+      kindImage: "Image",
+      kindGateway: "Gateway",
+      overallHealthy: "All Healthy",
+      overallWarning: "Warning",
+      overallCritical: "Outage / Overdue",
+      balanceUsed: "Used",
+      balanceAbundant: "Quota ample (prepaid)",
+      balanceRemaining: "Remaining",
+      balanceLimit: "Limit",
+      radarTitle: "Model Radar",
+      radarDesc: "Scan each API for the latest models · upgrade within same family only · 1-token live test for LLMs · rollback preserved · no restart needed",
+      scanBtn: "Scan Latest Models",
+      upgradeBtn: "Upgrade to Latest",
+      statusUpgradable: "Upgradable",
+      statusUpToDate: "Up to date",
+      statusFamilyN: "· {n} in family",
+      statusSourceUnavail: "Source unavailable",
+      overridesTitle: "Active overrides (rollback available):",
+      rollbackBtn: "Rollback",
+      rollbackDefault: "(restore code default)",
+      checkedAt: "Probed at",
+      cachedNote: "· Cached result (click \"Re-probe\" to force refresh)",
+      footer: "· Dashboard is read-only for quotas; no API keys stored or transmitted.",
+      scanFailed: "Scan failed",
+      upgradeFailed: "Upgrade failed",
+      upgradeFailedLogin: "Upgrade failed (login required)",
+      upgradeNone: "No upgrades available",
+      upgradedSummary: "Upgraded {n} item(s): {list}{skipped} — applied without restart",
+      upgradeSkippedNote: " ({n} skipped: live test failed, keeping original)",
+      upgradeSomeSkipped: "{n} candidate(s) failed live test, keeping current config",
+      rolledBack: "{envKey} rolled back",
+    },
+    seriesDetail: {
+      statusDraft: "Pending",
+      statusActive: "Generating",
+      statusCompleted: "Completed",
+      statusFailed: "Failed · Retry",
+      backLink: "Back",
+      pageTitle: "Series · Batch Generate",
+      statTotal: "{n} episodes total",
+      statCompleted: "Completed {n}",
+      statGenerating: "Generating {n}",
+      statFailed: "Failed {n}",
+      statPending: "Pending {n}",
+      batchGenerateBtn: "Batch Generate",
+      batchGeneratePendingHint: "({n} pending)",
+      regenerateAll: "Regenerate All",
+      seasonAssetsTitle: "Season Assets",
+      seasonCoverAlt: "Season Cover",
+      genCoverBtn: "Generate Cover",
+      regenCoverBtn: "Regenerate Cover",
+      exportSeasonBtn: "Export Full Season",
+      reexportSeasonBtn: "Re-export Full Season",
+      exportFirstEpisodeHint: "Generate at least one episode first",
+      watchSeasonVideo: "Watch Full Season",
+      seasonVideoDesc: "Compilation = finished episodes concatenated in order (normalized aspect ratio + re-encoded).",
+      seasonFixBusyLabel: "⏳ Fixing season…",
+      seasonFixLabel: "⚡ Fix downgraded shots ({n} episode(s) affected)",
+      seasonFixProgressMsg: "Fixing episode {episode} ({current}/{total})…",
+      seasonFixDoneMsg: "Season fix done ({n} episodes), re-checking…",
+      resumeStuckBtn: "🛟 Resume stuck episodes (no progress in 30 min → reset to pending)",
+      loading: "Loading…",
+      noEpisodes: "No episodes in this series",
+      episodeLabel: "Ep.{n}",
+      healthCheckAllGreen: "All checks passed",
+      shotsDowngradedLabel: "{n} shots downgraded",
+      openEpisodeLink: "Open →",
+      loadFailStatus: "Load failed {status}, please refresh",
+      loadFailNetwork: "Load failed, please check your network and refresh",
+      requestFailed: "Request failed",
+      exportingSeasonMsg: "Exporting full season (downloading episodes + concatenating & re-encoding, up to ~5 min, don't close the page)…",
+      exportCanceledMsg: "Export canceled — fix downgraded shots first, then re-export",
+      exportFailedStatus: "Export failed {status}",
+      exportDoneMsg: "Full season exported ({n} episodes)",
+      coverGeneratingMsg: "Generating season cover…",
+      coverFailedStatus: "Cover generation failed {status}",
+      coverDoneMsg: "Season cover generated",
+      resumeCheckedMsg: "Checked",
+      resumeFailedMsg: "Resume request failed",
+      resumeFailStatus: "Failed {status}",
+      batchQueuedMsg: "Queued {n} episodes for batch generation (persistent queue, processing one by one…)",
+      batchStartedMsg: "Started batch generation for {n} episodes (concurrency {concurrency}, processing…)",
+      noPendingEpisodes: "No episodes pending generation",
+      healthGateIssuePrefix: "Problem episodes: ",
+      healthGateEpisodeDetail: "Ep.{ep} ({shots} shots downgraded)",
+      healthGateConfirmHint: "Still export? (Recommended: fix downgraded shots first)",
+    },
+  providerHealth: {
+    ok: "Healthy",
+    outOfCredits: "Out of credits",
+    authError: "Auth failed",
+    misconfigured: "Misconfigured",
+    down: "Unreachable",
+    notConfigured: "Not configured",
+    recharge: "Recharge",
+    checkKey: "Check Key",
+    addConfig: "Add config",
+    checkNetwork: "Check network/service",
+    optionalSetup: "Optional",
+  },
 };
 
 // v5.0: 繁体中文 (之前是 zhCN 占位)
@@ -978,6 +1455,169 @@ const zhTW: Translations = {
     ctaDesc: '加入數千位創作者，開始你的 AI 漫劇創作之旅',
     ctaButton: '立即開始創作',
   },
+
+    visionAudit: {
+      verdictExcellent: "優秀",
+      verdictGood: "良好",
+      verdictNeedsWork: "待優化",
+      verdictPoor: "需重做",
+      noDataMessage: "還沒有成片質檢資料。生成成片後即可對每鏡畫面做「是否對得上劇本」的 AI 評分。",
+      panelTitle: "成片質檢 · 畫面 vs 劇本",
+      avgScore: "平均分",
+      shotUnit: "鏡",
+      passLabel: "通過",
+      warnLabel: "偏差",
+      failLabel: "跑題",
+      weakestShotsTitle: "最需關注（優先重生）：",
+      rebirthPlanPrefix: "重生計畫 · ",
+      rebirthPlanSuffix: " 個弱鏡建議重拍",
+      reshootButton: "一鍵去工坊重拍",
+      dimScene: "場景",
+      dimAction: "動作",
+      dimMood: "情緒",
+      dimComposition: "構圖",
+    },
+    usagePage: {
+      eyebrow: "用量與成本",
+      headline: "成本可觀測",
+      budgetLabel: "月預算 ¥",
+      budgetPlaceholder: "不限",
+      nearDays: "近",
+      daySuffix: "天",
+      daysCostSuffix: "天花費",
+      refreshTitle: "重新整理",
+      loading: "載入中…",
+      loadFailed: "載入失敗",
+      activeAlertsBanner: "活躍配額告警 · 近 1 小時",
+      goBilling: "前往計費",
+      statusOk: "預算健康",
+      statusWarn: "接近上限",
+      statusOver: "已超預算",
+      statusNone: "未設上限",
+      alertExhausted: "額度耗盡",
+      alertSaturated: "上游飽和",
+      alertRateLimited: "限流",
+      alertAuthFailed: "鑑權失敗",
+      alertModelUnavailable: "模型不可用",
+      thisMonthBudget: "本月預算",
+      projectedEndPrefix: "預計月末",
+      noCapSuffix: " · 未設上限",
+      statGenerations: "生成次數",
+      statEngines: "引擎數",
+      engineCostPrefix: "引擎花費 · 近",
+      engineNoData: "此視窗暫無成本記錄。",
+      dailyTrendTitle: "每日成本趨勢",
+      dailyNoData: "暫無每日資料。",
+      countSuffix: "次",
+    },
+    healthPage: {
+      title: "API 健康",
+      subtitle: "各模型 / 閘道即時狀態 · 一眼看誰欠費或掉線",
+      refreshBtn: "重新探測",
+      loadFailed: "探測失敗",
+      kindLlm: "大型語言模型",
+      kindTts: "語音",
+      kindVideo: "影片",
+      kindImage: "圖像",
+      kindGateway: "閘道",
+      overallHealthy: "全部正常",
+      overallWarning: "有警告",
+      overallCritical: "有故障 / 欠費",
+      balanceUsed: "已用",
+      balanceAbundant: "額度充裕(儲值制)",
+      balanceRemaining: "剩餘",
+      balanceLimit: "上限",
+      radarTitle: "模型雷達",
+      radarDesc: "掃描各 API 支援的最新模型 · 同家族才升級 · LLM 先 1-token 實測 · 留回滾 · 免重啟生效",
+      scanBtn: "掃描最新模型",
+      upgradeBtn: "一鍵升級到最新最強",
+      statusUpgradable: "可升級",
+      statusUpToDate: "已最新",
+      statusFamilyN: "· 家族 {n} 款",
+      statusSourceUnavail: "來源不可用",
+      overridesTitle: "現行覆蓋(可回滾到升級前):",
+      rollbackBtn: "回滾",
+      rollbackDefault: "(回程式碼預設)",
+      checkedAt: "探測於",
+      cachedNote: "· 快取結果 (點「重新探測」強制刷新)",
+      footer: "· 儀表板僅讀取各方額度，不儲存/不回傳任何 API Key。",
+      scanFailed: "掃描失敗",
+      upgradeFailed: "升級失敗",
+      upgradeFailedLogin: "升級失敗(需登入)",
+      upgradeNone: "沒有可升級項",
+      upgradedSummary: "已升級 {n} 項：{list}{skipped} — 免重啟已生效",
+      upgradeSkippedNote: "（{n} 項實測未過維持原值）",
+      upgradeSomeSkipped: "{n} 項候選實測未通過，維持現設定",
+      rolledBack: "{envKey} 已回滾",
+    },
+    seriesDetail: {
+      statusDraft: "待生成",
+      statusActive: "生成中",
+      statusCompleted: "已完成",
+      statusFailed: "失敗·可重試",
+      backLink: "返回",
+      pageTitle: "系列劇 · 批次生成",
+      statTotal: "共 {n} 集",
+      statCompleted: "已完成 {n}",
+      statGenerating: "生成中 {n}",
+      statFailed: "失敗 {n}",
+      statPending: "待生成 {n}",
+      batchGenerateBtn: "一鍵批次生成",
+      batchGeneratePendingHint: "({n} 集待生成)",
+      regenerateAll: "全部重新生成",
+      seasonAssetsTitle: "季度產出",
+      seasonCoverAlt: "季封面",
+      genCoverBtn: "生成季封面",
+      regenCoverBtn: "重新生成季封面",
+      exportSeasonBtn: "匯出整季合集",
+      reexportSeasonBtn: "重新匯出整季合集",
+      exportFirstEpisodeHint: "請先生成至少一集",
+      watchSeasonVideo: "看整季合集",
+      seasonVideoDesc: "合集 = 已完成各集成片按集號拼接（統一畫幅 + 重編碼）。",
+      seasonFixBusyLabel: "⏳ 全季補渲中…",
+      seasonFixLabel: "⚡ 全季補渲降級鏡（{n} 集受影響）",
+      seasonFixProgressMsg: "第 {episode} 集補渲中（{current}/{total}）…",
+      seasonFixDoneMsg: "全季補渲完成（{n} 集），重新體檢…",
+      resumeStuckBtn: "🛟 恢復卡死的集（30 分鐘無進展 → 重置待生成）",
+      loading: "載入中…",
+      noEpisodes: "此系列暫無劇集",
+      episodeLabel: "第{n}集",
+      healthCheckAllGreen: "體檢全綠",
+      shotsDowngradedLabel: "{n}鏡降級",
+      openEpisodeLink: "開啟 →",
+      loadFailStatus: "載入失敗 {status}，請重新整理",
+      loadFailNetwork: "載入失敗，請檢查網路後重新整理",
+      requestFailed: "請求失敗",
+      exportingSeasonMsg: "整季合集生成中（下載各集 + 拼接重編碼，最長約 5 分鐘，請勿關閉頁面）…",
+      exportCanceledMsg: "已取消匯出 —— 可先全季補渲再導",
+      exportFailedStatus: "匯出失敗 {status}",
+      exportDoneMsg: "整季合集已生成（{n} 集）",
+      coverGeneratingMsg: "季封面生成中…",
+      coverFailedStatus: "封面生成失敗 {status}",
+      coverDoneMsg: "季封面已生成",
+      resumeCheckedMsg: "已檢查",
+      resumeFailedMsg: "恢復請求失敗",
+      resumeFailStatus: "失敗 {status}",
+      batchQueuedMsg: "已入隊批次生成 {n} 集（持久佇列，逐集進行中…）",
+      batchStartedMsg: "已開始批次生成 {n} 集（並發 {concurrency}，逐集進行中…）",
+      noPendingEpisodes: "沒有待生成的劇集",
+      healthGateIssuePrefix: "問題集：",
+      healthGateEpisodeDetail: "第{ep}集（{shots}鏡降級）",
+      healthGateConfirmHint: "仍要匯出嗎？（建議先點「全季補渲降級鏡」）",
+    },
+  providerHealth: {
+    ok: "正常",
+    outOfCredits: "額度用盡",
+    authError: "鑑權失敗",
+    misconfigured: "配置缺失",
+    down: "不可達",
+    notConfigured: "未配置",
+    recharge: "去儲值",
+    checkKey: "檢查 Key",
+    addConfig: "補配置",
+    checkNetwork: "檢查網路/服務",
+    optionalSetup: "可選接入",
+  },
 };
 
 // v5.0: 日本語 (之前是 zhCN 占位)
@@ -1206,6 +1846,169 @@ const ja: Translations = {
     ctaTitle: '自分の作品を作る準備はできましたか？',
     ctaDesc: '数千人のクリエイターに加わり、AIコミック制作の旅を始めよう',
     ctaButton: '今すぐ作成を始める',
+  },
+
+    visionAudit: {
+      verdictExcellent: "優秀",
+      verdictGood: "良好",
+      verdictNeedsWork: "要改善",
+      verdictPoor: "要やり直し",
+      noDataMessage: "まだ品質チェックデータがありません。完成動画を生成した後、各ショットが脚本と一致しているかAI評価されます。",
+      panelTitle: "品質チェック · 映像 vs 脚本",
+      avgScore: "平均スコア",
+      shotUnit: "ショット",
+      passLabel: "合格",
+      warnLabel: "警告",
+      failLabel: "不一致",
+      weakestShotsTitle: "要注意（優先的に再生成）：",
+      rebirthPlanPrefix: "再生成プラン · ",
+      rebirthPlanSuffix: "個の弱ショットを再撮影推奨",
+      reshootButton: "ワークショップで再撮影",
+      dimScene: "シーン",
+      dimAction: "アクション",
+      dimMood: "雰囲気",
+      dimComposition: "構図",
+    },
+    usagePage: {
+      eyebrow: "使用量とコスト",
+      headline: "コスト可観測性",
+      budgetLabel: "月次予算 ¥",
+      budgetPlaceholder: "上限なし",
+      nearDays: "過去",
+      daySuffix: "日間",
+      daysCostSuffix: "日間の費用",
+      refreshTitle: "更新",
+      loading: "読み込み中…",
+      loadFailed: "読み込みに失敗しました",
+      activeAlertsBanner: "アクティブなクォータアラート · 過去1時間",
+      goBilling: "請求へ",
+      statusOk: "予算は正常",
+      statusWarn: "上限に近づいています",
+      statusOver: "予算超過",
+      statusNone: "上限未設定",
+      alertExhausted: "クォータ枯渇",
+      alertSaturated: "上流が飽和",
+      alertRateLimited: "レート制限中",
+      alertAuthFailed: "認証失敗",
+      alertModelUnavailable: "モデル利用不可",
+      thisMonthBudget: "今月の予算",
+      projectedEndPrefix: "月末予測",
+      noCapSuffix: " · 上限なし",
+      statGenerations: "生成回数",
+      statEngines: "エンジン数",
+      engineCostPrefix: "エンジン費用 · 過去",
+      engineNoData: "この期間のコスト記録はありません。",
+      dailyTrendTitle: "日次コスト推移",
+      dailyNoData: "日次データがありません。",
+      countSuffix: "回",
+    },
+    healthPage: {
+      title: "API ヘルス",
+      subtitle: "モデル / ゲートウェイのリアルタイム状態 · 残高切れや障害を一目で確認",
+      refreshBtn: "再プローブ",
+      loadFailed: "プローブ失敗",
+      kindLlm: "大規模言語モデル",
+      kindTts: "音声",
+      kindVideo: "動画",
+      kindImage: "画像",
+      kindGateway: "ゲートウェイ",
+      overallHealthy: "すべて正常",
+      overallWarning: "警告あり",
+      overallCritical: "障害 / 残高不足",
+      balanceUsed: "使用済み",
+      balanceAbundant: "残高十分（チャージ制）",
+      balanceRemaining: "残高",
+      balanceLimit: "上限",
+      radarTitle: "モデルレーダー",
+      radarDesc: "各 API の最新モデルをスキャン · 同ファミリーのみアップグレード · LLM は 1 トークン実検証 · ロールバック保持 · 再起動不要で反映",
+      scanBtn: "最新モデルをスキャン",
+      upgradeBtn: "最新最強にアップグレード",
+      statusUpgradable: "アップグレード可能",
+      statusUpToDate: "最新",
+      statusFamilyN: "· ファミリー {n} モデル",
+      statusSourceUnavail: "ソース利用不可",
+      overridesTitle: "現在の上書き（アップグレード前にロールバック可能）:",
+      rollbackBtn: "ロールバック",
+      rollbackDefault: "（コードデフォルトに戻す）",
+      checkedAt: "プローブ時刻:",
+      cachedNote: "· キャッシュ結果（「再プローブ」で強制更新）",
+      footer: "· ダッシュボードは残高の読み取り専用です。API キーは保存・送信されません。",
+      scanFailed: "スキャン失敗",
+      upgradeFailed: "アップグレード失敗",
+      upgradeFailedLogin: "アップグレード失敗（ログインが必要）",
+      upgradeNone: "アップグレード対象なし",
+      upgradedSummary: "{n} 件アップグレード：{list}{skipped} — 再起動なしで反映済み",
+      upgradeSkippedNote: "（{n} 件は実検証未通過のため元の値を維持）",
+      upgradeSomeSkipped: "{n} 件の候補が実検証未通過。現在の設定を維持します",
+      rolledBack: "{envKey} をロールバックしました",
+    },
+    seriesDetail: {
+      statusDraft: "未生成",
+      statusActive: "生成中",
+      statusCompleted: "完了",
+      statusFailed: "失敗・再試行可",
+      backLink: "戻る",
+      pageTitle: "シリーズ · 一括生成",
+      statTotal: "全 {n} 話",
+      statCompleted: "完了 {n}",
+      statGenerating: "生成中 {n}",
+      statFailed: "失敗 {n}",
+      statPending: "未生成 {n}",
+      batchGenerateBtn: "一括生成",
+      batchGeneratePendingHint: "({n} 話待ち)",
+      regenerateAll: "すべて再生成",
+      seasonAssetsTitle: "シーズン成果物",
+      seasonCoverAlt: "シーズンカバー",
+      genCoverBtn: "カバー生成",
+      regenCoverBtn: "カバー再生成",
+      exportSeasonBtn: "フルシーズンを書き出す",
+      reexportSeasonBtn: "フルシーズン再書き出し",
+      exportFirstEpisodeHint: "先に少なくとも1話を生成してください",
+      watchSeasonVideo: "フルシーズンを見る",
+      seasonVideoDesc: "コンピレーション = 完了した各話を話数順に結合（アスペクト比統一 + 再エンコード）。",
+      seasonFixBusyLabel: "⏳ シーズン修正中…",
+      seasonFixLabel: "⚡ ダウングレードショット修正（{n} 話に影響）",
+      seasonFixProgressMsg: "第 {episode} 話補正中（{current}/{total}）…",
+      seasonFixDoneMsg: "シーズン修正完了（{n} 話）、再チェック中…",
+      resumeStuckBtn: "🛟 停止した話を再開（30分間進捗なし → 保留にリセット）",
+      loading: "読み込み中…",
+      noEpisodes: "このシリーズにはエピソードがありません",
+      episodeLabel: "第{n}話",
+      healthCheckAllGreen: "全チェック通過",
+      shotsDowngradedLabel: "{n}ショット降格",
+      openEpisodeLink: "開く →",
+      loadFailStatus: "読み込み失敗 {status}、更新してください",
+      loadFailNetwork: "読み込み失敗、ネットワークを確認して更新してください",
+      requestFailed: "リクエストに失敗しました",
+      exportingSeasonMsg: "フルシーズン書き出し中（各話をダウンロード + 結合・再エンコード、最大約5分、ページを閉じないでください）…",
+      exportCanceledMsg: "書き出しをキャンセルしました — 先にダウングレードショットを修正してから再書き出し",
+      exportFailedStatus: "書き出し失敗 {status}",
+      exportDoneMsg: "フルシーズン書き出し完了（{n} 話）",
+      coverGeneratingMsg: "シーズンカバー生成中…",
+      coverFailedStatus: "カバー生成失敗 {status}",
+      coverDoneMsg: "シーズンカバーが生成されました",
+      resumeCheckedMsg: "確認済み",
+      resumeFailedMsg: "再開リクエストに失敗しました",
+      resumeFailStatus: "失敗 {status}",
+      batchQueuedMsg: "{n} 話をキューに追加（永続キュー、1話ずつ処理中…）",
+      batchStartedMsg: "{n} 話の一括生成を開始（並列数 {concurrency}、処理中…）",
+      noPendingEpisodes: "生成待ちのエピソードはありません",
+      healthGateIssuePrefix: "問題の話：",
+      healthGateEpisodeDetail: "第{ep}話（{shots}ショット降格）",
+      healthGateConfirmHint: "それでも書き出しますか？（先に「ダウングレードショット修正」を推奨）",
+    },
+  providerHealth: {
+    ok: "正常",
+    outOfCredits: "残高切れ",
+    authError: "認証失敗",
+    misconfigured: "設定不足",
+    down: "到達不可",
+    notConfigured: "未設定",
+    recharge: "チャージ",
+    checkKey: "キー確認",
+    addConfig: "設定追加",
+    checkNetwork: "ネット/サービス確認",
+    optionalSetup: "任意接続",
   },
 };
 
