@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/lib/config';
+import { emotionToMinimaxEmotion } from '@/lib/emotion-tag';
 import { voiceForLanguage } from '@/lib/tts-voice-map';
 
 export interface TTSOptions {
@@ -142,16 +143,16 @@ export class TTSService {
     if (langVoice) voiceId = langVoice;
     const profile = VOICE_PROFILES[voiceId] || VOICE_PROFILES[DEFAULT_VOICES.narrator_male];
 
-    // v7.0.1: 默认 speech-02-hd (实测各 Token Plan 普遍支持; t2a_v2 无需 GroupId), 可被 MINIMAX_TTS_MODEL 覆盖
+    // v12.211:默认升 speech-2.8-hd(支持情感 emotion 枚举,live 探测可用),可被 MINIMAX_TTS_MODEL 覆盖
     const body: Record<string, any> = {
-      model: process.env.MINIMAX_TTS_MODEL || 'speech-02-hd',
+      model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd',
       text,
       voice_setting: {
         voice_id: voiceId,
         speed: options?.speed ?? profile.speed,
         vol: options?.volume ?? profile.vol,
         pitch: options?.pitch ?? profile.pitch,
-        ...(options?.emotion && { emotion: options.emotion }),
+        ...(options?.emotion && { emotion: emotionToMinimaxEmotion(options.emotion) }), // v12.211:中文情绪→MiniMax 枚举
       },
       audio_setting: {
         sample_rate: 32000,
@@ -192,6 +193,11 @@ export class TTSService {
       audioUrl = `data:audio/mp3;base64,${data.data.audio.data}`;
     } else if (data.data?.audio_url) {
       audioUrl = data.data.audio_url;
+    } else if (typeof data.data?.audio === 'string' && data.data.audio.length > 0) {
+      // v12.211(live 抓获既有缺口):t2a_v2 默认返回 hex 编码音频(data.audio = 十六进制串,
+      // 非 URL 非 base64)。此前 generateVoiceover 直调对 hex 一律 "no audio URL";生产走
+      // dispatchTTSGenerate 才幸免。转 base64 data URI 补齐,让所有 TTS 路径都能拿到音频。
+      audioUrl = `data:audio/mp3;base64,${Buffer.from(data.data.audio, 'hex').toString('base64')}`;
     }
 
     if (!audioUrl) {

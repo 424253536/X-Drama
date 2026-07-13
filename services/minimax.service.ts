@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/lib/config';
+import { emotionToMinimaxEmotion } from '@/lib/emotion-tag';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -960,7 +961,7 @@ export class MinimaxService {
       console.log(`[Minimax] TTS: voice=${voiceId}, text="${text.slice(0, 50)}..."`);
 
       const body = {
-        model: 'speech-02-hd',
+        model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd', // v12.211:升情感版
         text: text,
         stream: false,
         voice_setting: {
@@ -968,6 +969,7 @@ export class MinimaxService {
           speed: options?.speed ?? 1.0,
           vol: options?.vol ?? 0.8,
           pitch: options?.pitch ?? 0,
+          ...(options?.emotion && { emotion: emotionToMinimaxEmotion(options.emotion) }), // v12.211:中文情绪→枚举
         },
         audio_setting: {
           sample_rate: 32000,

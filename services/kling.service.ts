@@ -89,6 +89,12 @@ export class KlingService {
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
 
+      // v12.211:原生音效 —— KLING_AUDIO_ENABLED=true 且 pro mode 时开 enable_audio(探测证实 v3/v2.6/v2.1 均接受)。
+      // 成本约 2×(PRO+audio),故 env 门控默认关。
+      if (process.env.KLING_AUDIO_ENABLED === 'true' && body.mode === 'pro') {
+        body.enable_audio = true;
+        console.log(`[Kling] enable_audio=true(${model}/pro,成本约 2×)`);
+      }
       // v12.201:运镜控制 —— 仅探测确认的 v1-5+pro 才注入(其余模型注入必 1201,忽略+warn)
       if (options?.cameraControl) {
         const { cameraControlSupported } = require('@/lib/kling-camera') as typeof import('@/lib/kling-camera');
