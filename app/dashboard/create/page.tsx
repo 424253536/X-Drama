@@ -89,6 +89,9 @@ const exampleIdeas = [
 export default function DashboardCreatePage() {
   const searchParams = useSearchParams();
   const [idea, setIdea] = useState('');
+  const [urlInput, setUrlInput] = useState('');
+  const [urlExtracting, setUrlExtracting] = useState(false);
+  const [urlHint, setUrlHint] = useState<string | null>(null);
   const [videoProvider, setVideoProvider] = useState('veo');
   const [style, setStyle] = useState(stylePresets[0].en);
   const [selectedTemplate, setSelectedTemplate] = useState<StoryTemplate | null>(null);
@@ -203,6 +206,40 @@ export default function DashboardCreatePage() {
       if (template.recommendedCamera) {
         setCameraDefault(template.recommendedCamera);
       }
+    }
+  };
+
+  const handleExtractUrl = async () => {
+    const trimmedUrl = urlInput.trim();
+    if (!trimmedUrl) return;
+    setUrlExtracting(true);
+    setUrlHint(null);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const res = await fetch('/api/tools/url-to-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmedUrl }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.idea) {
+          setIdea(data.idea);
+          setUrlHint(null);
+        } else {
+          setUrlHint('自动提取失败,请手动输入');
+        }
+      } else {
+        setUrlHint('自动提取失败,请手动输入');
+      }
+    } catch {
+      clearTimeout(timer);
+      setUrlHint('自动提取失败,请手动输入');
+    } finally {
+      setUrlExtracting(false);
     }
   };
 
@@ -787,6 +824,32 @@ export default function DashboardCreatePage() {
         <div className="cinema-card p-5 flex flex-col gap-5">
           {/* v12.149:引擎天气 —— 创作前可见哪路引擎不健康(全健康不占位) */}
           <EngineWeather />
+          {/* URL→创意入口 */}
+          <div className="mb-3">
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => { setUrlInput(e.target.value); setUrlHint(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleExtractUrl(); } }}
+                placeholder="贴商品/品牌页链接,自动提取创意"
+                className="cinema-input flex-1 text-sm"
+                disabled={urlExtracting}
+              />
+              <button
+                type="button"
+                onClick={handleExtractUrl}
+                disabled={urlExtracting || !urlInput.trim()}
+                className="cinema-btn-ghost text-sm px-3 shrink-0 disabled:opacity-40"
+              >
+                {urlExtracting ? '提取中…' : '提取'}
+              </button>
+            </div>
+            {urlHint && (
+              <p className="mt-1 text-xs opacity-60">{urlHint}</p>
+            )}
+          </div>
+
           <label className="block">
             <div className="flex items-center justify-between mb-2">
               <Eyebrow>Script · 创意 / 剧本</Eyebrow>

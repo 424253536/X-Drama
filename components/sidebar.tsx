@@ -7,7 +7,7 @@ import { useAuth } from '@/components/auth-provider';
 import {
   SquaresFour, Kanban, Sparkle, BookOpen, User,
   SignOut, CaretLeft, CaretRight, Package, PenNib, MagicWand, FilmReel, CreditCard, Scroll, Palette, UsersThree, Pulse, Lightning, ChartLineUp, Stack, Queue, FilmSlate,
-  Storefront, FlowArrow, Brain,
+  Storefront, FlowArrow, Brain, UserCircle,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 
@@ -27,6 +27,7 @@ const navItems = [
   { href: '/dashboard/u2v', label: '单图变视频', icon: FilmReel },
   // v8.3 P5: 角色库并入「素材库」(角色子类), 不再独立模块; 素材库统一管理角色/场景/视频/音乐/字幕/模板
   { href: '/dashboard/assets', label: '素材库', icon: Package },
+  { href: '/dashboard/characters', label: '角色库', icon: UserCircle },
   { href: '/cameo-market', label: 'IP 市场', icon: Storefront },
   { href: '/workflow-studio', label: '工作流', icon: FlowArrow },
   { href: '/dashboard/master-prompt', label: 'MasterPrompt', icon: Brain },

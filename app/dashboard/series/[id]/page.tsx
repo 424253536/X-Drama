@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { getToken } from '@/lib/auth';
 import { FilmStrip as Film, CircleNotch as Loader2, CheckCircle as CheckCircle2, Clock, Play, ArrowLeft, Image as ImageIcon, DownloadSimple } from '@phosphor-icons/react';
 import { useLocale } from '@/hooks/use-locale';
+import { DramaPackageButton } from '@/components/project/drama-package-button';
 
 interface Episode { id: string; title: string; status: string; episode_number: number | null; aspect: string | null }
 
@@ -240,6 +241,7 @@ export default function SeriesPanel() {
                 <Play className="w-3.5 h-3.5" /> {t.seriesDetail.watchSeasonVideo}
               </a>
             )}
+            <DramaPackageButton seriesId={seriesId} />
           </div>
           <p className="text-[10px] text-gray-500 mt-2">{t.seriesDetail.seasonVideoDesc}</p>
         </div>

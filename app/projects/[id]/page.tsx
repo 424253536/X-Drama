@@ -37,6 +37,7 @@ import { InviteProjectButton } from '@/components/project/invite-project-button'
 import { ShotCinematographyModal } from '@/components/project/shot-cinematography-modal';
 import { seedSpecFromCameraAngle, normalizeShotSpec, describeShotSpec, type ShotSpec } from '@/lib/cinematography';
 import { ContinuityConsole } from '@/components/project/continuity-console';
+import { HealShotsButton } from '@/components/project/heal-shots-button';
 import { AssetLedgerPanel } from '@/components/project/asset-ledger-panel';
 import { ClipWithAudio } from '@/components/project/clip-with-audio';
 import { PullSheetTable } from '@/components/project/pull-sheet-table';
@@ -1108,7 +1109,12 @@ export default function ProjectDetailPage() {
                       </div>
                     ))}
                     {healthReport && (
-                      <button type="button" onClick={() => void loadHealth()} className="cinema-mono text-[10px] opacity-50 hover:opacity-90">↻ 重新体检</button>
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <button type="button" onClick={() => void loadHealth()} className="cinema-mono text-[10px] opacity-50 hover:opacity-90">↻ 重新体检</button>
+                        {healthReport.overall !== 'ok' && (
+                          <HealShotsButton projectId={id} onHealed={() => void loadHealth()} />
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
