@@ -36,5 +36,7 @@ export function buildColorGradeFilter(
     epic: { contrast: 1.10, saturation: 1.20, gamma: 0.97 },     // 高对比高饱和,浓烈
   };
   const p = P[genre] || P.default;
-  return `eq=contrast=${p.contrast}:saturation=${p.saturation}:gamma=${p.gamma}`;
+  const eq = `eq=contrast=${p.contrast}:saturation=${p.saturation}:gamma=${p.gamma}`;
+  // v12.205:轻晕影聚焦视线到画面中心(电影感),eval=init 只算一次不耗性能;VIGNETTE_DISABLE=1 关
+  return env.VIGNETTE_DISABLE === '1' ? eq : `${eq},vignette=PI/5:eval=init`;
 }

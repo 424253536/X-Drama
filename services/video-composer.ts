@@ -14,6 +14,9 @@ import ffmpegPath from 'ffmpeg-static';
 import path from 'path';
 import { audioBitrateForPlatform } from '@/lib/audio-encode';
 import { buildColorGradeFilter, detectGradeGenre } from '@/lib/color-grade';
+// v12.205:成片质量参数(env 可调)。CRF 23→20 减双重编码损耗(暗部/边缘细节);unsharp 轻锐化补 AI 视频糊边。
+const crfValue = (): string => process.env.CRF_QUALITY || '20';
+const unsharpFilter = (): string => process.env.UNSHARP_DISABLE === '1' ? '' : 'unsharp=luma_msize_x=3:luma_msize_y=3:luma_amount=0.3';
 import fs from 'fs';
 import { audioUrlLoadKind } from '@/lib/audio-url';
 import { impactSfxNode } from '@/lib/impact-sfx'; // v12.13.1 打击音效程序化合成
@@ -402,7 +405,7 @@ export async function reframeVideo(
       .outputOptions([
         '-map', '[vout]',
         '-map', '0:a?',          // 有音轨就拷贝,没有也不报错
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', crfValue(),
         '-c:a', 'copy',
         '-movflags', '+faststart',
       ])
@@ -473,7 +476,7 @@ export async function concatVideos(
     }
     filters.push(`${labels.join('')}concat=n=${locals.length}:v=1:a=1[vout][aout]`);
     cmd.complexFilter(filters)
-      .outputOptions(['-map', '[vout]', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', audioBitrateForPlatform(undefined), '-movflags', '+faststart'])
+      .outputOptions(['-map', '[vout]', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'fast', '-crf', crfValue(), '-c:a', 'aac', '-b:a', audioBitrateForPlatform(undefined), '-movflags', '+faststart'])
       .output(outputPath)
       .on('end', () => resolve({ outputPath, count: locals.length }))
       .on('error', reject)
@@ -986,7 +989,8 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       // v12.13.0:单镜也按设计时长裁切(designed 未给则 = 源时长,无裁切)
       const trimTo0 = Math.min(durations[0], sourceDurations[0]);
       const _grade1 = buildColorGradeFilter(detectGradeGenre(options.editStyle));
-      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_grade1 ? ',' + _grade1 : ''}`;
+      const _us1 = unsharpFilter();
+      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us1 ? ',' + _us1 : ''}${_grade1 ? ',' + _grade1 : ''}`;
       if (speed !== 1.0 && speed > 0) {
         const pts = 1.0 / speed;
         {
@@ -1046,7 +1050,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
 
       cmd
         .complexFilter(filters)
-        .outputOptions(['-map', '[vout]', '-map', '[outa]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', audioBitrateForPlatform(options.platform), '-movflags', '+faststart'])
+        .outputOptions(['-map', '[vout]', '-map', '[outa]', '-c:v', 'libx264', '-preset', 'fast', '-crf', crfValue(), '-c:a', 'aac', '-b:a', audioBitrateForPlatform(options.platform), '-movflags', '+faststart'])
         .output(outputPath)
         .on('progress', (p) => onProgress?.(50 + Math.round((p.percent || 0) * 0.5), '合成中...'))
         .on('end', () => {
@@ -1094,7 +1098,8 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       const isHighlightClip = validClips[i]?.isHighlight || false;
       // v12.13.0:按设计时长真裁切源片(trim=0:T + 重置时间戳)—— 杜绝 8s 源整段流出,快切节奏落地。
       const trimTo = Math.min(durations[i], sourceDurations[i]);
-      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_grade ? ',' + _grade : ''}`;
+      const _us = unsharpFilter();
+      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us ? ',' + _us : ''}${_grade ? ',' + _grade : ''}`;
 
       // 高光变速：setpts 调整视频播放速度（<1 = 加速, >1 = 减速）
       if (speed !== 1.0 && speed > 0) {
@@ -1159,10 +1164,10 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     if (subtitlesFilterFragment) {
       // strip 开头的逗号 — subtitles filter 在 filter chain 里独立用 = 而不是 ,
       const filterBody = subtitlesFilterFragment.replace(/^,/, '');
-      filters.push(`[xvfinal]${filterBody}[vout]`);
+      filters.push(`[xvfinal]fade=t=in:st=0:d=0.5,${filterBody}[vout]`);
     } else {
       // 无字幕 — pass-through, 保持 [vout] label 名一致
-      filters.push(`[xvfinal]null[vout]`);
+      filters.push(`[xvfinal]fade=t=in:st=0:d=0.5[vout]`); // v12.205 开头淡入(fade out 因与片尾卡拼接冲突不加)
     }
 
     // 音频处理：生成的视频通常没有音频流，统一生成静音替代
@@ -1360,7 +1365,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         '-map', audioOut,
         '-c:v', 'libx264',
         '-preset', 'fast',
-        '-crf', '23',
+        '-crf', crfValue(),
         '-c:a', 'aac',
         '-b:a', audioBitrateForPlatform(options.platform),
         '-movflags', '+faststart',
@@ -1632,7 +1637,7 @@ export async function stillFrameToVideo(
         '-vf', vf,
         '-c:v', 'libx264',
         '-preset', 'fast',
-        '-crf', '23',
+        '-crf', crfValue(),
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
         '-b:a', audioBitrateForPlatform(undefined),
