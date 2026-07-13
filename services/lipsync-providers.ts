@@ -61,6 +61,9 @@ class KlingLipSyncProvider implements LipSyncProvider {
       // v12.212(live 抓获既有 bug):官方 lip-sync 的 audio_type 枚举是 'url'(非 'audio_url'),
       // 且必须带 mode:'audio2video' —— 旧 body 恒返 1201「audio_type value 'audio_url' is invalid」,
       // 于是 orchestrator 早已接入的口型同步一直静默降级到原视频、从未真正生效。零成本探测修正后 SUCCEED。
+      // ⚠️ v12.215 真机实测(2026-07-13):①**音频/语音时长必须 ≥2s**,否则失败「Audio duration can not less than 2s」
+      //    (≈15 字以上台词);②video_url 必须**公网可访问**(localhost/serve-file 取不到);③人物需清晰正面脸。
+      //    真机验证(text2video 模式)口型随台词自然变化、出片带 aac 音轨,证实端到端可用。
       const body = {
         input: {
           video_url: videoUrl,

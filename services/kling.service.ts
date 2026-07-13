@@ -95,11 +95,14 @@ export class KlingService {
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
 
-      // v12.211:原生音效 —— KLING_AUDIO_ENABLED=true 且 pro mode 时开 enable_audio(探测证实 v3/v2.6/v2.1 均接受)。
-      // 成本约 2×(PRO+audio),故 env 门控默认关。
+      // v12.211:原生音效 —— KLING_AUDIO_ENABLED=true 且 pro mode 时开 enable_audio(探测:v3/v2.6/v2.1 均接受参数)。
+      // ⚠️ v12.215 真机实测(2026-07-13,4 次真跑铁证):**enable_audio 名义接受、实际无效** ——
+      //    image2video(v3+v2.6)与 text2video(v2.6)成片**全都无 audio stream**。根因:此账号套餐 / api-beijing
+      //    当前版本不生成原生音效(参数不被拒但不产音)。**成片声音请走 MiniMax TTS + BGM 链,别依赖 Kling 原生音效**。
+      //    此分支保留(未来套餐/端点升级可能生效)但默认关且不应指望出声。
       if (process.env.KLING_AUDIO_ENABLED === 'true' && body.mode === 'pro' && !want4K) {
         body.enable_audio = true;
-        console.log(`[Kling] enable_audio=true(${model}/pro,成本约 2×)`);
+        console.log(`[Kling] enable_audio=true(${model}/pro;⚠️ 本账号实测不产音轨,声音走 TTS+BGM,详见 v12.215)`);
       }
       // v12.201:运镜控制 —— 仅探测确认的 v1-5+pro 才注入(其余模型注入必 1201,忽略+warn)
       if (options?.cameraControl) {
