@@ -6,13 +6,13 @@ import { t } from '@/lib/i18n';
 import fs from 'fs';
 
 describe('v12.209 · i18n 全量批', () => {
-  it('4 命名空间四语切换(ko/ru fallback en)', () => {
+  it('4 命名空间四语切换(v12.213 起 ko/ru 已补真文案)', () => {
     expect(t('zh-CN', 'healthPage.title')).toBe('API 健康');
     expect(t('en', 'healthPage.title')).toBe('API Health');
     expect(t('ja', 'usagePage.headline')).toBe('コスト可観測性');
     expect(t('en', 'seriesDetail.batchGenerateBtn')).toBe('Batch Generate');
     expect(t('ja', 'visionAudit.panelTitle')).toContain('品質チェック');
-    expect(t('ko', 'healthPage.title')).toBe('API Health'); // ko fallback en
+    expect(t('ko', 'healthPage.title')).toMatch(/[가-힣]/); // v12.213:ko 已有真韩文
   });
   it('provider-health lib 层零中文(STATUS_META label 存 i18n key)', () => {
     const ph = fs.readFileSync('lib/provider-health.ts', 'utf-8');

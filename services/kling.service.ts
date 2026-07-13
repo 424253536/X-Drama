@@ -56,6 +56,7 @@ export class KlingService {
       // v12.201:导演级运镜 —— camera_control 仅 kling-v1-5+pro+5s 可用(探测),故配 modelOverride 一起降级
       cameraControl?: import('@/lib/kling-camera').KlingCameraControl;
       modelOverride?: string;
+      render4K?: boolean; // v12.213:4K 提档(仅 kling-v3,¥6/5s,与运镜/音效互斥)
       onProgress?: ProgressCallback;
     }
   ): Promise<string> {
@@ -78,20 +79,25 @@ export class KlingService {
       const duration = options?.cameraControl ? '5' : (wantSec > 10 && maxSec >= 15 ? '15' : wantSec > 5 ? '10' : '5');
       // v12.197:官方硬限 prompt ≤2500 字(1201 报错实测)——超长裁断优于整镜失败
       if (prompt.length > 2450) { console.warn(`[Kling] prompt 超长 ${prompt.length} → 裁至 2450`); prompt = prompt.slice(0, 2450); }
+      // v12.213:4K 提档 —— render4K=true 且模型为 kling-v3 时走 mode:'4k'(零成本探测证实**仅 v3** 支持,
+      // v2.6/v2.1 明确 1201 not supported)。4K 与 camera_control/enable_audio 互斥(API 限制),按 4K 优先。
+      // 成本约 ¥6/5s,故按镜 opt-in(render4K 默认 false)。
+      const want4K = options?.render4K === true && model.startsWith('kling-v3');
       const body: Record<string, any> = {
         model_name: model,
         prompt: prompt,
-        // 可灵官方 mode 枚举是 'std' | 'pro'(v12.154 live 实测:'standard' 报 1201 invalid)
-        mode: options?.mode === 'professional' ? 'pro' : 'std',
+        // 可灵官方 mode 枚举是 'std' | 'pro'(v12.154 live 实测:'standard' 报 1201 invalid);v12.213 +'4k'(仅 v3)
+        mode: want4K ? '4k' : (options?.mode === 'professional' ? 'pro' : 'std'),
         duration,
       };
+      if (want4K) console.log(`[Kling] 4K 模式(${model},约 ¥6/5s;禁用运镜/音效)`);
 
       // v12.14.0 横竖屏:Kling 支持 aspect_ratio('16:9'|'9:16'|'1:1');竖屏短剧必须传,否则默认 16:9
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
 
       // v12.211:原生音效 —— KLING_AUDIO_ENABLED=true 且 pro mode 时开 enable_audio(探测证实 v3/v2.6/v2.1 均接受)。
       // 成本约 2×(PRO+audio),故 env 门控默认关。
-      if (process.env.KLING_AUDIO_ENABLED === 'true' && body.mode === 'pro') {
+      if (process.env.KLING_AUDIO_ENABLED === 'true' && body.mode === 'pro' && !want4K) {
         body.enable_audio = true;
         console.log(`[Kling] enable_audio=true(${model}/pro,成本约 2×)`);
       }
