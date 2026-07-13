@@ -1,6 +1,7 @@
 /**
- * GET /api/projects/[id]/cost (v12.190) — 项目成本下钻(cost_log × rollupByEngine)。
+ * GET /api/projects/[id]/cost (v12.190;v12.207 加 ?export=csv) — 项目成本下钻。
  * 读免鉴权(与 health/pull-sheet GET 同哲学,按 projectId 作用域,不含 PII)。
+ * ?export=csv → 逐条成本明细 CSV 下载(团队对账/报销基础)。
  */
 import { NextResponse } from 'next/server';
 import { listCostLogByProject } from '@/lib/repos/cost-log-repo';
@@ -9,9 +10,34 @@ import { rollupByEngine } from '@/lib/cost-rollup';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/** CSV 字段转义:含逗号/引号/换行的值加引号并转义内部引号。 */
+function csvCell(v: unknown): string {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const rows = await listCostLogByProject(id);
+
+  if (new URL(request.url).searchParams.get('export') === 'csv') {
+    const header = ['createdAt', 'engine', 'resolution', 'durationSec', 'costCny', 'shotNumber'];
+    const lines = [header.join(',')];
+    for (const r of rows) {
+      const shot = (r.metadata as Record<string, unknown>)?.shotNumber ?? '';
+      lines.push([r.createdAt, r.engine, r.resolution, r.durationSec, r.costCny, shot].map(csvCell).join(','));
+    }
+    const total = Number(rows.reduce((t, r) => t + (Number(r.costCny) || 0), 0).toFixed(2));
+    lines.push(['', '', '', '', total, `合计 ${rows.length} 条`].map(csvCell).join(','));
+    return new NextResponse('﻿' + lines.join('\n'), { // BOM 保 Excel 中文不乱码
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="cost-${id}.csv"`,
+      },
+    });
+  }
+
   const byEngine = rollupByEngine(rows);
   const totalCny = Number(rows.reduce((t, r) => t + (Number(r.costCny) || 0), 0).toFixed(2));
   return NextResponse.json({ projectId: id, totalCny, entries: rows.length, byEngine });

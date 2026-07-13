@@ -32,6 +32,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: '请指定镜头编号' }, { status: 400 });
   }
 
+  // v12.207:预算护栏 —— 此前本路由(项目页单镜重生)完全绕过 assertBudget,反复重生可无上限烧钱。
+  // 有登录态才检查(与全局 /api/regenerate-shot 同哲学);超限返 402,不进 SSE。
+  {
+    const { getUserFromRequest } = await import('../../../auth/lib');
+    const uid = getUserFromRequest(request)?.sub;
+    if (uid) {
+      const { assertBudget } = await import('@/lib/budget-enforce');
+      const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
+      const pending = estimatePipelineCostCny({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true });
+      const b = await assertBudget({ userId: uid, pendingCostCny: pending });
+      if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
+    }
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {

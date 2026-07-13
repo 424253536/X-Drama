@@ -98,11 +98,21 @@ export class VeoService {
     // ═══ 模型级 fallback 链: 主模型 + 配置的 fallback ═══
     // 如果主模型报"整池饱和"类错误, 立刻换 fallback 模型重试,
     // 避免用户看到"整条 Veo 引擎都坏了"的假象 (其实只是 sora-2 池子满了)
-    const modelChain = [this.model, ...this.fallbackModels.filter(m => m !== this.model)];
-    // v12.173:Sora-2 API 2026-09-24 退役 —— 默认链已摘除;用户显式配置仍可用到停服日,但每次告警。
+    let modelChain = [this.model, ...this.fallbackModels.filter(m => m !== this.model)];
+    // v12.173/207:Sora-2 API 2026-09-24 退役。退役日前:显式配仍可用但每次告警;退役日后:
+    // 自动从链中剔除(走 veo/kling fallback),剔完若链空才抛,免到期日静默 401 白等。
     const soraModels = modelChain.filter((m) => m.toLowerCase().startsWith('sora'));
     if (soraModels.length > 0) {
-      console.warn(`[Veo] ⚠️ 模型链含即将退役的 Sora 系(${soraModels.join(',')}):OpenAI Sora-2 API 将于 2026-09-24 停服,请迁移到 veo3.1 / kling(改 VEO_MODEL / VEO_FALLBACK_MODELS)`);
+      const retired = new Date() >= new Date('2026-09-24T00:00:00Z');
+      if (retired) {
+        modelChain = modelChain.filter((m) => !m.toLowerCase().startsWith('sora'));
+        console.warn(`[Veo] ⚠️ Sora 系(${soraModels.join(',')})已过 2026-09-24 退役日,自动剔除走 fallback`);
+        if (modelChain.length === 0) {
+          throw new Error('Veo: 模型链仅含已退役的 Sora 系(2026-09-24 停服),请改 VEO_MODEL/VEO_FALLBACK_MODELS 为 veo3.1 / kling');
+        }
+      } else {
+        console.warn(`[Veo] ⚠️ 模型链含即将退役的 Sora 系(${soraModels.join(',')}):OpenAI Sora-2 API 将于 2026-09-24 停服,请迁移到 veo3.1 / kling(改 VEO_MODEL / VEO_FALLBACK_MODELS)`);
+      }
     }
     const originalModel = this.model;
     const originalFormat = this.format;

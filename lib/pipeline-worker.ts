@@ -90,6 +90,14 @@ async function runJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJob>>>
       const { runPullSheetJob } = await import('./pull-sheet-job');
       await runPullSheetJob(job.payload as any, emit);
     } else {
+      // v12.207:预算护栏 —— 队列消费 create 任务前拦(此前 worker 完全绕过 assertBudget,
+      // 批量入队反复重生可无上限烧钱)。attempt>1 续跑不重复计费,故仅首次尝试检查。
+      if (job.userId && job.attempts <= 1) {
+        const { assertBudget } = await import('./budget-enforce');
+        const { estimatePipelineCostCny } = await import('./budget-estimate');
+        const b = await assertBudget({ userId: job.userId, pendingCostCny: estimatePipelineCostCny({}) });
+        if (!b.allow) throw new Error(`预算超限,任务拦截:${b.guard.message}`);
+      }
       // v10.4.2: attempt>1 = 续跑 —— 断点装载,已有产物阶段跳过(不重复生成/计费)
       await runCreatePipeline(job.payload as CreatePipelineInput, emit, { resume: job.attempts > 1 });
     }
