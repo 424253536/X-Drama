@@ -5,8 +5,8 @@
  * 下拉挑 `VOICE_CATALOG` 音色 + 「试听」(POST /api/voice-sample)+ 「保存」(POST /voice-overrides)。
  * 保存后 shot-audio 优先用覆盖音色。挂在「配音口型」面板内,默认折叠。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserSound, CaretDown, CaretRight, Play, CircleNotch, FloppyDisk } from '@phosphor-icons/react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { UserSound, CaretDown, CaretRight, Play, CircleNotch, FloppyDisk, UploadSimple } from '@phosphor-icons/react';
 import { VOICE_CATALOG } from '@/lib/character-studio';
 import { buildVoiceRouting } from '@/lib/voice-routing';
 
@@ -18,6 +18,31 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [auditionId, setAuditionId] = useState<string | null>(null);
+  // v12.208:音色克隆 —— 上传音样 → MiniMax 克隆 → voiceId 进音色列表可绑定角色
+  const [cloned, setCloned] = useState<Array<{ id: string; label: string }>>([]);
+  const [cloneName, setCloneName] = useState('');
+  const [cloning, setCloning] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const doClone = useCallback(async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) { setSavedMsg('请先选择音样文件(WAV/MP3,≥10s、≤5MB)'); return; }
+    if (file.size > 5 * 1024 * 1024) { setSavedMsg('音样需 ≤5MB'); return; }
+    setCloning(true); setSavedMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (cloneName.trim()) fd.append('name', cloneName.trim());
+      const res = await fetch('/api/voice-clone', { method: 'POST', body: fd });
+      const b = await res.json();
+      if (!res.ok) throw new Error(b.error || '克隆失败');
+      setCloned((arr) => [...arr, { id: b.voiceId, label: `${cloneName.trim() || b.voiceId} [克隆]` }]);
+      setSavedMsg(`✓ 克隆成功:${b.voiceId} —— 已加入下拉,选给角色后保存即生效`);
+      if (fileRef.current) fileRef.current.value = '';
+      setCloneName('');
+    } catch (e) { setSavedMsg(e instanceof Error ? e.message : '克隆失败'); }
+    finally { setCloning(false); }
+  }, [cloneName]);
 
   useEffect(() => {
     let alive = true;
@@ -79,6 +104,7 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
                   className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white/80 outline-none"
                 >
                   {VOICE_CATALOG.map((v) => (<option key={v.id} value={v.id} className="bg-[#1a1a24]">{v.label} · {v.tone}</option>))}
+                  {cloned.map((v) => (<option key={v.id} value={v.id} className="bg-[#1a1a24]">{v.label}</option>))}
                 </select>
                 <span className={`text-[9px] shrink-0 w-6 ${overridden ? 'text-amber-300/70' : 'text-white/25'}`}>{overridden ? '手动' : '自动'}</span>
                 <button onClick={() => audition(c)} disabled={!!auditionId} className="cinema-btn !px-1.5 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-50" title="试听">
@@ -93,6 +119,20 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
               {saving ? '保存中…' : '保存音色'}
             </button>
             {savedMsg && <span className="text-[10px] text-white/45 truncate">{savedMsg}</span>}
+          </div>
+
+          {/* v12.208:音色克隆 —— 上传音样(≥10s 干净人声)克隆专属音色,voiceId 进上方下拉可绑定角色 */}
+          <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5">
+            <div className="text-[10px] text-white/45">🎤 克隆专属音色(上传 ≥10s 干净人声,WAV/MP3 ≤5MB)</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <input ref={fileRef} type="file" accept="audio/*" className="text-[10px] text-white/60 max-w-[150px]" />
+              <input value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="音色名(如 老陈)"
+                className="bg-white/[0.04] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white/80 outline-none w-[100px]" />
+              <button onClick={doClone} disabled={cloning} className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-50">
+                {cloning ? <CircleNotch className="w-3 h-3 animate-spin" /> : <UploadSimple className="w-3 h-3" />}
+                {cloning ? '克隆中…(约10-30s)' : '克隆音色'}
+              </button>
+            </div>
           </div>
         </div>
       )}
