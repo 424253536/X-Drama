@@ -58,12 +58,15 @@ class KlingLipSyncProvider implements LipSyncProvider {
   async syncMouthToAudio(videoUrl: string, audioUrl: string, options?: { language?: 'zh' | 'en'; onProgress?: (p: number, s: string) => void }): Promise<LipSyncResult> {
     if (!this.isAvailable()) return { videoUrl, applied: false, warning: 'kling not configured', provider: this.name };
     try {
+      // v12.212(live 抓获既有 bug):官方 lip-sync 的 audio_type 枚举是 'url'(非 'audio_url'),
+      // 且必须带 mode:'audio2video' —— 旧 body 恒返 1201「audio_type value 'audio_url' is invalid」,
+      // 于是 orchestrator 早已接入的口型同步一直静默降级到原视频、从未真正生效。零成本探测修正后 SUCCEED。
       const body = {
         input: {
           video_url: videoUrl,
-          audio_type: 'audio_url',
+          mode: 'audio2video',
+          audio_type: 'url',
           audio_url: audioUrl,
-          language: options?.language || 'zh',
         },
       };
       const response = await fetchWithTimeout(

@@ -57,7 +57,8 @@ describe('v3.5 · styleToForceStyle', () => {
     expect(fs).toContain('FontSize=44');
     expect(fs).toContain('Outline=3');
     expect(fs).toContain('Alignment=2');
-    expect(fs.split(',').length).toBe(9);
+    expect(fs.split(',').length).toBe(10); // v12.212:+Blur 软化描边(youtube 无底板)
+    expect(fs).toContain("Blur=0.6");
   });
 });
 

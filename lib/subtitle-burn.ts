@@ -29,18 +29,22 @@ export interface SubtitleStyle {
   alignment: number;
   /** 是否加粗 (-1 = 是, 0 = 否, ASS 约定). */
   bold: number;
+  /** v12.212:半透明底板色(ASS BackColour &HAABBGGRR);配 borderStyle=4 用. */
+  backColour?: string;
+  /** v12.212:1=描边+阴影(默认) 4=不透明底板(社媒复杂背景可读性更强). */
+  borderStyle?: number;
 }
 
 const PRESETS: Record<SubtitlePlatform, SubtitleStyle> = {
   // 抖音: 大白字 + 粗黑边 + 居中偏下, 信息密度高也看得清
   douyin: {
     fontName: 'PingFang SC', fontSize: 56, primaryColour: '&H00FFFFFF',
-    outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 120, alignment: 2, bold: -1,
+    outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 120, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   // 快手: 比抖音更大更粗, 下沉一点
   kuaishou: {
     fontName: 'PingFang SC', fontSize: 60, primaryColour: '&H00FFFFFF',
-    outlineColour: '&H00000000', outline: 5, shadow: 1, marginV: 140, alignment: 2, bold: -1,
+    outlineColour: '&H00000000', outline: 5, shadow: 1, marginV: 140, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   // 小红书: 细一点, 暖白, 描边淡, 偏精致
   xiaohongshu: {
@@ -55,7 +59,7 @@ const PRESETS: Record<SubtitlePlatform, SubtitleStyle> = {
   // TikTok: 竖屏大白字粗描边, 上抬避开右侧操作栏/底部话题, 与抖音同源略瘦
   tiktok: {
     fontName: 'Arial', fontSize: 52, primaryColour: '&H00FFFFFF',
-    outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 180, alignment: 2, bold: -1,
+    outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 180, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   default: {
     fontName: 'PingFang SC', fontSize: 50, primaryColour: '&H00FFFFFF',
@@ -113,6 +117,9 @@ export function styleToForceStyle(style: SubtitleStyle): string {
     ['Alignment', style.alignment],
     ['Bold', style.bold],
   ];
+  // v12.212:软化描边边缘(硬描边在高分屏发糊/锯齿),libass 原生 Blur;有底板时追加 BackColour+BorderStyle
+  if (style.borderStyle != null) { pairs.push(['BorderStyle', style.borderStyle]); if (style.backColour) pairs.push(['BackColour', style.backColour]); }
+  pairs.push(['Blur', 0.6]);
   return pairs.map(([k, v]) => `${k}=${v}`).join(',');
 }
 
