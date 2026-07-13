@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.213</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.214</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -17,7 +17,7 @@
   <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ChrisChen667788/wind-comic/ci.yml?branch=main&label=CI&logo=github" alt="CI" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/stargazers"><img src="https://img.shields.io/github/stars/ChrisChen667788/wind-comic?style=social" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/Tests-3004%2F3004-2ea44f"  alt="3004 tests passing" />
+  <img src="https://img.shields.io/badge/Tests-3032%2F3032-2ea44f"  alt="3032 tests passing" />
   <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
 </p>
@@ -234,8 +234,8 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 
 ## 🥊 vs. competitors
 
-> 阵容核验 2026-07-12(Artificial Analysis 盲投竞技场):格局较 07-06 稳定 —— **带音频文生视频榜:Dreamina Seedance 2.0 720p 仍榜首(Elo 1226)**、Wan2.7-260612 次席(1160)、HappyHorse-1.1 第三(1152)、Kling 3.0 1080p Pro(1112);**无音频榜 HappyHorse-1.0 登顶(1287)**、HappyHorse-1.1(1277)、Seedance 2.0(1272)、Kling 3.0 Pro(1245);**图生视频 Seedance 2.0 榜首(Elo 1345)**。**Seedance 2.5** 已进入主流对比梯队(我方 v12.177 预备态待网关额度激活)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 性价比冠军(多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。
-> **本轮 v12.195–204 全部落在护城河「制作/平台层」**(生成层红海不硬拼):多引擎色调统一 + 转场多样性、可灵首尾帧锁定接主链(image_tail,live 末帧逐像素一致)、角色档案多主体人脸库(对标即梦角色管理)、出海多语版一键译制(对标阅文 ToonScroll)、AI 作曲免版权 BGM、角色音色性别/年龄纠偏、决策日志/成本下钻。
+> 阵容核验 2026-07-13(Artificial Analysis 盲投竞技场):格局较 07-12 稳定(1 日无实质变动) —— **带音频文生视频榜:Dreamina Seedance 2.0 720p 仍榜首(Elo 1226)**、Wan2.7-260612 次席(1160)、HappyHorse-1.1 第三(1152)、Kling 3.0 1080p Pro(1112);**无音频榜 HappyHorse-1.0 登顶(1287)**、HappyHorse-1.1(1277)、Seedance 2.0(1272)、Kling 3.0 Pro(1245);**图生视频 Seedance 2.0 榜首(Elo 1345)**。**Seedance 2.5** 已进入主流对比梯队(我方 v12.177 预备态待网关额度激活)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 性价比冠军(多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。
+> **本轮 v12.195–213 全部落在护城河「制作/平台层」**(生成层红海不硬拼):可灵首尾帧锁定+口型同步修复(image_tail/lip-sync,均为探测修正的 live-caught bug)、**情感 TTS 真接通**(中文情绪→MiniMax 枚举,speech-2.8-hd)、角色档案多主体人脸库(对标即梦)、出海多语版一键译制 + **5 语全量 UI(zh/en/ja/ko/ru)**(对标阅文 ToonScroll)、AI 作曲免版权 BGM、多引擎色调统一+晕影+锐化、EBU R128 双遍响度、Kling 4K/enable_audio 门控、决策日志/成本下钻/一键自愈/URL→创意 等断层入口补齐。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
 | Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
@@ -258,6 +258,9 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 | One-click localization (script + re-voice) | ❌ | ⚠️ dub only | ❌ | ❌ | ❌ | ❌ | **✅ 8-lang translate → apply → re-TTS, honest degradation** |
 | Royalty-free AI BGM per story | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MiniMax music-2.6, style-prompt → project BGM** |
 | Per-shot auditable decision log (engine/cost/consistency) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ decision log + cost drill-down + quality score** |
+| Emotion-aware TTS (mapped to native enum) | ⚠️ | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ | **✅ CN emotion → MiniMax speech-2.8-hd enum, live A/B verified** |
+| Lip-sync wired into pipeline (auto per dialogue shot) | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ❌ | **✅ Kling lip-sync, honest skip on non-face** |
+| Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌ | **✅ 5 languages, ~400 keys, no hardcoded strings** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
 
