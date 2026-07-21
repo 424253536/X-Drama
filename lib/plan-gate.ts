@@ -21,6 +21,9 @@ import type { AnyTier } from './stripe';
 
 export const TIER_ORDER: AnyTier[] = ['free', 'creator', 'pro', 'enterprise'];
 
+// v12.219:生产误留 PLAN_GATE_DISABLED 时只警告一次,避免每次 checkPlan 刷屏。
+let planGateProdWarned = false;
+
 export function tierRank(tier: string | null | undefined): number {
   const idx = TIER_ORDER.indexOf((tier as AnyTier) || 'free');
   return idx === -1 ? 0 : idx;
@@ -47,8 +50,16 @@ export function checkPlan(request: Request, minTier: AnyTier): PlanCheck {
       .get(userId) as { subscription_tier?: string } | undefined;
     current = (row?.subscription_tier as AnyTier) || 'free';
   }
-  // 总开关:PLAN_GATE_DISABLED=1 → 所有计费 gate 放行(上线前/本地测试用;真上线删此 env 即恢复)
-  const disabled = process.env.PLAN_GATE_DISABLED === '1';
+  // 总开关:PLAN_GATE_DISABLED=1 → 所有计费 gate 放行(上线前/本地测试用)。
+  // v12.219 密钥硬化:该穿透付费墙的开关**在生产环境强制忽略** —— 误留 env 就是免费墙全开(🟠-12)。
+  // 仅 NODE_ENV!==production 生效;生产下即使置 1 也照常 gate,并打一次警告便于运维发现误配。
+  const wantDisabled = process.env.PLAN_GATE_DISABLED === '1';
+  const isProd = process.env.NODE_ENV === 'production';
+  const disabled = wantDisabled && !isProd;
+  if (wantDisabled && isProd && !planGateProdWarned) {
+    planGateProdWarned = true;
+    console.warn('[plan-gate] ⚠️ 生产环境检测到 PLAN_GATE_DISABLED=1 —— 已强制忽略(付费墙保持生效)。请从生产 env 移除该开关。');
+  }
   return {
     ok: disabled || tierRank(current) >= tierRank(minTier),
     current,

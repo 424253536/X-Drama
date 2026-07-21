@@ -7,10 +7,34 @@ import { db } from '@/lib/db';
 let devSecret: string | null = null;
 
 /**
+ * 已知弱/占位密钥黑名单(v12.219 密钥硬化)。
+ * `.env.example` 里的 `change_me_...` 是公开可见的占位值:任何人只要拷模板忘改,
+ * 生产就会用这串公开密钥签发/校验令牌 → 可被据此伪造任意用户(含 admin)令牌。
+ * 生产环境命中黑名单 = 与未设置同等危险,一律 fail-fast 拒起。
+ * 判定用小写去空白规范化,挡「大小写/首尾空格」绕过。
+ */
+const WEAK_JWT_SECRETS = new Set(
+  [
+    'change_me_to_a_random_32_char_string', // .env.example 默认占位
+    'change_me',
+    'changeme',
+    'secret',
+    'your-secret-key',
+    'your_secret_key',
+    'e2e-fixture-secret-not-for-prod', // .env.example 里 e2e 示例串,非生产密钥
+  ].map((s) => s.toLowerCase()),
+);
+
+function isWeakSecret(s: string): boolean {
+  return WEAK_JWT_SECRETS.has(s.trim().toLowerCase());
+}
+
+/**
  * 运行时解析 JWT 密钥(刻意不在模块顶层求值 —— 避免 `next build` 期间误抛中断构建)。
- *   - 设了 `JWT_SECRET` → 用它(生产/CI/e2e 都走这条)。
+ *   - 设了 `JWT_SECRET` 且非弱默认 → 用它(生产/CI/e2e 都走这条)。
+ *   - 设了但命中弱默认黑名单 + 生产 → **fail-fast 抛错**:拷模板忘改等同裸奔。
  *   - 没设 + 生产环境(`NODE_ENV=production`)→ **fail-fast 抛错**:绝不静默用弱密钥。
- *   - 没设 + 开发/测试 → 生成**进程级随机密钥**(非源码内置,无法被仓库读者据此伪造令牌),
+ *   - 没设/弱默认 + 开发/测试 → 生成**进程级随机密钥**(非源码内置,无法被仓库读者据此伪造令牌),
  *     首次打一次告警提醒部署前必须设 JWT_SECRET。
  *
  * 安全说明:历史上这里曾内置公开兜底串,任何人都能据此伪造任意用户(含 admin)的令牌。
@@ -18,11 +42,21 @@ let devSecret: string | null = null;
  */
 function getJwtSecret(): string {
   const s = process.env.JWT_SECRET;
-  if (s && s.length > 0) return s;
-  if (process.env.NODE_ENV === 'production') {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (s && s.length > 0 && !isWeakSecret(s)) return s;
+  if (isProd) {
+    if (s && isWeakSecret(s)) {
+      throw new Error(
+        '[auth] JWT_SECRET 是公开占位/弱默认值(如 .env.example 的 change_me_...)—— 生产环境拒启动。' +
+          '请用 `openssl rand -hex 32` 生成高强度随机密钥后重设。',
+      );
+    }
     throw new Error(
       '[auth] JWT_SECRET 未设置 —— 生产环境必须配置一个高强度随机密钥(否则无法签发/校验令牌)。',
     );
+  }
+  if (s && isWeakSecret(s)) {
+    console.warn('[auth] ⚠️ JWT_SECRET 为弱默认/占位值,已忽略并改用进程级随机开发密钥;部署前务必设为高强度随机串。');
   }
   if (!devSecret) {
     devSecret = crypto.randomBytes(32).toString('hex');
