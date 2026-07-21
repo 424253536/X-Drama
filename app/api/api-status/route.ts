@@ -55,10 +55,13 @@ export async function GET() {
     } catch { return { provider: p, recentFailures: 0 }; }
   }));
 
+  // v12.216:引擎能力边界(真机实测结论,env 触发 —— 开了不生效的开关必须让运营者知情)
+  const { engineCapabilityNotes } = await import('@/lib/engine-capability-notes');
   return NextResponse.json({
     alerts: Array.from(byProvider.values()),
     gateways: listOutOfCreditsGateways(),
     engines,
+    capabilityNotes: engineCapabilityNotes({ env: process.env }),
     timestamp: new Date().toISOString(),
   });
 }

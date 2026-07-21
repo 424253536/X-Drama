@@ -61,6 +61,19 @@ export async function buildProjectHealth(projectId: string): Promise<ProjectHeal
     shotWithVideo: withVideo.length,
     animaticShots,
   });
+
+  // v12.216:引擎能力边界提示 —— 项目语种命中口型降级(ja/ko/ru)或运营者开了不生效的开关时,
+  // 追加为体检行(知情项;overall 不动 —— 引擎边界不是这条片的缺陷)。语种从剧本嗅探(零成本)。
+  try {
+    const { sniffTextLanguage } = await import('./language-detect');
+    const { engineCapabilityNotes } = await import('./engine-capability-notes');
+    const sniffSample = [script?.title, ...shots.slice(0, 6).map((s: any) => s?.dialogue)].filter(Boolean).join(' ');
+    const notes = engineCapabilityNotes({ language: sniffTextLanguage(sniffSample) });
+    for (const n of notes) {
+      report.items.push({ key: n.key, label: n.label, status: n.severity === 'warn' ? 'warn' : 'unknown', detail: n.text } as any);
+    }
+  } catch { /* 提示层失败不阻塞体检 */ }
+
   return { ...report, animaticShots };
 }
 

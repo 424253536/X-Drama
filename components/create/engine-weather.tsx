@@ -20,8 +20,14 @@ const TYPE_LABEL: Record<string, string> = {
   exhausted: '余额/额度耗尽', auth_failed: '密钥失效', saturated: '上游饱和', rate_limited: '限流中',
 };
 
-/** 纯函数:状态 → 展示片段(可单测)。v12.161:引擎近10分钟失败 ≥3 也亮条。 */
-export function weatherSegments(alerts: Alert[], gateways: Gateway[], engines: Array<{ provider: string; recentFailures: number }> = []): string[] {
+/** 纯函数:状态 → 展示片段(可单测)。v12.161:引擎近10分钟失败 ≥3 也亮条。
+ *  v12.216:+能力边界提示(如「Kling 原生音效不可用」)—— 运营者开了不生效的开关时上下文亮条。 */
+export function weatherSegments(
+  alerts: Alert[],
+  gateways: Gateway[],
+  engines: Array<{ provider: string; recentFailures: number }> = [],
+  capabilityNotes: Array<{ text: string }> = [],
+): string[] {
   const segs: string[] = [];
   for (const a of alerts) {
     segs.push(`${PROVIDER_LABEL[a.provider] || a.provider} ${TYPE_LABEL[a.alertType] || a.alertType}`);
@@ -32,6 +38,9 @@ export function weatherSegments(alerts: Alert[], gateways: Gateway[], engines: A
   for (const e of engines) {
     if (e.recentFailures >= 3) segs.push(`${PROVIDER_LABEL[e.provider] || e.provider} 近10分钟失败 ${e.recentFailures} 次(不稳)`);
   }
+  for (const n of capabilityNotes) {
+    segs.push(`⚙️ ${n.text}`);
+  }
   return segs;
 }
 
@@ -41,7 +50,7 @@ export function EngineWeather() {
     try {
       const res = await fetch('/api/api-status');
       const data = await res.json();
-      setSegs(weatherSegments(data.alerts || [], data.gateways || [], data.engines || []));
+      setSegs(weatherSegments(data.alerts || [], data.gateways || [], data.engines || [], data.capabilityNotes || []));
     } catch { /* 拉不到就当晴天,不打扰 */ }
   }, []);
   useEffect(() => {
