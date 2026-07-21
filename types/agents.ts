@@ -298,20 +298,173 @@ export interface PipelineNodeData {
 // 导演审核
 export interface ReviewItem {
   shotNumber?: number;
-  targetRole: AgentRole;       // 需要返工的环节
+  /**
+   * 需要返工的环节。v12.225:放宽为 `AgentRole | string` —— LLM 复审路径直接吐字符串
+   * ('storyboard' / 'writer'),连续性标记也 push 裸串;下游用宽松比较,不做枚举收紧。
+   */
+  targetRole: AgentRole | string;
   issue: string;
   suggestion: string;
   severity: 'minor' | 'major' | 'critical';
+  /** v12.225:fallbackReview 与连续性标记会带阶段('script'|'video'|'editor'…) */
+  stage?: string;
+  /** v12.225:命中的评分维度('visualQuality'|'continuity'…) */
+  dimension?: string;
 }
 
+/**
+ * 导演复审结果。
+ *
+ * v12.225(神类拆分第一刀 · 消契约面 any):此前 `runDirectorReview`/`fallbackReview` 返回 `any`,
+ * 本接口与实现长期漂移。按实现**实测形状**校正(依据:并行侦察 + 对抗校验,逐字段有 file:line 证据):
+ *   - `projectId` 改可选 —— 编排器两条路径都不设,由 DB 层另行落库(原为必填,一补类型即 TS2741)
+ *   - `status` 补 `'passed'` —— LLM 路径与 fallback 都会写这个值
+ *   - 新增 `passed?` —— 门禁字段,被 orchestrator/create-pipeline/测试/review-node 消费
+ *   - 新增 `dimensions?` —— fallback 恒吐六维;LLM 路径可能缺,故可选
+ *   - 新增 `producerReports?` —— 实现内部追加(制片四报告);内联结构避免与 producer-enhance 循环依赖
+ */
 export interface DirectorReview {
   id: string;
-  projectId: string;
-  overallScore: number;        // 1-10
+  projectId?: string;
+  overallScore: number;        // 0-100(实测:fallback 40-90,LLM 0-100)
   summary: string;
   items: ReviewItem[];
-  status: 'pending' | 'accepted' | 'completed';
+  status: 'pending' | 'accepted' | 'completed' | 'passed';
   createdAt: string;
+  passed?: boolean;
+  dimensions?: Record<string, { score: number; comment: string }>;
+  producerReports?: {
+    continuityFlags: Array<{
+      shotNumber: number;
+      dimension: 'prop' | 'costume' | 'eyeline' | 'screen-direction' | 'time-of-day' | 'weather';
+      severity: 'critical' | 'major' | 'minor';
+      description: string;
+      fix: string;
+    }>;
+    assetLedger: {
+      entries: Array<{
+        shotNumber: number;
+        characterRef: 'missing' | 'draft' | 'approved';
+        sceneRef: 'missing' | 'draft' | 'approved';
+        storyboardImg: 'missing' | 'draft' | 'approved';
+        videoClip: 'missing' | 'draft' | 'approved';
+        dialogue: 'missing' | 'draft' | 'approved';
+        voiceover?: 'missing' | 'draft' | 'approved';
+        musicCue: 'missing' | 'draft' | 'approved';
+      }>;
+      totalShots: number;
+      missingCount: number;
+      draftCount: number;
+      approvedCount: number;
+      blockers: string[];
+    };
+    rhythmReport: {
+      genre: string;
+      averageShotLength: number;
+      variance: number;
+      benchmark: { min: number; max: number; ideal: number; label: string };
+      verdict: 'on-target' | 'too-fast' | 'too-slow' | 'monotonous' | 'chaotic';
+      warnings: string[];
+    };
+    runtimeReport: {
+      targetDurationSec: number;
+      actualDurationSec: number;
+      overrun: number;
+      actBreakdown: { act1: number; act2: number; act3: number };
+      idealBreakdown: { act1: number; act2: number; act3: number };
+      warnings: string[];
+    };
+    characterBibleSize: number;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v12.225 · Agent 契约类型(神类拆分第一刀:先把接口定死,实现再逐步搬离编排器)
+//
+// 病根(🔴-5):hybrid-orchestrator.ts 5471 行 / 113 处 any,其中 6 处在**公开方法签名**上 ——
+// 这是 agent 之间的契约面,一旦是 any,任何调用方拿到的都是无类型对象,重构无从谈起。
+// 下列类型由「并行侦察 + 对抗校验」得出:逐 return 分支穷尽 + 全仓消费点核对,
+// 原则**宁松勿紧**(目标零破坏,不是极致精确)—— 消费方实际访问但生产方不产的字段一律标可选。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 剪辑产物(runEditor 返回)。实测仅一个 return 出口,故全部必填。 */
+export interface EditResult {
+  timeline: Array<{
+    shotNumber?: number;
+    videoUrl: string;
+    duration: number;        // 会被高光引擎就地变速改写
+    baseDuration: number;    // 原始设计时长
+    transition: string;
+    effect: string;
+    emotion: string;
+    act: number;
+    dialogue: string;
+    speaker: string;
+    emotionTemperature: number;
+    tensionLevel: number;
+  }>;
+  totalDuration: number;
+  videoCount: number;
+  finalVideoUrl: string;     // 合成成功=/api/serve-file?path=…;三级兜底=首片 URL;无有效片=''
+  musicUrl: string;
+  voiceoverClips: Array<{ shotNumber: number; audioUrl: string }>;
+  /** 只回传 isHighlight===true 的子集 */
+  highlightAnalysis: Array<{
+    shotNumber: number;
+    score: number;
+    isHighlight: boolean;
+    reason: string;
+    editStrategy: { speedMultiplier: number; transition: string; transitionDuration: number };
+  }>;
+  audioWarnings: string[];
+  hasBgm: boolean;
+  hasVoiceover: boolean;
+  /** 内联 QualityReport 结构,避免把 quality-report 的动态 import 改成静态 */
+  qualityReport: {
+    totalEvents: number;
+    byKind: Record<string, number>;
+    affectedShots: number[];
+    degradedShots: number[];
+    healthScore: number;
+    summary: string;
+    shotReasons: Record<number, string[]>;
+  };
+}
+
+/**
+ * 角色设计产物(runCharacterDesigner 返回)。
+ * 生产方只产 character/prompt/imageUrl 三个字段,但 create-pipeline 未经 cast 就访问
+ * name/description/appearance(`c.character || c.name` 这类兜底链)—— 故标为可选,
+ * 运行时恒 undefined。漏了它们会直接 TS2339(对抗校验实测)。
+ */
+export interface CharacterDesignerResult {
+  character: string;
+  prompt: string;
+  imageUrl: string;          // http URL 或超时兜底的 data:image/svg+xml
+  name?: string;
+  description?: string;
+  appearance?: string;
+}
+
+/** 场景设计产物(runSceneDesigner 返回)。null 槽位已在实现内过滤,故全部必填。 */
+export interface SceneDesignerResult {
+  sceneId: string;
+  name: string;              // = 入参 scene.location,下游按它查场景
+  description: string;
+  imageUrl: string;
+}
+
+/** 人工闸门入参(waitForGate)。方法本身不读字段,只原样 spread 进 SSE 事件。 */
+export type GateData = Record<string, unknown>;
+
+/**
+ * 人工闸门放行结果。
+ * `editedData` 刻意保持 `any`:create-pipeline 把它直接赋给 `any[]` 变量,
+ * 换成 unknown 会 TS2322(unknown 不可赋给 any[])—— 对抗校验实测,勿收紧。
+ */
+export interface GateResult {
+  action: string;            // 运行时为 'continue' | 'edit';留 string 免调用方窄化
+  editedData?: any;
 }
 
 // 完整项目（扩展）

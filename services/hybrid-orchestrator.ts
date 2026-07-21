@@ -4,7 +4,9 @@ import { withVerticalHints } from '@/lib/vertical-composition';
 // v2.18.1: 复用 polish 那套 4 级 JSON fallback (LLM 对中文长文本经常返回非法 JSON)
 import { robustJsonParse } from '@/lib/polish-json';
 import {
-  Agent, AgentRole, DirectorPlan, Script, Storyboard, VideoClip, Character
+  Agent, AgentRole, DirectorPlan, Script, Storyboard, VideoClip, Character,
+  // v12.225 神类拆分第一刀:agent 契约面类型(消公开方法签名上的 any)
+  EditResult, DirectorReview, CharacterDesignerResult, SceneDesignerResult, GateData, GateResult,
 } from '@/types/agents';
 import { MinimaxService } from './minimax.service';
 import { VeoService, hasVeo } from './veo.service';
@@ -798,7 +800,7 @@ export class HybridOrchestrator {
   }
 
   // Wait for user at an intervention gate
-  async waitForGate(gateId: string, gateData: any): Promise<any> {
+  async waitForGate(gateId: string, gateData: GateData): Promise<GateResult> {
     this.emit('gate', { gateId, ...gateData });
     return new Promise((resolve) => {
       this.gateResolvers.set(gateId, resolve);
@@ -2267,7 +2269,7 @@ ${raw.slice(0, 2000)}
   // ══════════════════════════════════════
   // 角色设计师（Midjourney 三视图）
   // ══════════════════════════════════════
-  async runCharacterDesigner(characters: Character[]): Promise<any[]> {
+  async runCharacterDesigner(characters: Character[]): Promise<CharacterDesignerResult[]> {
     this.update(AgentRole.CHARACTER_DESIGNER, { status: 'working', currentTask: `设计 ${characters.length} 个角色三视图`, progress: 0 });
     this.emit('agentTalk', { role: AgentRole.CHARACTER_DESIGNER, text: '开始画角色三视图，正面侧面背面一个不少~ 🎨' });
 
@@ -2475,7 +2477,7 @@ ${raw.slice(0, 2000)}
   // ══════════════════════════════════════
   // 场景设计师（Midjourney，--sref 保持画风一致）
   // ══════════════════════════════════════
-  async runSceneDesigner(scenes: { id: string; description: string; location: string; visual?: any }[]): Promise<any[]> {
+  async runSceneDesigner(scenes: { id: string; description: string; location: string; visual?: unknown }[]): Promise<SceneDesignerResult[]> {
     // ═══ 限制场景数量（防止 15 个场景串行生成导致超长等待）═══
     const MAX_SCENES = 8;
     const trimmedScenes = scenes.length > MAX_SCENES
@@ -4161,7 +4163,7 @@ ${shots.map((s, i) => {
   // ══════════════════════════════════════
   // 剪辑师（专业节奏策略）
   // ══════════════════════════════════════
-  async runEditor(videos: VideoClip[], script: Script): Promise<any> {
+  async runEditor(videos: VideoClip[], script: Script): Promise<EditResult> {
     this.update(AgentRole.EDITOR, { status: 'working', currentTask: '分析镜头节奏，构建剪辑时间线', progress: 5 });
     this.emit('agentTalk', { role: AgentRole.EDITOR, text: '开始剪辑！先分析高光时刻，再智能编排节奏 ✂️🔥' });
 
@@ -5019,7 +5021,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
   // ══════════════════════════════════════
   // 导演审核（Claude LLM 100分制）
   // ══════════════════════════════════════
-  async runDirectorReview(script: Script, videos: VideoClip[], editResult?: any, storyboards?: Storyboard[]): Promise<any> {
+  async runDirectorReview(script: Script, videos: VideoClip[], editResult?: EditResult, storyboards?: Storyboard[]): Promise<DirectorReview> {
     // 制片人负责最终审核（替代原来的导演审核角色）
     this.update(AgentRole.PRODUCER, { status: 'thinking', currentTask: '100分制全面审核', progress: 10 });
     this.emit('agentTalk', { role: AgentRole.PRODUCER, text: '让我仔细看看成片效果...🧐' });
@@ -5140,7 +5142,7 @@ ${characterBibleBlock}${producerContext}
     return review;
   }
 
-  private fallbackReview(videos: VideoClip[]): any {
+  private fallbackReview(videos: VideoClip[]): DirectorReview {
     const failed = videos.filter(v => !v.videoUrl || v.videoUrl.startsWith('data:'));
     const total = videos.length || 1;
     const failRate = failed.length / total;
