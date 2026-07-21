@@ -17,6 +17,14 @@ import { buildColorGradeFilter, detectGradeGenre } from '@/lib/color-grade';
 // v12.205:成片质量参数(env 可调)。CRF 23→20 减双重编码损耗(暗部/边缘细节);unsharp 轻锐化补 AI 视频糊边。
 const crfValue = (): string => process.env.CRF_QUALITY || '20';
 const unsharpFilter = (): string => process.env.UNSHARP_DISABLE === '1' ? '' : 'unsharp=luma_msize_x=3:luma_msize_y=3:luma_amount=0.3';
+// v12.222 合规:env 门控的「AI 生成」角标(默认关;出海/合规场景 AI_WATERMARK=1 开)。
+// 右上角半透明标签,drawtext 用 ASCII 文本(默认 AI-GENERATED,可 AI_WATERMARK_TEXT 覆盖)——
+// 免 CJK 字体路径依赖,跨平台(darwin/Linux)稳。清理引号/冒号/反斜杠防 filtergraph 注入。
+const aiWatermarkFilter = (): string => {
+  if (process.env.AI_WATERMARK !== '1') return '';
+  const txt = (process.env.AI_WATERMARK_TEXT || 'AI-GENERATED').replace(/[\\:'%]/g, '').slice(0, 32);
+  return `drawtext=text='${txt}':fontcolor=white@0.75:fontsize=h/32:x=w-tw-14:y=14:box=1:boxcolor=black@0.35:boxborderw=6`;
+};
 import fs from 'fs';
 import { audioUrlLoadKind } from '@/lib/audio-url';
 import { impactSfxNode } from '@/lib/impact-sfx'; // v12.13.1 打击音效程序化合成
@@ -990,7 +998,8 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       const trimTo0 = Math.min(durations[0], sourceDurations[0]);
       const _grade1 = buildColorGradeFilter(detectGradeGenre(options.editStyle));
       const _us1 = unsharpFilter();
-      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us1 ? ',' + _us1 : ''}${_grade1 ? ',' + _grade1 : ''}`;
+      const _aiwm1 = aiWatermarkFilter();
+      let videoFilter = `[0:v]trim=0:${trimTo0.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us1 ? ',' + _us1 : ''}${_grade1 ? ',' + _grade1 : ''}${_aiwm1 ? ',' + _aiwm1 : ''}`;
       if (speed !== 1.0 && speed > 0) {
         const pts = 1.0 / speed;
         {
@@ -1099,7 +1108,8 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       // v12.13.0:按设计时长真裁切源片(trim=0:T + 重置时间戳)—— 杜绝 8s 源整段流出,快切节奏落地。
       const trimTo = Math.min(durations[i], sourceDurations[i]);
       const _us = unsharpFilter();
-      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us ? ',' + _us : ''}${_grade ? ',' + _grade : ''}`;
+      const _aiwm = aiWatermarkFilter();
+      let videoFilter = `[${i}:v]trim=0:${trimTo.toFixed(2)},setpts=PTS-STARTPTS,${canvasFit},fps=24,setsar=1${_us ? ',' + _us : ''}${_grade ? ',' + _grade : ''}${_aiwm ? ',' + _aiwm : ''}`;
 
       // 高光变速：setpts 调整视频播放速度（<1 = 加速, >1 = 减速）
       if (speed !== 1.0 && speed > 0) {

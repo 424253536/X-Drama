@@ -401,6 +401,8 @@ export interface Translations {
     dramaPackageErrPrefix: string;
     dramaPackageNetworkErr: string;
     dramaPackageViewVideo: string;
+    dramaPackageAiDeclaration: string;
+    dramaPackageAiRequiredHint: string;
   };
   providerHealth: Record<string, string>;
 }
@@ -820,6 +822,8 @@ const zhCN: Translations = {
       dramaPackageErrPrefix: "获取失败:",
       dramaPackageNetworkErr: "网络错误",
       dramaPackageViewVideo: "查看视频",
+      dramaPackageAiDeclaration: "我确认本片由 AI 生成 / 深度合成技术制作,导出时将随包声明",
+      dramaPackageAiRequiredHint: "请先勾选 AI 声明",
     },
   providerHealth: {
     ok: "正常",
@@ -1251,6 +1255,8 @@ const en: Translations = {
       dramaPackageErrPrefix: "Fetch failed: ",
       dramaPackageNetworkErr: "Network error",
       dramaPackageViewVideo: "View video",
+      dramaPackageAiDeclaration: "I confirm this film is AI-generated / synthetic media; the declaration ships with the package",
+      dramaPackageAiRequiredHint: "Please confirm the AI declaration first",
     },
   providerHealth: {
     ok: "Healthy",
@@ -1656,6 +1662,8 @@ const zhTW: Translations = {
       dramaPackageErrPrefix: "取得失敗:",
       dramaPackageNetworkErr: "網路錯誤",
       dramaPackageViewVideo: "查看影片",
+      dramaPackageAiDeclaration: "我確認本片由 AI 生成 / 深度合成技術製作,匯出時將隨包聲明",
+      dramaPackageAiRequiredHint: "請先勾選 AI 聲明",
     },
   providerHealth: {
     ok: "正常",
@@ -2061,6 +2069,8 @@ const ja: Translations = {
       dramaPackageErrPrefix: "取得失敗:",
       dramaPackageNetworkErr: "ネットワークエラー",
       dramaPackageViewVideo: "動画を見る",
+      dramaPackageAiDeclaration: "本作品が AI 生成 / 深度合成技術で制作されたことを確認します(パッケージに声明を同梱)",
+      dramaPackageAiRequiredHint: "先に AI 声明にチェックしてください",
     },
   providerHealth: {
     ok: "正常",
@@ -2547,6 +2557,8 @@ const ko: Translations = {
     dramaPackageErrPrefix: "가져오기 실패: ",
     dramaPackageNetworkErr: "네트워크 오류",
     dramaPackageViewVideo: "영상 보기",
+    dramaPackageAiDeclaration: "본 작품이 AI 생성 / 딥합성 기술로 제작되었음을 확인합니다(패키지에 선언 포함)",
+    dramaPackageAiRequiredHint: "먼저 AI 선언에 체크하세요",
   },
   "providerHealth": {
     "ok": "정상",
@@ -3030,6 +3042,8 @@ const ru: Translations = {
     dramaPackageErrPrefix: "Ошибка получения: ",
     dramaPackageNetworkErr: "Ошибка сети",
     dramaPackageViewVideo: "Смотреть видео",
+    dramaPackageAiDeclaration: "Я подтверждаю, что этот фильм создан ИИ / синтетическими медиа; декларация войдёт в пакет",
+    dramaPackageAiRequiredHint: "Сначала подтвердите декларацию об ИИ",
   },
   "providerHealth": {
     "ok": "В норме",

@@ -69,7 +69,9 @@ export function createDouyinAdapter(deps: DouyinDeps = {}): PublishAdapter {
         // 步骤 2:创建投稿
         const crRes = await fetchImpl(`${CREATE_URL}?open_id=${encodeURIComponent(openId)}`, {
           method: 'POST', headers: { 'access-token': token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ video_id: videoId, text: (pkg.title || '').slice(0, 55) }),
+          // v12.222 合规:强制注入 AI 生成标识(《互联网信息服务深度合成管理规定》第17条)。
+          // 本平台成片皆 AIGC,create_video 恒带 aigc_info 声明,不给运营者「忘标」的机会。
+          body: JSON.stringify({ video_id: videoId, text: (pkg.title || '').slice(0, 55), aigc_info: { created_by_ai: true } }),
         });
         const crJson: any = await crRes.json();
         const itemId = crJson?.data?.item_id;

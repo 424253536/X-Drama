@@ -28,6 +28,8 @@ export function DramaPackageButton({ seriesId }: Props) {
   const [data, setData] = useState<DramaPackageResult | null>(null);
   const [errMsg, setErrMsg] = useState('');
   const [open, setOpen] = useState(false);
+  // v12.222 合规:出海打包前必须确认 AI 声明(未勾选禁止拉取/导出),请求随带 aiAck=1。
+  const [aiAck, setAiAck] = useState(false);
 
   const pricingMap = (data?.pricing ?? []).reduce<Record<number, DramaPricing>>((acc, p) => {
     acc[p.episodeNumber] = p;
@@ -36,10 +38,11 @@ export function DramaPackageButton({ seriesId }: Props) {
 
   const fetch_ = async () => {
     if (state === 'loading') return;
+    if (!aiAck) { setState('error'); setErrMsg(t.seriesDetail.dramaPackageAiRequiredHint); return; }
     setState('loading');
     setErrMsg('');
     try {
-      const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/drama-package`);
+      const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/drama-package?aiAck=1`);
       const body = await res.json();
       if (!res.ok) { setState('error'); setErrMsg(body?.error || `HTTP ${res.status}`); return; }
       setData(body as DramaPackageResult);
@@ -64,10 +67,17 @@ export function DramaPackageButton({ seriesId }: Props) {
 
   return (
     <>
+      {/* v12.222 合规:AI 声明勾选(未勾选禁止打包/导出) */}
+      <label className="flex items-start gap-1.5 text-[11px] text-gray-400 cursor-pointer leading-snug mb-1.5 max-w-md">
+        <input type="checkbox" checked={aiAck} onChange={(e) => setAiAck(e.target.checked)} className="mt-0.5 accent-amber-400" />
+        <span>{t.seriesDetail.dramaPackageAiDeclaration}</span>
+      </label>
+
       {/* 入口按钮 */}
       <button
         onClick={() => { if (state === 'done' && data) { setOpen(true); } else { void fetch_(); } }}
-        disabled={state === 'loading'}
+        disabled={state === 'loading' || (!aiAck && !(state === 'done' && !!data))}
+        title={!aiAck ? t.seriesDetail.dramaPackageAiRequiredHint : t.seriesDetail.dramaPackageBtn}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-gray-200 text-xs hover:text-white disabled:opacity-40"
       >
         {state === 'loading'

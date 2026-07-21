@@ -37,11 +37,19 @@ export function buildDramaPackage(input: {
     },
     episodes: eps,
     pricing: suggestPricing(eps, input.freeCount ?? 3),
+    // v12.222 合规:AI 生成声明从「文字提示」升级为包内**结构化强制字段** ——
+    // 全片由 AIGC/深度合成技术制作,导出即随包携带声明,平台端强制勾选时有据可依。
+    aigcInfo: {
+      generatedByAI: true,
+      mandatory: true,
+      declaration: '本作品由人工智能生成 / 深度合成技术制作(AI-generated / synthetic media)。',
+      note: '在 Drama Center 提交审核时,务必勾选「AI-generated content」声明;多国平台与《互联网信息服务深度合成管理规定》均要求显著标识。',
+    },
     uploadGuide: [
       '1. Drama Center 后台 → Content → Create Series,粘贴系列标题/语言/封面',
       '2. 逐集上传 episodes[].videoUrl(集号即顺序),粘贴各集标题',
       '3. Monetization 按 pricing 建议设免费集与 coins 档位',
-      '4. 提交审核(AI 内容需勾选 AI-generated 声明)',
+      '4. ⚠️ 必做:提交审核时勾选「AI-generated content」声明(本片为 AIGC,合规强制)',
     ],
   };
 }

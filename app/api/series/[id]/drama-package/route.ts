@@ -22,6 +22,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const payload = getUserFromRequest(request);
   if (!payload?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
+
+  // v12.222 合规:导出前必须显式确认 AI 声明(前端勾选框 → aiAck=1)。
+  // 未确认 → 422,不给「忘标 AI」的机会;全片皆 AIGC,声明是硬门槛而非可选提示。
+  const aiAck = new URL(request.url).searchParams.get('aiAck');
+  if (aiAck !== '1' && aiAck !== 'true') {
+    return NextResponse.json({ error: 'AI 声明未确认:出海打包需先勾选「本片由 AI 生成」声明(aiAck=1)', code: 'ai_declaration_required' }, { status: 422 });
+  }
   const eps = await listSeriesEpisodesFull(id, payload.sub);
   if (eps.length === 0) return NextResponse.json({ error: '系列无剧集(或非本人)' }, { status: 404 });
 
