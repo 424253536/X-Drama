@@ -15,7 +15,7 @@ npm run dev                       # http://localhost:3000
 Run the test + typecheck loop before opening a PR:
 
 ```bash
-npm run test         # vitest, 2800+ tests
+npm run test         # vitest, 3000+ tests
 npm run typecheck    # tsc --noEmit, must be 0 errors
 ```
 
@@ -40,7 +40,7 @@ Look for issues tagged `good first issue` or `help wanted`. The current sprint r
 ## Pull request checklist
 
 - [ ] Branch from `main`, with a descriptive name (`feat/cameo-bible-persistence`, `fix/ttspipeline-empty-text`)
-- [ ] Tests pass: `npm test` (2800+ green)
+- [ ] Tests pass: `npm test` (3000+ green)
 - [ ] Typecheck clean: `npm run typecheck` (0 errors)
 - [ ] Self-contained — no leftover `console.log`, no commented-out code, no `.env.local` changes
 - [ ] If you touched a service in `services/`, add or update at least one integration test in `tests/`

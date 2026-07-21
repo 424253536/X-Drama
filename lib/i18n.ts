@@ -624,7 +624,7 @@ const zhCN: Translations = {
     moreTitle: '还有其他问题？',
     moreDesc: '我们的团队随时为你解答疑问',
     contactSupport: '联系支持团队',
-    alertPayment: '支付功能即将上线，敬请期待！',
+    alertPayment: '支付尚未接入，当前为免费 / 自托管版本。',
   },
   help: {
     examples: '示例作品',
@@ -643,7 +643,7 @@ const zhCN: Translations = {
       { q: '支持哪些视频生成引擎？', a: '我们支持 Minimax、Vidu 和可灵 AI 等多个视频生成引擎，你可以根据需求选择最适合的引擎。' },
       { q: '生成一个项目需要多长时间？', a: '通常需要 5-15 分钟，具体时间取决于项目复杂度和所选的视频生成引擎。' },
       { q: '可以编辑 AI 生成的内容吗？', a: '是的，你可以编辑剧本、调整角色设计、修改分镜图，完全掌控创作过程。' },
-      { q: '生成的作品可以商用吗？', a: '专业版和企业版用户可以将作品用于商业用途。免费版仅供个人学习使用。' },
+      { q: '生成的作品可以商用吗？', a: '生成素材的版权归属各底层生成引擎(Kling / MiniMax 等),是否可商用取决于各引擎的服务条款,请自行核对。青枫仅提供多智能体编排与后期编辑工具,不对生成素材的商用权利作担保。' },
       { q: '如何导出我的作品？', a: '在项目详情页点击「下载」按钮，可以导出视频、图片和剧本等所有素材。' },
     ],
     moreTitle: '还有其他问题？',
@@ -1048,14 +1048,14 @@ const en: Translations = {
     faq: [
       { q: 'What are the limits of the Free plan?', a: 'The Free plan allows 3 projects per month, up to 5 characters in the library, 720p video export, and includes a QingFeng watermark. Best for individual trials.' },
       { q: 'Can I use new features right after upgrading?', a: 'Yes. Once payment succeeds, the corresponding plan benefits activate immediately — no review wait.' },
-      { q: 'What does the Pro commercial license cover?', a: "The Pro commercial license lets you use content generated with QingFeng for commercial purposes — ads, branding, film distribution and more — but does not include rights to retrain the source models." },
+      { q: 'Can I use generated content commercially?', a: "Copyright of generated assets belongs to the underlying engines (Kling, MiniMax, etc.). Whether you may use them commercially depends on each engine's terms of service — please verify them yourself. QingFeng only provides multi-agent orchestration and post-production tooling; it does not grant or guarantee commercial rights over generated content." },
       { q: 'How does Enterprise differ from Pro?', a: 'Enterprise supports self-hosting — deploying the full AI system on your own private servers — plus custom AI-agent development, SLA guarantees, and a dedicated customer success manager.' },
       { q: 'Can I cancel my subscription anytime?', a: 'Yes. You can cancel anytime in account settings. After canceling, you keep full access until the end of the current billing cycle.' },
     ],
     moreTitle: 'Still have questions?',
     moreDesc: 'Our team is always here to help',
     contactSupport: 'Contact Support',
-    alertPayment: 'Payments are coming soon — stay tuned!',
+    alertPayment: 'Payments are not yet integrated — this is currently free / self-hosted.',
   },
   help: {
     examples: 'Examples',
@@ -1460,7 +1460,7 @@ const zhTW: Translations = {
     moreTitle: '還有其他問題？',
     moreDesc: '我們的團隊隨時為你解答疑問',
     contactSupport: '聯絡支援團隊',
-    alertPayment: '付款功能即將上線，敬請期待！',
+    alertPayment: '付款尚未接入，目前為免費 / 自架版本。',
   },
   help: {
     examples: '範例作品',
@@ -1479,7 +1479,7 @@ const zhTW: Translations = {
       { q: '支援哪些影片生成引擎？', a: '我們支援 Minimax、Vidu 和可靈 AI 等多個影片生成引擎，你可以依需求選擇最適合的引擎。' },
       { q: '生成一個專案需要多長時間？', a: '通常需要 5-15 分鐘，具體時間取決於專案複雜度和所選的影片生成引擎。' },
       { q: '可以編輯 AI 生成的內容嗎？', a: '是的，你可以編輯腳本、調整角色設計、修改分鏡圖，完全掌控創作過程。' },
-      { q: '生成的作品可以商用嗎？', a: '專業版和企業版使用者可以將作品用於商業用途。免費版僅供個人學習使用。' },
+      { q: '生成的作品可以商用嗎？', a: '生成素材的版權歸屬各底層生成引擎(Kling / MiniMax 等),是否可商用取決於各引擎的服務條款,請自行核對。青楓僅提供多智能體編排與後期編輯工具,不對生成素材的商用權利作擔保。' },
       { q: '如何匯出我的作品？', a: '在專案詳情頁點擊「下載」按鈕，可以匯出影片、圖片和腳本等所有素材。' },
     ],
     moreTitle: '還有其他問題？',
@@ -1858,14 +1858,14 @@ const ja: Translations = {
     faq: [
       { q: '無料プランの制限は？', a: '無料プランは月に3プロジェクト、キャラクターライブラリは最大5体、動画の書き出しは720p、青楓のウォーターマーク付きです。個人のお試しに最適です。' },
       { q: 'アップグレード後すぐ新機能を使えますか？', a: 'はい。支払いが完了すると、該当プランの特典がすぐに有効になります。審査待ちはありません。' },
-      { q: 'プロ版の商用ライセンスの範囲は？', a: 'プロ版の商用ライセンスでは、青楓で生成したコンテンツを広告・ブランディング・映像配信などの商用目的に利用できます。ただし元モデルの再学習権は含まれません。' },
+      { q: '生成したコンテンツは商用利用できますか？', a: '生成された素材の著作権は各基盤エンジン(Kling / MiniMax 等)に帰属します。商用利用の可否は各エンジンの利用規約によりますので、必ずご自身でご確認ください。青楓はマルチエージェントの編集・後処理ツールを提供するのみで、生成物の商用権利を保証するものではありません。' },
       { q: '企業版とプロ版の主な違いは？', a: '企業版はセルフホストに対応し、AIシステム一式を自社のプライベートサーバーに導入できます。さらにカスタムAIエージェント開発、SLA保証、専任のカスタマーサクセスマネージャーが付きます。' },
       { q: 'いつでも解約できますか？', a: 'はい。アカウント設定からいつでも解約できます。解約後も、現在の請求期間の終了までは全機能を利用できます。' },
     ],
     moreTitle: '他にご質問は？',
     moreDesc: '私たちのチームがいつでもお答えします',
     contactSupport: 'サポートに連絡',
-    alertPayment: '決済機能は近日公開予定です。お楽しみに！',
+    alertPayment: '決済は未導入です。現在は無料 / セルフホスト版です。',
   },
   help: {
     examples: 'サンプル作品',
@@ -1884,7 +1884,7 @@ const ja: Translations = {
       { q: '対応している動画エンジンは？', a: 'Minimax、Vidu、可灵 AI など複数の動画エンジンに対応しています。ニーズに合わせて選べます。' },
       { q: 'プロジェクト生成にかかる時間は？', a: '通常5〜15分です。プロジェクトの複雑さと選んだ動画エンジンによって変わります。' },
       { q: 'AIが生成した内容を編集できますか？', a: 'はい。脚本の編集、キャラクターデザインの調整、絵コンテの修正ができ、制作を完全にコントロールできます。' },
-      { q: '生成した作品は商用利用できますか？', a: 'プロ版・企業版のユーザーは商用利用できます。無料版は個人学習用途のみです。' },
+      { q: '生成した作品は商用利用できますか？', a: '生成物の著作権は各生成エンジンに帰属します。商用利用の可否は各エンジンの規約をご確認ください。青楓は編集・後処理ツールを提供するのみです。' },
       { q: '作品はどう書き出しますか？', a: 'プロジェクト詳細ページの「ダウンロード」をクリックすると、動画・画像・脚本などすべての素材を書き出せます。' },
     ],
     moreTitle: '他にご質問は？',
@@ -2336,7 +2336,7 @@ const ko: Translations = {
     "moreTitle": "더 궁금한 점이 있나요?",
     "moreDesc": "팀이 언제든 도움을 드립니다",
     "contactSupport": "고객 지원 문의",
-    "alertPayment": "결제 기능이 곧 출시됩니다 — 기대해 주세요!"
+    "alertPayment": "결제는 아직 연동되지 않았습니다 — 현재 무료 / 셀프 호스팅입니다."
   },
   "help": {
     "examples": "예시 작품",
@@ -2369,7 +2369,7 @@ const ko: Translations = {
         "a": "네 — 스크립트 편집, 캐릭터 디자인 조정, 스토리보드 수정이 가능합니다. 창작 과정을 완전히 제어할 수 있습니다."
       }, {
         "q": "작품을 상업적으로 사용할 수 있나요?",
-        "a": "Pro 및 Enterprise 사용자는 작품을 상업적으로 사용할 수 있습니다. 무료 플랜은 개인 학습용입니다."
+        "a": "생성된 자산의 저작권은 각 기반 엔진(Kling / MiniMax 등)에 귀속됩니다. 상업적 사용 가능 여부는 각 엔진의 이용약관에 따르므로 반드시 직접 확인하세요. QingFeng은 멀티 에이전트 편집·후처리 도구만 제공하며 생성물의 상업적 권리를 보장하지 않습니다."
       }, {
         "q": "작품을 어떻게 내보내나요?",
         "a": "프로젝트 상세 페이지에서 \"다운로드\"를 클릭하면 비디오, 이미지, 스크립트 및 모든 에셋을 내보낼 수 있습니다."
@@ -2807,8 +2807,8 @@ const ru: Translations = {
         "q": "Могу ли я использовать новые функции сразу после перехода на платный план?",
         "a": "Да. После успешной оплаты преимущества соответствующего плана активируются немедленно — проверка не требуется."
       }, {
-        "q": "Что покрывает коммерческая лицензия Pro?",
-        "a": "Коммерческая лицензия Pro позволяет использовать контент, созданный с помощью QingFeng, в коммерческих целях — реклама, брендинг, дистрибуция фильмов и т. д. — но не включает права на переобучение исходных моделей."
+        "q": "Можно ли использовать сгенерированный контент в коммерческих целях?",
+        "a": "Авторские права на сгенерированные материалы принадлежат базовым движкам (Kling, MiniMax и др.). Возможность коммерческого использования зависит от условий каждого движка — проверяйте их самостоятельно. QingFeng предоставляет только инструменты оркестрации и постобработки и не гарантирует коммерческих прав на контент."
       }, {
         "q": "Чем Enterprise отличается от Pro?",
         "a": "Enterprise поддерживает self-hosting — развёртывание полной AI-системы на ваших серверах — плюс разработку кастомных AI-агентов, гарантии SLA и выделенного менеджера по работе с клиентами."
@@ -2819,7 +2819,7 @@ const ru: Translations = {
     "moreTitle": "Остались вопросы?",
     "moreDesc": "Наша команда всегда готова помочь",
     "contactSupport": "Связаться с поддержкой",
-    "alertPayment": "Оплата скоро появится — следите за обновлениями!"
+    "alertPayment": "Оплата ещё не подключена — сейчас это бесплатная / самостоятельно размещаемая версия."
   },
   "help": {
     "examples": "Примеры",
@@ -2852,7 +2852,7 @@ const ru: Translations = {
         "a": "Да — вы можете редактировать сценарий, дизайн персонажей и раскадровку, сохраняя полный контроль."
       }, {
         "q": "Можно ли использовать работы в коммерческих целях?",
-        "a": "Пользователи планов Pro и Enterprise могут использовать работы коммерчески. Бесплатный план — только для личного обучения."
+        "a": "Авторские права на контент принадлежат генерирующим движкам. Проверяйте условия каждого движка для коммерческого использования; QingFeng предоставляет только инструменты редактирования и постобработки."
       }, {
         "q": "Как экспортировать работу?",
         "a": "На странице проекта нажмите «Скачать» — будут экспортированы видео, изображения, сценарий и все ресурсы."
