@@ -22,17 +22,25 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
   const [cloned, setCloned] = useState<Array<{ id: string; label: string }>>([]);
   const [cloneName, setCloneName] = useState('');
   const [cloning, setCloning] = useState(false);
+  // v12.221 合规授权门:克隆他人声音须先勾选授权声明 + 选用途,否则禁止提交。
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [clonePurpose, setClonePurpose] = useState('drama_production');
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const doClone = useCallback(async () => {
     const file = fileRef.current?.files?.[0];
     if (!file) { setSavedMsg('请先选择音样文件(WAV/MP3,≥10s、≤5MB)'); return; }
     if (file.size > 5 * 1024 * 1024) { setSavedMsg('音样需 ≤5MB'); return; }
+    if (!consentChecked) { setSavedMsg('请先勾选授权声明:须确认已获被克隆人授权'); return; }
     setCloning(true); setSavedMsg(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
       if (cloneName.trim()) fd.append('name', cloneName.trim());
+      // v12.221:授权凭证随请求提交,后端落 consent_log 后才执行克隆。
+      fd.append('consent_authorized', 'true');
+      fd.append('consent_purpose', clonePurpose);
+      fd.append('consent_owner_declaration', '我确认已获被克隆人授权,仅用于合法用途');
       const res = await fetch('/api/voice-clone', { method: 'POST', body: fd });
       const b = await res.json();
       if (!res.ok) throw new Error(b.error || '克隆失败');
@@ -42,7 +50,7 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
       setCloneName('');
     } catch (e) { setSavedMsg(e instanceof Error ? e.message : '克隆失败'); }
     finally { setCloning(false); }
-  }, [cloneName]);
+  }, [cloneName, consentChecked, clonePurpose]);
 
   useEffect(() => {
     let alive = true;
@@ -122,16 +130,34 @@ export function VoiceShelf({ projectId, characters }: { projectId: string; chara
           </div>
 
           {/* v12.208:音色克隆 —— 上传音样(≥10s 干净人声)克隆专属音色,voiceId 进上方下拉可绑定角色 */}
+          {/* v12.221:合规授权门 —— 克隆他人声音属深度合成,须勾选授权声明 + 选用途才能提交 */}
           <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5">
             <div className="text-[10px] text-white/45">🎤 克隆专属音色(上传 ≥10s 干净人声,WAV/MP3 ≤5MB)</div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <input ref={fileRef} type="file" accept="audio/*" className="text-[10px] text-white/60 max-w-[150px]" />
               <input value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="音色名(如 老陈)"
                 className="bg-white/[0.04] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white/80 outline-none w-[100px]" />
-              <button onClick={doClone} disabled={cloning} className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-50">
+              <select value={clonePurpose} onChange={(e) => setClonePurpose(e.target.value)}
+                className="bg-white/[0.04] border border-white/10 rounded px-1.5 py-1 text-[10px] text-white/80 outline-none" title="克隆用途(合规记录)">
+                <option value="drama_production">用途:短剧配音</option>
+                <option value="ad_production">用途:广告配音</option>
+                <option value="personal_project">用途:个人项目</option>
+                <option value="other">用途:其他</option>
+              </select>
+            </div>
+            <label className="flex items-start gap-1.5 text-[10px] text-white/55 cursor-pointer leading-snug">
+              <input type="checkbox" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)}
+                className="mt-0.5 accent-amber-400" />
+              <span>我确认<b className="text-white/75">已获被克隆人授权</b>,仅用于合法用途,并已知悉深度合成合规要求(《深度合成管理规定》)。</span>
+            </label>
+            <div className="flex items-center gap-1.5">
+              <button onClick={doClone} disabled={cloning || !consentChecked}
+                className="cinema-btn !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 disabled:opacity-40"
+                title={consentChecked ? '克隆音色' : '请先勾选授权声明'}>
                 {cloning ? <CircleNotch className="w-3 h-3 animate-spin" /> : <UploadSimple className="w-3 h-3" />}
                 {cloning ? '克隆中…(约10-30s)' : '克隆音色'}
               </button>
+              {!consentChecked && <span className="text-[9px] text-amber-300/70">← 勾选授权后可克隆</span>}
             </div>
           </div>
         </div>

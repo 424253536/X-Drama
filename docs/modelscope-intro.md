@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/ChrisChen667788/wind-comic/main/assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.219</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.220</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -19,7 +19,7 @@
   <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ChrisChen667788/wind-comic/ci.yml?branch=main&label=CI&logo=github" alt="CI" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/stargazers"><img src="https://img.shields.io/github/stars/ChrisChen667788/wind-comic?style=social" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/Tests-3043%2F3043-2ea44f"  alt="3043 tests passing" />
+  <img src="https://img.shields.io/badge/Tests-3088%2F3088-2ea44f"  alt="3088 tests passing" />
   <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
 </p>
@@ -220,8 +220,8 @@ Beyond reference image hacks, we run each character's turnaround sheet through V
 - **Real-time multiplayer**: Yjs awareness paints other users' cursors live, presence avatars show which tab each collaborator is in, Y.Map locks prevent two people editing the same segment
 - **Project invites** with viewer/commenter/editor role gating
 
-### 7. **Lipsync that actually works**
-Kling lip-sync API for talking heads, with Sync.so and Hailuo as auto-fallback. The pipeline strips dialogue from the prompt so the model only generates lip *motion*; we then sync the lips to the TTS audio in post.
+### 7. **Lipsync that actually works** (zh / en; needs a public video URL + audio ≥ 2s)
+Kling lip-sync API for talking heads, with Sync.so and Hailuo as auto-fallback. The pipeline strips dialogue from the prompt so the model only generates lip *motion*; we then sync the lips to the TTS audio in post. **Real-machine limits:** dialogue audio must be ≥ 2 seconds and the source video must be reachable at a public URL; ja/ko/ru currently degrade to no lip-sync (honest skip, surfaced in the engine-weather panel).
 
 ### 8. **Conflict / reversal / cliffhanger pacing audit** (v2.21 P1.1)
 After Writer finishes, we score each shot 0-10 on a Chinese-conflict-word dictionary + detect emotional polarity reversals + cliffhanger keywords. If a vertical drama has <2 reversals or shot-1 conflict <5, you see a warning in the dedicated Pacing tab with actionable suggestions.
@@ -261,8 +261,8 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 | Royalty-free AI BGM per story | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MiniMax music-2.6, style-prompt → project BGM** |
 | Per-shot auditable decision log (engine/cost/consistency) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ decision log + cost drill-down + quality score** |
 | Emotion-aware TTS (mapped to native enum) | ⚠️ | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ | **✅ CN emotion → MiniMax speech-2.8-hd enum, live A/B verified** |
-| Lip-sync wired into pipeline (auto per dialogue shot) | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ❌ | **✅ Kling lip-sync, honest skip on non-face** |
-| Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌ | **✅ 5 languages, ~400 keys, no hardcoded strings** |
+| Lip-sync wired into pipeline (auto per dialogue shot) | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ❌ | **⚠️ Kling lip-sync — zh/en only (needs public video URL + audio ≥2s); ja/ko/ru degrade to none; honest skip on non-face** |
+| Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌ | **✅ 5-language core UI, ~400 keys (component-level string cleanup ongoing)** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
 

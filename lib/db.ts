@@ -325,6 +325,21 @@ CREATE TABLE IF NOT EXISTS ui_events (
 );
 CREATE INDEX IF NOT EXISTS idx_ui_events_event ON ui_events(event, created_at);
 
+-- v12.221(合规底线):声音克隆等深度合成操作的**授权同意日志**(append-only,双驱动)。
+-- 触《深度合成管理规定》第14条 / GDPR 第9条:克隆他人声音须留可追溯的授权凭证。
+-- who(user_id)/what(action)/why(purpose)/声明(owner_declaration)/from(ip)/when(created_at)。
+CREATE TABLE IF NOT EXISTS consent_log (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  owner_declaration TEXT NOT NULL,
+  ip TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_consent_log_user ON consent_log(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_consent_log_action ON consent_log(action, created_at);
+
 -- v11.0.3: 任务进度事件 append-only 表 —— 取代 pipeline_jobs.progress_log 的
 -- 读改写(非原子,多副本/PG 下有 lost update;部署文档限位 #2)。INSERT 天然原子。
 -- 排序 (at, ord):job 同一时刻只被一个 worker 认领,进程内 ord 单调递增即可全序。
