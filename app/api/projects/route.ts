@@ -4,14 +4,10 @@ import { getUserFromRequest } from '../auth/lib';
 import { createProject } from '@/lib/repos/project-repo';
 
 export async function GET(request: Request) {
+  // v12.218(安全止血):删「回落 DB 第一个用户」—— 匿名即得他人项目列表。无 token → 401。
   const payload = getUserFromRequest(request);
-  let userId = payload?.sub;
-
-  // If no auth, fall back to the first user in the DB (single-user / demo mode)
-  if (!userId) {
-    const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = firstUser?.id || 'demo-user';
-  }
+  if (!payload?.sub) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  const userId = payload.sub;
 
   // 一次查询: 项目本表 + 最新 script asset 的 data (子查询).
   // 这样列表页就能拿到 latestPolish 渲染就绪度徽章, 而不必每张卡再发一次请求。

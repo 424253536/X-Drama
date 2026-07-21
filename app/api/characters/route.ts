@@ -6,14 +6,10 @@ import { listCharactersByUser, createCharacter } from '@/lib/repos/character-rep
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
+  // v12.218(安全止血):删回落首用户 —— 匿名即得他人角色库。无 token → 401。
   const payload = getUserFromRequest(request);
-  let userId = payload?.sub;
-
-  // If no auth, fall back to the first user in the DB (single-user / demo mode)
-  if (!userId) {
-    const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = firstUser?.id || 'demo-user';
-  }
+  if (!payload?.sub) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  const userId = payload.sub;
 
   const rows = await listCharactersByUser(userId);
 
@@ -35,14 +31,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // v12.218:删回落首用户,无 token → 401
   const payload = getUserFromRequest(request);
-  let userId = payload?.sub;
-
-  // Fall back to first DB user in demo mode
-  if (!userId) {
-    const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = firstUser?.id || 'demo-user';
-  }
+  if (!payload?.sub) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  const userId = payload.sub;
 
   const body = await request.json().catch(() => ({}));
   const { name, description, appearance, visualTags, imageUrls, styleKeywords } = body;

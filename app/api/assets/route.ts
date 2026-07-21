@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { normalizeAssetRow } from '@/lib/asset-storage';
 import { getUserFromRequest } from '../auth/lib';
+import { requireProjectAccess } from '@/lib/auth-guard';
 import { getAsset, deleteAsset } from '@/lib/repos/asset-repo';
 import { getOwnedProject } from '@/lib/repos/project-repo';
 
@@ -12,6 +13,12 @@ export async function GET(request: NextRequest) {
   const projectId = request.nextUrl.searchParams.get('projectId');
   const confirmed = request.nextUrl.searchParams.get('confirmed');
   const type = request.nextUrl.searchParams.get('type');
+
+  // v12.218(安全止血):此 GET 曾无属主校验,?projectId= 即枚举下载他人图/视频/TTS。
+  // 现要求 projectId 且对其有 view 权限;不再允许无 projectId 的全表扫。
+  if (!projectId) return NextResponse.json({ message: 'projectId required' }, { status: 400 });
+  const g = await requireProjectAccess(request, projectId, 'view');
+  if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
   try {
     let query = 'SELECT * FROM project_assets WHERE 1=1';

@@ -46,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let userId = getUserFromRequest(request)?.sub || null;
   if (!userId) {
     const first = await getDbDriver().get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
-    userId = first?.id || null;
+    userId = '__no_auth__';
   }
 
   const scriptRows = await listAssetsByType(id, 'script');

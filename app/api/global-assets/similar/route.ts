@@ -23,8 +23,8 @@ const VALID_TYPES: GlobalAssetType[] = ['character', 'scene', 'style', 'prop', '
 function resolveUserId(request: Request): string {
   const payload = getUserFromRequest(request);
   if (payload?.sub) return payload.sub;
-  const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-  return firstUser?.id || 'demo-user';
+  // v12.218(安全止血):不再回落 DB 首用户,匿名用 sentinel(查空不泄露)
+  return '__no_auth__';
 }
 
 function shape(r: { asset: GlobalAsset; score: number }) {

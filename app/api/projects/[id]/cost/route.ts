@@ -1,9 +1,10 @@
 /**
  * GET /api/projects/[id]/cost (v12.190;v12.207 加 ?export=csv) — 项目成本下钻。
- * 读免鉴权(与 health/pull-sheet GET 同哲学,按 projectId 作用域,不含 PII)。
+ * v12.218:改属主校验(成本含商业敏感,不再免鉴权)。
  * ?export=csv → 逐条成本明细 CSV 下载(团队对账/报销基础)。
  */
 import { NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/auth-guard';
 import { listCostLogByProject } from '@/lib/repos/cost-log-repo';
 import { rollupByEngine } from '@/lib/cost-rollup';
 
@@ -18,6 +19,9 @@ function csvCell(v: unknown): string {
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.218(安全止血):成本数据含商业敏感,从「免鉴权」改属主校验(与 decision-log 对齐)。
+  const g = await requireProjectAccess(request, id, 'view');
+  if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
   const rows = await listCostLogByProject(id);
 
   if (new URL(request.url).searchParams.get('export') === 'csv') {

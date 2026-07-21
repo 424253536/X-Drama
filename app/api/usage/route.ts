@@ -4,14 +4,10 @@ import { getUserFromRequest } from '../auth/lib';
 import { getTierById, PRICING_TIERS } from '@/lib/pricing';
 
 export async function GET(request: Request) {
+  // v12.218:删回落首用户,无 token → 401(用量含订阅档等敏感信息)
   const payload = getUserFromRequest(request);
-  let userId = payload?.sub;
-
-  // Fall back to first user in demo mode
-  if (!userId) {
-    const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = firstUser?.id || 'demo-user';
-  }
+  if (!payload?.sub) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  const userId = payload.sub;
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

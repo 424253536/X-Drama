@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let userId = getUserFromRequest(request)?.sub || null;
   if (!userId) {
     const first = await d.get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
-    userId = first?.id || null;
+    userId = '__no_auth__';
   }
 
   // 1) 说话人脸:body 优先,否则取该镜分镜图

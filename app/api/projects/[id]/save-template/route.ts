@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let userId = payloadUser?.sub || null;
   if (!userId) {
     const first = await d.get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
-    userId = first?.id || null;
+    userId = '__no_auth__';
   }
 
   const proj = await d.get<any>('SELECT title, style_id, locked_characters FROM projects WHERE id = ?', [id]);

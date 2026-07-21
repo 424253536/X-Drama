@@ -4,20 +4,17 @@ import { getUserFromRequest } from '../../auth/lib';
 import { normalizeAssetRow } from '@/lib/asset-storage';
 import { listProjectAssets, getAsset, updateAssetDataInProject } from '@/lib/repos/asset-repo';
 import { getOwnedProject, deleteProjectCascade, setProjectArchived } from '@/lib/repos/project-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // 先尝试直接查询项目（不限制user_id，因为演示环境）
-  let row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any;
+  // v12.218(安全止血):堵 IDOR —— 旧逻辑「先不带 user_id 查」使枚举 projectId 即读任意他人项目。
+  // 现要求 view 权限(owner 或协作者),不存在/无权一律 404/403。
+  const g = await requireProjectAccess(request, id, 'view');
+  if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
-  // 如果没找到，再尝试用user_id查询
-  if (!row) {
-    const payload = getUserFromRequest(request);
-    const userId = payload?.sub || 'demo-user';
-    row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(id, userId) as any;
-  }
-
+  const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any;
   if (!row) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   // 加载项目资产 — v4.2.3: 走 async asset-repo (DbDriver), SQLite/PG 双驱动
@@ -90,6 +87,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!assetId || data === undefined) {
     return NextResponse.json({ message: 'assetId and data are required' }, { status: 400 });
   }
+
+  // v12.218(安全止血):旧代码此分支无 auth —— 知道 projectId+assetId 即可覆写他人资产内容。补 edit 守卫。
+  const g = await requireProjectAccess(request, id, 'edit');
+  if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
   const asset = await getAsset(assetId);
   if (!asset || asset.project_id !== id) return NextResponse.json({ message: 'Asset not found' }, { status: 404 });

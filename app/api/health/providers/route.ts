@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth-guard';
 import {
   isPlaceholder, classifyHttp, classifyMinimax, extractGatewayBalance, overallHealth,
   type ProviderHealth, type ProviderKind,
@@ -78,6 +79,9 @@ function optionalProvider(id: string, label: string, kind: ProviderKind, key?: s
 }
 
 export async function GET(request: NextRequest) {
+  // v12.218(安全止血):此端点暴露所有 provider 的 baseUrl(含内部网关域名)/余额/密钥状态,不该匿名。
+  const _g = requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
   const fresh = request.nextUrl.searchParams.get('fresh') === '1';
   if (!fresh && cache && Date.now() - cache.at < CACHE_TTL) {
     return NextResponse.json({ ...cache.payload, cached: true });

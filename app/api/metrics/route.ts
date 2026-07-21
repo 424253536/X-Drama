@@ -8,8 +8,8 @@ export async function GET(request: Request) {
 
   // If no auth, fall back to the first user (demo mode)
   if (!userId) {
-    const firstUser = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = firstUser?.id || 'demo-user';
+    // v12.218(安全止血):不再回落 DB 首用户,匿名用 sentinel(查空不泄露)
+    userId = '__no_auth__';
   }
 
   const projects = (db.prepare('SELECT COUNT(*) as count FROM projects WHERE user_id = ?').get(userId) as any).count;

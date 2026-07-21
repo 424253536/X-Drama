@@ -25,10 +25,7 @@ export async function GET(request: Request) {
   const driver = getDbDriver();
 
   let userId = payload?.sub;
-  if (!userId) {
-    const first = (await driver.get('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', [])) as { id: string } | undefined;
-    userId = first?.id || 'demo-user';
-  }
+  if (!userId) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 }); // v12.218:删回落首用户
 
   const url = new URL(request.url);
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 30));

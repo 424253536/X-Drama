@@ -14,11 +14,9 @@ import { getUserBudget, setUserBudget } from '@/lib/budget-enforce';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function resolveUserId(request: Request): Promise<string> {
+async function resolveUserId(request: Request): Promise<string | null> {
   const p = getUserFromRequest(request);
-  if (p?.sub) return p.sub;
-  const first = (await getDbDriver().get('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', [])) as { id: string } | undefined;
-  return first?.id || 'demo-user';
+  return p?.sub ?? null; // v12.218:删回落首用户
 }
 
 function parseCny(v: unknown): number | null {
@@ -27,11 +25,13 @@ function parseCny(v: unknown): number | null {
 
 export async function GET(request: Request) {
   const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   return NextResponse.json(await getUserBudget(userId));
 }
 
 export async function POST(request: Request) {
   const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   let body: any = {};
   try { body = await request.json(); } catch { /* swallow */ }
   await setUserBudget(userId, { capCny: parseCny(body?.capCny), hardCapCny: parseCny(body?.hardCapCny) });
