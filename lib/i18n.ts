@@ -388,6 +388,19 @@ export interface Translations {
     healthGateIssuePrefix: string;
     healthGateEpisodeDetail: string;
     healthGateConfirmHint: string;
+    dramaPackageBtn: string;
+    dramaPackageFetching: string;
+    dramaPackageTitle: string;
+    dramaPackageDownload: string;
+    dramaPackageCoverAlt: string;
+    dramaPackageLangEpisodes: string;
+    dramaPackageTotalMin: string;
+    dramaPackageEpFree: string;
+    dramaPackageEpCoins: string;
+    dramaPackageGuideTitle: string;
+    dramaPackageErrPrefix: string;
+    dramaPackageNetworkErr: string;
+    dramaPackageViewVideo: string;
   };
   providerHealth: Record<string, string>;
 }
@@ -794,6 +807,19 @@ const zhCN: Translations = {
       healthGateIssuePrefix: "问题集:",
       healthGateEpisodeDetail: "第{ep}集({shots}镜降级)",
       healthGateConfirmHint: "仍要导出吗?(建议先点「全季补渲降级镜」)",
+      dramaPackageBtn: "📦 出海打包",
+      dramaPackageFetching: "正在获取打包数据…",
+      dramaPackageTitle: "出海打包 · TikTok Drama Center",
+      dramaPackageDownload: "下载 JSON",
+      dramaPackageCoverAlt: "系列封面",
+      dramaPackageLangEpisodes: "语言:{lang} · 共 {n} 集",
+      dramaPackageTotalMin: "总时长:{n} 分钟",
+      dramaPackageEpFree: "免费",
+      dramaPackageEpCoins: "{coins} coins",
+      dramaPackageGuideTitle: "上传步骤",
+      dramaPackageErrPrefix: "获取失败:",
+      dramaPackageNetworkErr: "网络错误",
+      dramaPackageViewVideo: "查看视频",
     },
   providerHealth: {
     ok: "正常",
@@ -1212,6 +1238,19 @@ const en: Translations = {
       healthGateIssuePrefix: "Problem episodes: ",
       healthGateEpisodeDetail: "Ep.{ep} ({shots} shots downgraded)",
       healthGateConfirmHint: "Still export? (Recommended: fix downgraded shots first)",
+      dramaPackageBtn: "📦 Export Package",
+      dramaPackageFetching: "Fetching package…",
+      dramaPackageTitle: "Drama Package · TikTok Drama Center",
+      dramaPackageDownload: "Download JSON",
+      dramaPackageCoverAlt: "Series cover",
+      dramaPackageLangEpisodes: "Language: {lang} · {n} episodes",
+      dramaPackageTotalMin: "Total: {n} min",
+      dramaPackageEpFree: "Free",
+      dramaPackageEpCoins: "{coins} coins",
+      dramaPackageGuideTitle: "Upload steps",
+      dramaPackageErrPrefix: "Fetch failed: ",
+      dramaPackageNetworkErr: "Network error",
+      dramaPackageViewVideo: "View video",
     },
   providerHealth: {
     ok: "Healthy",
@@ -1604,6 +1643,19 @@ const zhTW: Translations = {
       healthGateIssuePrefix: "問題集：",
       healthGateEpisodeDetail: "第{ep}集（{shots}鏡降級）",
       healthGateConfirmHint: "仍要匯出嗎？（建議先點「全季補渲降級鏡」）",
+      dramaPackageBtn: "📦 出海打包",
+      dramaPackageFetching: "正在取得打包資料…",
+      dramaPackageTitle: "出海打包 · TikTok Drama Center",
+      dramaPackageDownload: "下載 JSON",
+      dramaPackageCoverAlt: "系列封面",
+      dramaPackageLangEpisodes: "語言:{lang} · 共 {n} 集",
+      dramaPackageTotalMin: "總時長:{n} 分鐘",
+      dramaPackageEpFree: "免費",
+      dramaPackageEpCoins: "{coins} coins",
+      dramaPackageGuideTitle: "上傳步驟",
+      dramaPackageErrPrefix: "取得失敗:",
+      dramaPackageNetworkErr: "網路錯誤",
+      dramaPackageViewVideo: "查看影片",
     },
   providerHealth: {
     ok: "正常",
@@ -1996,6 +2048,19 @@ const ja: Translations = {
       healthGateIssuePrefix: "問題の話：",
       healthGateEpisodeDetail: "第{ep}話（{shots}ショット降格）",
       healthGateConfirmHint: "それでも書き出しますか？（先に「ダウングレードショット修正」を推奨）",
+      dramaPackageBtn: "📦 海外パッケージ",
+      dramaPackageFetching: "パッケージ取得中…",
+      dramaPackageTitle: "海外パッケージ · TikTok Drama Center",
+      dramaPackageDownload: "JSON ダウンロード",
+      dramaPackageCoverAlt: "シリーズカバー",
+      dramaPackageLangEpisodes: "言語:{lang} · 全 {n} 話",
+      dramaPackageTotalMin: "合計:{n} 分",
+      dramaPackageEpFree: "無料",
+      dramaPackageEpCoins: "{coins} coins",
+      dramaPackageGuideTitle: "アップロード手順",
+      dramaPackageErrPrefix: "取得失敗:",
+      dramaPackageNetworkErr: "ネットワークエラー",
+      dramaPackageViewVideo: "動画を見る",
     },
   providerHealth: {
     ok: "正常",
@@ -2468,7 +2533,20 @@ const ko: Translations = {
     "noPendingEpisodes": "생성 대기 중인 에피소드가 없습니다",
     "healthGateIssuePrefix": "문제 에피소드: ",
     "healthGateEpisodeDetail": "{ep}화 ({shots}컷 다운그레이드됨)",
-    "healthGateConfirmHint": "그래도 내보내시겠습니까? (권장: 다운그레이드된 컷 먼저 수정)"
+    "healthGateConfirmHint": "그래도 내보내시겠습니까? (권장: 다운그레이드된 컷 먼저 수정)",
+    dramaPackageBtn: "📦 해외 패키지",
+    dramaPackageFetching: "패키지 데이터 가져오는 중…",
+    dramaPackageTitle: "해외 패키지 · TikTok Drama Center",
+    dramaPackageDownload: "JSON 다운로드",
+    dramaPackageCoverAlt: "시리즈 커버",
+    dramaPackageLangEpisodes: "언어: {lang} · 총 {n}화",
+    dramaPackageTotalMin: "총 길이: {n}분",
+    dramaPackageEpFree: "무료",
+    dramaPackageEpCoins: "{coins} coins",
+    dramaPackageGuideTitle: "업로드 단계",
+    dramaPackageErrPrefix: "가져오기 실패: ",
+    dramaPackageNetworkErr: "네트워크 오류",
+    dramaPackageViewVideo: "영상 보기",
   },
   "providerHealth": {
     "ok": "정상",
@@ -2938,7 +3016,20 @@ const ru: Translations = {
     "noPendingEpisodes": "Нет серий, ожидающих генерации",
     "healthGateIssuePrefix": "Проблемные серии: ",
     "healthGateEpisodeDetail": "Эп.{ep} ({shots} кадров понижено)",
-    "healthGateConfirmHint": "Всё равно экспортировать? (Рекомендуется: сначала исправить пониженные кадры)"
+    "healthGateConfirmHint": "Всё равно экспортировать? (Рекомендуется: сначала исправить пониженные кадры)",
+    dramaPackageBtn: "📦 Экспорт-пакет",
+    dramaPackageFetching: "Получение пакета…",
+    dramaPackageTitle: "Экспорт-пакет · TikTok Drama Center",
+    dramaPackageDownload: "Скачать JSON",
+    dramaPackageCoverAlt: "Обложка сериала",
+    dramaPackageLangEpisodes: "Язык: {lang} · {n} серий",
+    dramaPackageTotalMin: "Всего: {n} мин",
+    dramaPackageEpFree: "Бесплатно",
+    dramaPackageEpCoins: "{coins} coins",
+    dramaPackageGuideTitle: "Шаги загрузки",
+    dramaPackageErrPrefix: "Ошибка получения: ",
+    dramaPackageNetworkErr: "Ошибка сети",
+    dramaPackageViewVideo: "Смотреть видео",
   },
   "providerHealth": {
     "ok": "В норме",

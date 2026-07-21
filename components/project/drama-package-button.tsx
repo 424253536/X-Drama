@@ -1,24 +1,13 @@
 'use client';
 
 /**
- * DramaPackageButton — 出海打包入口组件(v12.188.1)
+ * DramaPackageButton — 出海打包入口组件(v12.188.1;v12.217 接 i18n 六语,清 v12.210 欠账)
  * 调用 GET /api/series/[id]/drama-package,展示各集视频 URL/封面/定价建议,支持下载 JSON。
- * 文案均为中文字面量,需 i18n 时参见下方 I18N_KEYS 注释。
- *
- * I18N_KEYS(补进 i18n.ts seriesDetail 区):
- *   dramaPackageBtn        = "📦 出海打包"
- *   dramaPackageFetching   = "正在获取打包数据…"
- *   dramaPackageTitle      = "出海打包 · TikTok Drama Center"
- *   dramaPackageClose      = "关闭"
- *   dramaPackageDownload   = "下载 JSON"
- *   dramaPackageCoverLabel = "系列封面"
- *   dramaPackageEpFree     = "免费"
- *   dramaPackageEpCoins    = "{coins} coins"
- *   dramaPackageGuideTitle = "上传步骤"
- *   dramaPackageErrPrefix  = "获取失败:"
+ * 文案走 t.seriesDetail.dramaPackage*(zhCN/en/zhTW/ja/ko/ru 全量)。
  */
 
 import { useState } from 'react';
+import { useLocale } from '@/hooks/use-locale';
 import { Package, CircleNotch as Loader2, X, DownloadSimple, Play } from '@phosphor-icons/react';
 
 interface DramaEpisode { episodeNumber: number; title: string; videoUrl: string; durationSec?: number }
@@ -34,6 +23,7 @@ interface DramaPackageResult {
 interface Props { seriesId: string }
 
 export function DramaPackageButton({ seriesId }: Props) {
+  const { t } = useLocale();
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [data, setData] = useState<DramaPackageResult | null>(null);
   const [errMsg, setErrMsg] = useState('');
@@ -57,7 +47,7 @@ export function DramaPackageButton({ seriesId }: Props) {
       setOpen(true);
     } catch (e) {
       setState('error');
-      setErrMsg(e instanceof Error ? e.message : '网络错误');
+      setErrMsg(e instanceof Error ? e.message : t.seriesDetail.dramaPackageNetworkErr);
     }
   };
 
@@ -83,12 +73,12 @@ export function DramaPackageButton({ seriesId }: Props) {
         {state === 'loading'
           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
           : <Package className="w-3.5 h-3.5" />}
-        {state === 'loading' ? '正在获取打包数据…' : '📦 出海打包'}
+        {state === 'loading' ? t.seriesDetail.dramaPackageFetching : t.seriesDetail.dramaPackageBtn}
       </button>
 
       {/* 错误内联提示 */}
       {state === 'error' && errMsg && (
-        <span className="text-[11px] text-red-300">获取失败:{errMsg}</span>
+        <span className="text-[11px] text-red-300">{t.seriesDetail.dramaPackageErrPrefix}{errMsg}</span>
       )}
 
       {/* 结果面板(内联展开) */}
@@ -96,13 +86,13 @@ export function DramaPackageButton({ seriesId }: Props) {
         <div className="w-full mt-3 rounded-xl border border-white/10 bg-white/5 p-4 space-y-4 text-[13px]">
           {/* 标题栏 */}
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-white text-sm">出海打包 · TikTok Drama Center</span>
+            <span className="font-semibold text-white text-sm">{t.seriesDetail.dramaPackageTitle}</span>
             <div className="flex items-center gap-2">
               <button
                 onClick={downloadJson}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/15 text-gray-200 text-xs hover:text-white"
               >
-                <DownloadSimple className="w-3.5 h-3.5" /> 下载 JSON
+                <DownloadSimple className="w-3.5 h-3.5" /> {t.seriesDetail.dramaPackageDownload}
               </button>
               <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white">
                 <X className="w-4 h-4" />
@@ -114,14 +104,14 @@ export function DramaPackageButton({ seriesId }: Props) {
           <div className="flex items-start gap-3">
             {data.series.coverUrl && (
               <div className="w-14 shrink-0 rounded-lg overflow-hidden bg-black/30 aspect-[3/4]">
-                <img src={data.series.coverUrl} alt="系列封面" className="w-full h-full object-cover" />
+                <img src={data.series.coverUrl} alt={t.seriesDetail.dramaPackageCoverAlt} className="w-full h-full object-cover" />
               </div>
             )}
             <div className="space-y-1 text-gray-300 text-[12px]">
               <div className="font-medium text-white">{data.series.title}</div>
-              <div>语言:{data.series.language} · 共 {data.series.episodeCount} 集</div>
+              <div>{t.seriesDetail.dramaPackageLangEpisodes.replace('{lang}', data.series.language).replace('{n}', String(data.series.episodeCount))}</div>
               {data.series.totalDurationSec > 0 && (
-                <div>总时长:{Math.round(data.series.totalDurationSec / 60)} 分钟</div>
+                <div>{t.seriesDetail.dramaPackageTotalMin.replace('{n}', String(Math.round(data.series.totalDurationSec / 60)))}</div>
               )}
             </div>
           </div>
@@ -139,11 +129,11 @@ export function DramaPackageButton({ seriesId }: Props) {
                   )}
                   {price && (
                     <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${price.unlock === 'free' ? 'border-emerald-500/40 text-emerald-300' : 'border-amber-500/40 text-amber-300'}`}>
-                      {price.unlock === 'free' ? '免费' : `${price.coins} coins`}
+                      {price.unlock === 'free' ? t.seriesDetail.dramaPackageEpFree : t.seriesDetail.dramaPackageEpCoins.replace('{coins}', String(price.coins))}
                     </span>
                   )}
                   {ep.videoUrl && (
-                    <a href={ep.videoUrl} target="_blank" rel="noreferrer" title="查看视频"
+                    <a href={ep.videoUrl} target="_blank" rel="noreferrer" title={t.seriesDetail.dramaPackageViewVideo}
                       className="text-cyan-300 hover:text-cyan-200 shrink-0">
                       <Play className="w-3.5 h-3.5" />
                     </a>
@@ -156,7 +146,7 @@ export function DramaPackageButton({ seriesId }: Props) {
           {/* 上传步骤 */}
           {data.uploadGuide.length > 0 && (
             <div className="bg-black/20 rounded-lg px-3 py-2.5 space-y-1">
-              <div className="text-[11px] font-semibold text-gray-400 mb-1">上传步骤</div>
+              <div className="text-[11px] font-semibold text-gray-400 mb-1">{t.seriesDetail.dramaPackageGuideTitle}</div>
               {data.uploadGuide.map((step, i) => (
                 <div key={i} className="text-[11px] text-gray-400 leading-relaxed">{step}</div>
               ))}
