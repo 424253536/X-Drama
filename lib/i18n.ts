@@ -284,6 +284,11 @@ export interface Translations {
     alertAuthFailed: string;
     alertModelUnavailable: string;
     thisMonthBudget: string;
+    quotaTitle: string;
+    quotaUnlimited: string;
+    quotaExceeded: string;
+    quotaNearLimit: string;
+    quotaOfCeiling: string;
     projectedEndPrefix: string;
     noCapSuffix: string;
     statGenerations: string;
@@ -705,6 +710,11 @@ const zhCN: Translations = {
       alertAuthFailed: "鉴权失败",
       alertModelUnavailable: "模型不可用",
       thisMonthBudget: "本月预算",
+      quotaTitle: "本月配额",
+      quotaUnlimited: "无上限",
+      quotaExceeded: "已超档上限,请充值或改用经济引擎",
+      quotaNearLimit: "接近档上限",
+      quotaOfCeiling: "档上限",
       projectedEndPrefix: "预计月末",
       noCapSuffix: " · 未设上限",
       statGenerations: "生成次数",
@@ -1138,6 +1148,11 @@ const en: Translations = {
       alertAuthFailed: "Auth failed",
       alertModelUnavailable: "Model unavailable",
       thisMonthBudget: "This month's budget",
+      quotaTitle: "Monthly quota",
+      quotaUnlimited: "Unlimited",
+      quotaExceeded: "Over plan ceiling — top up or switch to an economy engine",
+      quotaNearLimit: "Near plan ceiling",
+      quotaOfCeiling: "plan ceiling",
       projectedEndPrefix: "Projected month-end",
       noCapSuffix: " · No cap set",
       statGenerations: "Generations",
@@ -1545,6 +1560,11 @@ const zhTW: Translations = {
       alertAuthFailed: "鑑權失敗",
       alertModelUnavailable: "模型不可用",
       thisMonthBudget: "本月預算",
+      quotaTitle: "本月配額",
+      quotaUnlimited: "無上限",
+      quotaExceeded: "已超檔上限,請儲值或改用經濟引擎",
+      quotaNearLimit: "接近檔上限",
+      quotaOfCeiling: "檔上限",
       projectedEndPrefix: "預計月末",
       noCapSuffix: " · 未設上限",
       statGenerations: "生成次數",
@@ -1952,6 +1972,11 @@ const ja: Translations = {
       alertAuthFailed: "認証失敗",
       alertModelUnavailable: "モデル利用不可",
       thisMonthBudget: "今月の予算",
+      quotaTitle: "今月のクォータ",
+      quotaUnlimited: "無制限",
+      quotaExceeded: "プラン上限を超過 — チャージまたは低コストエンジンへ",
+      quotaNearLimit: "プラン上限に接近",
+      quotaOfCeiling: "プラン上限",
       projectedEndPrefix: "月末予測",
       noCapSuffix: " · 上限なし",
       statGenerations: "生成回数",
@@ -2440,6 +2465,11 @@ const ko: Translations = {
     "alertAuthFailed": "인증 실패",
     "alertModelUnavailable": "모델 사용 불가",
     "thisMonthBudget": "이번 달 예산",
+    "quotaTitle": "이번 달 할당량",
+    "quotaUnlimited": "무제한",
+    "quotaExceeded": "플랜 상한 초과 — 충전 또는 경제형 엔진으로 전환",
+    "quotaNearLimit": "플랜 상한 근접",
+    "quotaOfCeiling": "플랜 상한",
     "projectedEndPrefix": "예상 월말 지출",
     "noCapSuffix": " · 한도 미설정",
     "statGenerations": "생성 횟수",
@@ -2925,6 +2955,11 @@ const ru: Translations = {
     "alertAuthFailed": "Ошибка авторизации",
     "alertModelUnavailable": "Модель недоступна",
     "thisMonthBudget": "Бюджет на месяц",
+    "quotaTitle": "Месячная квота",
+    "quotaUnlimited": "Без лимита",
+    "quotaExceeded": "Превышен лимит плана — пополните или смените движок",
+    "quotaNearLimit": "Близко к лимиту плана",
+    "quotaOfCeiling": "лимит плана",
     "projectedEndPrefix": "Прогноз на конец месяца",
     "noCapSuffix": " · Лимит не задан",
     "statGenerations": "Генераций",

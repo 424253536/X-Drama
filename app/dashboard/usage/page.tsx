@@ -17,12 +17,23 @@ import type { BudgetGuardResult } from '@/lib/budget-guard';
 import { useLocale } from '@/hooks/use-locale';
 
 interface Alert { provider: string; model: string; alertType: string; occurrenceCount: number; errorMessage: string; }
+interface Quota {
+  tierId: string;
+  usedCny: number;
+  ceilingCny: number;
+  remainingCny: number;
+  ratio: number;
+  exceeded: boolean;
+  nearLimit: boolean;
+  unlimited: boolean;
+}
 interface Summary {
   scope: string;
   window: { days: number; since: string };
   cost: CostSummary;
   budget: BudgetStatus;
   guard: BudgetGuardResult;
+  quota?: Quota;
   activeAlerts: Alert[];
   failuresByProvider: Array<{ provider: string; failed: number }>;
 }
@@ -167,8 +178,17 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* 预算环 + 总览 */}
-          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4">
+          {/* v12.223 配额超额提示条(超档上限 → 建议充值/降级引擎) */}
+          {data.quota && !data.quota.unlimited && data.quota.exceeded && (
+            <div className="cinema-card !p-3 border border-[var(--secondary)]/50 bg-[var(--secondary)]/5 flex items-center gap-2">
+              <AlertTriangle size={15} className="text-[var(--secondary)] shrink-0" />
+              <span className="text-[12px] flex-1">{t.usagePage.quotaExceeded}</span>
+              <a href="/dashboard/billing" className="cinema-btn-ghost !text-[10px] shrink-0">{t.usagePage.goBilling}</a>
+            </div>
+          )}
+
+          {/* 预算环 + 配额环 + 总览 */}
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_1fr] gap-4">
             <div className={`cinema-card !p-4 flex items-center gap-4 border ${STATUS_TONE[ringTone]}`}>
               <div className="relative shrink-0" style={{ width: 84, height: 84 }}>
                 <svg width="84" height="84" className="-rotate-90">
@@ -187,6 +207,35 @@ export default function UsagePage() {
                 <div className="cinema-mono text-[10px] opacity-50 mt-0.5">{t.usagePage.projectedEndPrefix} {cny(b?.projectedPeriodEndCny || 0)}{b?.capCny == null && t.usagePage.noCapSuffix}</div>
               </div>
             </div>
+
+            {/* v12.223 订阅档月度配额环(本月真实成本 / 档上限) */}
+            {data.quota && (() => {
+              const q = data.quota!;
+              const qPct = q.unlimited ? 0 : Math.max(0, Math.min(1, q.ratio));
+              const qTone = q.unlimited ? 'none' : q.exceeded ? 'over' : q.nearLimit ? 'warn' : 'ok';
+              return (
+                <div className={`cinema-card !p-4 flex items-center gap-4 border ${STATUS_TONE[qTone]}`}>
+                  <div className="relative shrink-0" style={{ width: 84, height: 84 }}>
+                    <svg width="84" height="84" className="-rotate-90">
+                      <circle cx="42" cy="42" r="32" fill="none" stroke="var(--border)" strokeWidth="7" />
+                      <circle cx="42" cy="42" r="32" fill="none" stroke={RING_STROKE[qTone]} strokeWidth="7"
+                        strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - qPct)} style={{ transition: 'stroke-dashoffset .6s' }} />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="cinema-mono text-base tabular-nums">{q.unlimited ? '∞' : `${Math.round(q.ratio * 100)}%`}</span>
+                      <span className="cinema-mono text-[8px] opacity-50 uppercase">{q.tierId}</span>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="cinema-eyebrow !text-[9px] opacity-60">{t.usagePage.quotaTitle}</div>
+                    <div className="cinema-mono text-lg mt-0.5">{cny(q.usedCny)}{!q.unlimited && <span className="opacity-50 text-sm"> / {cny(q.ceilingCny)}</span>}</div>
+                    <div className="cinema-mono text-[10px] opacity-50 mt-0.5">
+                      {q.unlimited ? t.usagePage.quotaUnlimited : q.exceeded ? t.usagePage.quotaExceeded : q.nearLimit ? t.usagePage.quotaNearLimit : t.usagePage.quotaOfCeiling}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="cinema-card !p-4 grid grid-cols-3 gap-3">
               <Stat label={`${t.usagePage.nearDays} ${data.window.days} ${t.usagePage.daysCostSuffix}`} value={cny(data.cost.totals.costCny)} icon={<CurrencyCny size={13} />} />

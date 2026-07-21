@@ -13,6 +13,10 @@ export interface PricingTier {
     apiAccess: boolean;
     priorityQueue: boolean;
     commercialLicense: boolean;
+    // v12.223 用量护栏:各档**月度真实生成成本上限(¥)**。-1=不设上限(企业定制)。
+    // 病根(🔴-6):Pro ¥298/月原本无用量上限,单个 4K 重度用户月成本可超订阅价数倍。
+    // 上限按「订阅价留毛利」定:超额触发降级/提示充值(见 lib/usage-quota)。
+    monthlyCostCeilingCny: number;
   };
   recommended?: boolean;
   color: string;
@@ -42,6 +46,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: false,
       priorityQueue: false,
       commercialLicense: false,
+      monthlyCostCeilingCny: 5,     // 免费档:轻量试用,约 5 元算力
     },
   },
   {
@@ -67,6 +72,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: false,
       priorityQueue: false,
       commercialLicense: false,
+      monthlyCostCeilingCny: 60,    // 创作版 ¥98/月:留毛利上限 ¥60
     },
   },
   {
@@ -95,6 +101,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: true,
       priorityQueue: true,
       commercialLicense: true,
+      monthlyCostCeilingCny: 200,   // 专业版 ¥298/月:留毛利上限 ¥200(堵 4K 重度亏损)
     },
   },
   {
@@ -122,6 +129,7 @@ export const PRICING_TIERS: PricingTier[] = [
       apiAccess: true,
       priorityQueue: true,
       commercialLicense: true,
+      monthlyCostCeilingCny: -1,    // 企业定制:不设固定上限(私有化/合约计费)
     },
   },
 ];

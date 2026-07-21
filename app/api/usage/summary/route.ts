@@ -15,6 +15,7 @@ import { buildCostSummary, computeBudget, totalCostCny, type CostLogRow } from '
 import { evaluateBudgetGuard } from '@/lib/budget-guard';
 import { getUserBudget } from '@/lib/budget-enforce';
 import { listActiveQuotaAlerts } from '@/lib/api-usage-tracker';
+import { computeQuotaStatus } from '@/lib/usage-quota';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -89,12 +90,19 @@ export async function GET(request: Request) {
   )) as any[];
   const failuresByProvider = failRows.map((r) => ({ provider: r.provider, failed: Number(r.failed) || 0 }));
 
+  // ── v12.223 用量护栏: 本月真实成本 vs 订阅档月度上限 (前端配额环) ──
+  const tierRow = await driver.get<{ subscription_tier?: string }>(
+    `SELECT subscription_tier FROM users WHERE id = ?`, [scopeUserId || userId],
+  );
+  const quota = computeQuotaStatus((tierRow?.subscription_tier as string) || 'free', budget.spentCny);
+
   return NextResponse.json({
     scope: isAdmin ? (scopeUserId ? 'admin:user' : 'admin:all') : 'self',
     window: { days, since },
     cost,
     budget,
     guard,
+    quota,
     activeAlerts,
     failuresByProvider,
   });
