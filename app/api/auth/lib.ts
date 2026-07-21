@@ -55,8 +55,16 @@ function getJwtSecret(): string {
       '[auth] JWT_SECRET 未设置 —— 生产环境必须配置一个高强度随机密钥(否则无法签发/校验令牌)。',
     );
   }
-  if (s && isWeakSecret(s)) {
-    console.warn('[auth] ⚠️ JWT_SECRET 为弱默认/占位值,已忽略并改用进程级随机开发密钥;部署前务必设为高强度随机串。');
+  // v12.226 修 v12.219 引入的回归:非生产环境下**显式设置的密钥必须被采用**(哪怕是弱串),
+  // 只告警不替换。原实现把弱串忽略掉改用进程级随机密钥,会让「多进程共用一个 fixture 密钥」
+  // 的场景直接崩 —— 典型如 e2e:dev server 与 playwright 测试进程各自随机 → JWT 不匹配 → 全 401,
+  // 而 `.env.example` 恰恰就教用户用 `JWT_SECRET=e2e-fixture-secret-not-for-prod` 跑本地 e2e。
+  // 黑名单的职责是**拦生产**(上面已 fail-fast),不该越界破坏开发/测试工作流。
+  if (s && s.length > 0) {
+    if (isWeakSecret(s)) {
+      console.warn('[auth] ⚠️ JWT_SECRET 为弱默认/占位值(仅开发/测试可用,生产会拒启动);部署前务必设为高强度随机串。');
+    }
+    return s;
   }
   if (!devSecret) {
     devSecret = crypto.randomBytes(32).toString('hex');

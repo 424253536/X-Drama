@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.225</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.226</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -17,7 +17,7 @@
   <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ChrisChen667788/wind-comic/ci.yml?branch=main&label=CI&logo=github" alt="CI" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/stargazers"><img src="https://img.shields.io/github/stars/ChrisChen667788/wind-comic?style=social" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/Tests-3125%2F3125-2ea44f"  alt="3125 tests passing" />
+  <img src="https://img.shields.io/badge/Tests-3127%2F3127-2ea44f"  alt="3127 tests passing" />
   <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
 </p>
@@ -454,6 +454,18 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repo's contribution guide.
 ## 📄 License
 
 MIT. Use it, fork it, build a startup on it. We just ask: if you ship a feature on top, send a PR back.
+
+### ⚠️ Redistribution notice — bundled binaries are not all MIT
+
+**Wind Comic's own source is MIT.** But three npm dependencies ship pre-built binaries under copyleft licenses. This does **not** affect the MIT status of this repository, and it does not affect you if you simply run or fork the source. It **does** matter the moment you redistribute a bundle that embeds those binaries (a Docker image, a desktop build, a hosted appliance you hand to a customer):
+
+| Dependency | License | What you must do when redistributing a bundle |
+|---|---|---|
+| `ffmpeg-static` | **GPL-3.0-or-later** | **Strongest constraint.** Ship the GPL-3 text and a written offer for the corresponding FFmpeg source — or drop the dependency and point `FFMPEG_PATH` at a system ffmpeg you obtained separately. |
+| `lightningcss` (+ platform binaries) | MPL-2.0 | File-level weak copyleft. Unmodified use/redistribution carries no extra duty; only if you modify its MPL-licensed files must you publish those files. |
+| `@img/sharp-libvips-*` | LGPL-3.0-or-later | Dynamic linking does not infect your code. On redistribution you must let end users replace/relink the library and point them to its source. |
+
+CI enforces this: [`scripts/license-check.mjs`](scripts/license-check.mjs) scans the **production** dependency tree every run and **fails the build** if a copyleft dependency appears that is not registered in the table above — so a new GPL dependency can never slip in unnoticed.
 
 ---
 

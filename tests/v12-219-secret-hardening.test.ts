@@ -9,6 +9,7 @@
  * 断言「生产弱密钥拒签发」「生产强制忽略 gate 开关」。
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { signToken } from '@/app/api/auth/lib';
 import { checkPlan } from '@/lib/plan-gate';
 
@@ -60,10 +61,34 @@ describe('v12.219 JWT_SECRET 弱默认生产拒启', () => {
     expect(t.split('.').length).toBe(3);
   });
 
-  it('非生产 + 弱默认 → 不抛错(降级进程级随机密钥)', () => {
+  it('非生产 + 弱默认 → 不抛错(仅告警)', () => {
     setEnv('NODE_ENV', 'development');
     setEnv('JWT_SECRET', WEAK);
     expect(() => signToken({ id: 'u1', role: 'user' })).not.toThrow();
+  });
+
+  /**
+   * v12.226 回归锁:v12.219 初版在非生产下把弱密钥**忽略并替换成进程级随机密钥**,
+   * 这会让「多进程共用一个 fixture 密钥」的场景崩掉 —— e2e 里 dev server 与测试进程
+   * 各自随机 → JWT 不匹配 → 全 401,而 .env.example 恰恰就教用户这么跑本地 e2e。
+   * 现在:非生产下显式设置的密钥**必须被真正采用**,只告警。
+   */
+  it('非生产 + 显式弱密钥 → 该密钥被真正采用(e2e 多进程共享密钥的前提)', () => {
+    setEnv('NODE_ENV', 'test');
+    setEnv('JWT_SECRET', 'e2e-fixture-secret-not-for-prod');
+    const token = signToken({ id: 'u-e2e', role: 'user' });
+    // 用同一串独立校验:能验通 ⇒ 签发用的确实是这串,而非进程内随机值
+    const decoded = jwt.verify(token, 'e2e-fixture-secret-not-for-prod') as { sub: string };
+    expect(decoded.sub).toBe('u-e2e');
+  });
+
+  it('非生产 + 未设密钥 → 才回落进程级随机(签发仍可用)', () => {
+    setEnv('NODE_ENV', 'development');
+    setEnv('JWT_SECRET', undefined);
+    const t = signToken({ id: 'u2', role: 'user' });
+    expect(t.split('.').length).toBe(3);
+    // 随机密钥下,用弱串校验必然失败(证明没被误用成固定弱串)
+    expect(() => jwt.verify(t, 'change_me')).toThrow();
   });
 });
 
