@@ -37,10 +37,26 @@ const CAT_COLOR: Record<CostCategory, string> = {
 
 const CAP_KEY = (id: string) => `qfmj-cost-cap-${id}`;
 
+// v12.224 单片 COGS 报告结构(与 lib/cogs-report 对齐)
+interface CogsLine { engine: string; count: number; totalSec: number; unit: 'per_sec' | 'per_call'; unitRateCny: number; subtotalCny: number; pct: number; }
+interface CogsReport { totalCogsCny: number; lines: CogsLine[]; margin: { saleCny: number; cogsCny: number; grossProfitCny: number; grossMarginPct: number } | null; }
+
 export function CostAttributionPanel({ projectId }: { projectId: string }) {
   const [attr, setAttr] = useState<CostAttribution | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [cap, setCap] = useState('');
+  // v12.224:COGS/毛利下钻(投资人视角)
+  const [cogs, setCogs] = useState<CogsReport | null>(null);
+  const [showCogs, setShowCogs] = useState(false);
+  const [sale, setSale] = useState('');
+
+  const loadCogs = async (saleCny: string) => {
+    try {
+      const q = saleCny.trim() && Number(saleCny) > 0 ? `&sale=${Number(saleCny)}` : '';
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/cost?report=cogs${q}`);
+      if (res.ok) setCogs(await res.json());
+    } catch { /* 静默:增强信息 */ }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -121,6 +137,56 @@ export function CostAttributionPanel({ projectId }: { projectId: string }) {
                 <Lightbulb size={12} weight="fill" className="text-[var(--cinema-amber)] shrink-0 mt-0.5" />{h}
               </div>
             ))}
+          </div>
+
+          {/* v12.224 COGS / 毛利下钻(投资人视角:逐引擎单价×用量 + 参考售价算毛利) */}
+          <div className="mt-3 pt-3 border-t border-[var(--cinema-border)]">
+            <button
+              onClick={() => { const next = !showCogs; setShowCogs(next); if (next && !cogs) void loadCogs(sale); }}
+              className="cinema-mono text-[11px] text-[var(--cinema-text-2)] hover:text-[var(--cinema-amber)] flex items-center gap-1.5"
+            >
+              📊 COGS 报告 · 单片销货成本与毛利 {showCogs ? '▾' : '▸'}
+            </button>
+            {showCogs && (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="cinema-mono text-[11px] text-[var(--cinema-text-3)]">参考售价 ¥</span>
+                  <input
+                    type="number" min="0" inputMode="decimal" value={sale}
+                    onChange={(e) => setSale(e.target.value)} onBlur={() => void loadCogs(sale)}
+                    placeholder="填单片售价算毛利" className="cinema-input !w-28 !py-0.5 !text-[11px] text-right"
+                  />
+                </div>
+                {cogs && (
+                  <>
+                    <div className="space-y-1.5">
+                      {cogs.lines.map((l) => (
+                        <div key={l.engine} className="flex items-center gap-2 cinema-mono text-[11px]">
+                          <span className="w-24 shrink-0 truncate text-[var(--cinema-text-2)]" title={l.engine}>{l.engine}</span>
+                          <span className="text-[var(--cinema-text-3)] w-28 shrink-0">
+                            ¥{l.unitRateCny}/{l.unit === 'per_sec' ? '秒' : '次'} × {l.unit === 'per_sec' ? `${l.totalSec}s` : `${l.count}次`}
+                          </span>
+                          <div className="flex-1 min-w-0 h-1.5 rounded bg-[var(--cinema-border)] overflow-hidden">
+                            <div className="h-full rounded bg-[var(--cinema-amber)]" style={{ width: `${Math.max(2, l.pct)}%` }} />
+                          </div>
+                          <span className="w-14 shrink-0 text-right tabular-nums text-[var(--cinema-text-2)]">¥{l.subtotalCny.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between cinema-mono text-[11px] pt-1.5 border-t border-[var(--cinema-border)]">
+                      <span className="text-[var(--cinema-text-2)]">总 COGS</span>
+                      <span className="tabular-nums text-[var(--cinema-text-1)]">¥{cogs.totalCogsCny.toFixed(2)}</span>
+                    </div>
+                    {cogs.margin && (
+                      <div className={`cinema-mono text-[11px] rounded p-2 ${cogs.margin.grossProfitCny >= 0 ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                        售价 ¥{cogs.margin.saleCny.toFixed(2)} − COGS ¥{cogs.margin.cogsCny.toFixed(2)} = 毛利 ¥{cogs.margin.grossProfitCny.toFixed(2)}
+                        <span className="opacity-80"> · 毛利率 {cogs.margin.grossMarginPct}%</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

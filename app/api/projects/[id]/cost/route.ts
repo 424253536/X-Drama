@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { requireProjectAccess } from '@/lib/auth-guard';
 import { listCostLogByProject } from '@/lib/repos/cost-log-repo';
 import { rollupByEngine } from '@/lib/cost-rollup';
+import { buildCogsReport } from '@/lib/cogs-report';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,5 +45,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const byEngine = rollupByEngine(rows);
   const totalCny = Number(rows.reduce((t, r) => t + (Number(r.costCny) || 0), 0).toFixed(2));
+
+  // v12.224:?report=cogs → 单片 COGS 报告(逐引擎单价×用量 + 可选毛利)。?sale=X 给参考售价算毛利率。
+  const sp = new URL(request.url).searchParams;
+  if (sp.get('report') === 'cogs') {
+    const saleRaw = sp.get('sale');
+    const saleCny = saleRaw != null && saleRaw !== '' && Number.isFinite(Number(saleRaw)) ? Number(saleRaw) : null;
+    const report = buildCogsReport(byEngine, { projectId: id, saleCny });
+    return NextResponse.json(report);
+  }
+
   return NextResponse.json({ projectId: id, totalCny, entries: rows.length, byEngine });
 }
