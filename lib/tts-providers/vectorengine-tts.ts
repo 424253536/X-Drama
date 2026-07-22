@@ -8,10 +8,25 @@
 
 import { registerTTSProvider } from './registry';
 import type { TTSGenerateInput } from './types';
+import { VOICE_CATALOG } from '@/lib/character-studio';
 
-/** 项目内 voiceId (narrator_male_cn 等) → OpenAI tts voice. 纯函数, 可单测. */
+/**
+ * 项目内 voiceId (narrator_male_cn 等) → OpenAI tts voice. 纯函数, 可单测.
+ *
+ * v12.229:先查音色目录取该档**显式指定**的 OpenAI 音色;查不到(克隆音色 / 未知 id)才回落
+ * 原来的性别正则。
+ *
+ * 病根:原实现**只有**那段正则,把所有音色压成 nova(女)/onyx(男)/alloy(其余)三个 ——
+ * voice-routing 精心做的"同性别多角色池内轮转避免撞嗓"到这里被完全抹平,
+ * 成片里全片女角一个嗓、男角一个嗓,与"每角色独立音色"的承诺不符。
+ */
 export function mapVoiceToOpenAI(voiceId?: string): string {
-  const v = (voiceId || '').toLowerCase();
+  const id = (voiceId || '').trim();
+  if (id) {
+    const hit = VOICE_CATALOG.find((m) => m.id === id);
+    if (hit?.openai) return hit.openai;
+  }
+  const v = id.toLowerCase();
   if (/female|woman|girl|女/.test(v)) return 'nova';
   if (/male|man|boy|男/.test(v)) return 'onyx';
   return 'alloy';

@@ -39,6 +39,20 @@ export function buildVoiceRouting(names: string[], catalog: VoiceMeta[] = VOICE_
   const females = pool.filter((v) => v.gender === 'female');
   const counters = { male: 0, female: 0, unknown: 0 };
 
+  // v12.229:全局去重 —— 原实现里「未知性别」走**全池**轮转、「已知性别」走**子池**轮转,
+  // 两个区间重叠,于是 `陈墨`(未知→全池[2])和 `赵公子`(男→男池[0])会拿到同一个音色。
+  // 音色档只有 4 个时这问题被撞嗓噪音掩盖;扩到 22 档后必须真正做到「每角色独立音色」。
+  // 策略:优先在性别匹配的子池里找**还没被用过**的;子池用尽再退到全池找没用过的;
+  // 全都用过了(角色数 > 目录容量)才允许复用,复用时仍按原轮转顺序,保持确定性。
+  const used = new Set<string>();
+  const pickFirstUnused = (bucket: VoiceMeta[], startIdx: number): VoiceMeta | null => {
+    for (let i = 0; i < bucket.length; i++) {
+      const cand = bucket[(startIdx + i) % bucket.length];
+      if (!used.has(cand.id)) return cand;
+    }
+    return null;
+  };
+
   for (const raw of Array.isArray(names) ? names : []) {
     const n = (raw || '').trim();
     if (!n || map.has(n)) continue;
@@ -47,8 +61,14 @@ export function buildVoiceRouting(names: string[], catalog: VoiceMeta[] = VOICE_
       : g === 'male' ? (males.length ? males : pool)
         : pool;
     const idx = counters[g]++;
-    const pick = bucket.length ? bucket[idx % bucket.length] : null;
-    map.set(n, pick?.id || DEFAULT_VOICE_ID);
+    // ① 性别子池里找没用过的 → ② 全池找没用过的 → ③ 都用过则按原轮转复用
+    const pick =
+      pickFirstUnused(bucket, idx) ??
+      pickFirstUnused(pool, idx) ??
+      (bucket.length ? bucket[idx % bucket.length] : null);
+    const id = pick?.id || DEFAULT_VOICE_ID;
+    used.add(id);
+    map.set(n, id);
   }
   return map;
 }

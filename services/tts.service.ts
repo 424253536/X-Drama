@@ -1,6 +1,7 @@
 import { API_CONFIG } from '@/lib/config';
 import { emotionToMinimaxEmotion } from '@/lib/emotion-tag';
 import { voiceForLanguage } from '@/lib/tts-voice-map';
+import { VOICE_CATALOG } from '@/lib/character-studio';
 
 export interface TTSOptions {
   voiceId?: string;
@@ -53,6 +54,26 @@ const VOICE_PROFILES: Record<string, VoiceProfile> = {
   young_male_cn: { voiceId: 'young_male_cn', speed: 1.1, vol: 1.0, pitch: 2 },
   young_female_cn: { voiceId: 'young_female_cn', speed: 1.05, vol: 1.0, pitch: 3 },
 };
+
+/**
+ * v12.229 —— **修一个一直没人发现的真 bug**:内部音色 id 解析成 MiniMax 真实音色 id。
+ *
+ * 病根:此前 `voice_id` 把 `narrator_male_cn` / `young_female_cn` 这类**内部别名原样**发给 MiniMax,
+ * 而 MiniMax 压根不认 —— live 探测返回 `2054 voice id not exist`,和随手编的假 id 反应一模一样。
+ * 也就是说**走 MiniMax 路径时,按角色路由的音色从来没出过声**。
+ * 之所以长期没暴露:生产主路径是 vectorengine(priority 50 < minimax 100),MiniMax 只是兜底,
+ * 平时轮不到它;一旦 vectorengine 不可用回落 MiniMax,配音就会静默失败。
+ *
+ * 解析顺序:音色目录里的 `minimax` 字段(逐个 live 探测确认可用)> 已是合法 MiniMax id 则原样透传
+ * (克隆音色 / env 配的语种专属音色走这条)> 兜底 presenter_male(探测确认存在)。
+ */
+export function resolveMinimaxVoiceId(voiceId: string): string {
+  const hit = VOICE_CATALOG.find((v) => v.id === voiceId);
+  if (hit?.minimax) return hit.minimax;
+  // 不在目录里:可能是克隆音色 id 或 env 指定的语种专属音色 —— 原样透传,由 MiniMax 判定
+  if (voiceId && !/_cn$/.test(voiceId)) return voiceId;
+  return 'presenter_male';
+}
 
 // Estimate audio duration from text length (average speaking rate ~4 chars/sec for Chinese)
 function estimateDuration(text: string): number {
@@ -148,7 +169,8 @@ export class TTSService {
       model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd',
       text,
       voice_setting: {
-        voice_id: voiceId,
+        // v12.229:内部别名 → MiniMax 真实音色 id(原样下发会得 2054 voice id not exist)
+        voice_id: resolveMinimaxVoiceId(voiceId),
         speed: options?.speed ?? profile.speed,
         vol: options?.volume ?? profile.vol,
         pitch: options?.pitch ?? profile.pitch,
