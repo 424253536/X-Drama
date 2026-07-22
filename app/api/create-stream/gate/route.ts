@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { activeOrchestrators } from '../route';
 import { emitGateResolve } from '@/lib/event-bus';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,12 @@ export async function POST(request: NextRequest) {
   if (!projectId || !gateId) {
     return NextResponse.json({ error: 'projectId and gateId are required' }, { status: 400 });
   }
+
+  // v12.231(对抗复检补漏):v12.227 我改这个文件做多实例信令时**没加鉴权** ——
+  // 任何人知道 projectId 即可放行他人流水线的人工审核门(绕过 enableGates)。
+  // 放行属写操作,要 edit 级。
+  const g = await requireProjectAccess(request, projectId, 'edit');
+  if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
   const localHit = activeOrchestrators.has(projectId);
   emitGateResolve(projectId, gateId, { action, editedData });

@@ -22,6 +22,12 @@ const WEAK_JWT_SECRETS = new Set(
     'your-secret-key',
     'your_secret_key',
     'e2e-fixture-secret-not-for-prod', // .env.example 里 e2e 示例串,非生产密钥
+    // v12.231(收官 · 堵 🟡-24):CI workflow 里的明文夹具密钥。
+    // 它们只用于临时 runner,本身不触达线上;真风险是**被人 fork 后复制进生产 env**。
+    // 加进黑名单 = 即便复制了,生产也拒启动(纵深防御)。CI 自身不受影响 ——
+    // v12.226 已改成「非生产环境采用显式设置的密钥」,只有 production 才 fail-fast。
+    'dummy_for_build_only_change_in_production',
+    'e2e-ci-fixture-secret-not-for-prod',
   ].map((s) => s.toLowerCase()),
 );
 

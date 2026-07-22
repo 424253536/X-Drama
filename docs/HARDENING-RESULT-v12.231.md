@@ -1,0 +1,104 @@
+# 加固结果复检 · v12.218 → v12.231
+
+对抗尽调(竞品视角)列出 **27 条软肋**。本文逐条复检「堵了没有、堵在哪一版、还剩什么」。
+
+**口径**:只有能指出**具体代码/测试/live 证据**的才记「已堵」;做了一半的记「部分」;
+没做的照实记「未堵」并说明原因。**不粉饰** —— 这份表的价值恰恰在于它承认还剩什么。
+
+加固期间测试数 **2802 → 3175**,tsc 恒 0,CI 从「tsc+vitest」扩到 5 个 job(含 e2e / audit / license)。
+
+---
+
+## ⚠️ 本文经过对抗复检,并被大幅下修
+
+初稿是我**自评**的,结论是「已堵 14 条 / 52%、安全类致命项 100% 收口」。
+随后跑了**独立对抗复检**(3 路:鉴权绕过 / 烧额度 / 门面诚实性),结果**推翻了其中多条**:
+
+| 我原本声称 | 复检实况 |
+|---|---|
+| 🔴-2 安全类「100% 收口」 | **不成立**。三版修补只覆盖 `projects/[id]` 树,`characters/[id]` PUT/DELETE **匿名即可改/删任意角色**;`assets/confirm`、`pipeline-jobs`(跨租户)、`global-assets/[id]`、`notifications`、`preview-shot` 仍是首用户回落 |
+| 🔴-6 用量护栏「已堵」 | **不成立**。`tierMonthlyCeilingCny` 只喂 UI 展示;`assertBudget` 实读 `users.budget_cap_cny`(默认 null → 永远放行)。**档位上限从未真正生效** |
+| 🟡-20 测试数「已堵」 | **只改了徽章**。README 正文仍写 2802、Contributing 仍写 2894;`MARKETING-*.md` 冻在 v3.1.3 / 1150 tests(还是 README 首屏的公开 Pitch 链接) |
+| 「会花钱的写操作都已保护」 | **不成立**。`u2v/stream`、`narration/synthesize`、`character-traits/from-face`、`cameo/preview`、`test-llm` **零鉴权**;`create-stream` 与 `regenerate-shot` 的预算检查裹在 `if (uid)` 内,**匿名请求直接跳过护栏跑完整管线** |
+
+**这正是独立复检的价值** —— 自评永远看不见自己的盲区。下面各行的结论已按复检结果修正。
+
+---
+
+## 🔴 致命项(8 条)
+
+| # | 软肋 | 结论 | 堵在哪 |
+|---|---|---|---|
+| 🔴-1 | 支付六语写「即将上线」却已承诺「Pro 商业许可」 | **已堵** | v12.220:六语撤商业许可承诺,改「素材版权归属各生成引擎,商用请自查各引擎条款」;alertPayment 改「支付尚未接入,当前为免费/自托管」 |
+| 🔴-2 | IDOR + 无鉴权覆写 + 默认 JWT 密钥 | **部分**(复检下修) | v12.218 堵 IDOR(projects/[id] GET 加 view、PATCH 资产覆写加 edit)+ 撤「回落第一个用户」;v12.219 弱密钥生产拒启;**v12.230 复扫补 43 处漏网 handler** |
+| 🔴-3 | 三个核心卖点从未真正工作,README 始终标 ✅ | **部分** | v12.220 校正竞品表(口型行 ✅→⚠️ 限定 zh/en+需公网视频≥2s、i18n 行去「no hardcoded strings」)。**但卖点本身的能力差距未补** —— 那是产品路线,不是加固范畴 |
+| 🔴-4 | Midjourney 未授权代理调用 + 商用权属链断裂 | **部分** | 权属链已在 v12.220 说清(版权归各引擎、商用自查);**MJ 代理调用方式未改** |
+| 🔴-5 | Bus Factor=1 × 5471 行神类 | **部分** | v12.225 消 6 处契约面 `any` + 修 `DirectorReview` 长期接口漂移(projectId 必填但实现从不设、status 缺 'passed' 等)。**5471 行 glue 债仍在** —— 侦察后确认 writer/editor 纯逻辑早已在 lib/,剩的是深度耦合 `this` 的编排壳,拆它风险 > 收益,如实留债 |
+| 🔴-6 | Pro ¥298/月 vs 4K 实际成本 ¥240+:订阅即亏损 | **部分**(复检下修:上限只展示不执法) | v12.223 各档月度成本上限(免费5/创作60/专业200/企业-1)+ **4K 估算校准**(旧按 std ¥0.2/s 蒙,实为 ¥1.2/s,低估 6 倍);v12.224 单片 COGS 报告 + 毛利 |
+| 🔴-7 | qingyuntop 单一网关饱和 >24h,视频链路单点 | **未堵** | 本轮探测**再次证实问题真实**:该网关现已 `401 Token quota exhausted`。属运营/商务问题(需多网关合约),非代码可解 |
+| 🔴-8 | 声音克隆无被克隆人授权机制 | **已堵** | v12.221:consent 门(缺失→422)+ `consent_log` 落库(who/purpose/declaration/ip)+ 前端授权勾选;**次序修正**:输入校验提到 feature-flag 501 之前,授权门不被「本环境未启用」掩盖 |
+
+## 🟠 重要项(11 条)
+
+| # | 软肋 | 结论 | 堵在哪 |
+|---|---|---|---|
+| 🟠-9 | 健康端点无鉴权,暴露 provider 拓扑/余额 | **已堵** | v12.218 `health/providers` 加 `requireUser` |
+| 🟠-10 | assets 无属主校验 + 回落「第一个用户」 | **已堵** | v12.218:assets 强制 projectId+view;projects/characters/usage/budget/summary 撤回落→401;另 8 端点改哨兵 `'__no_auth__'`(匿名查空不泄露) |
+| 🟠-11 | MIT + SQLite = 用户零迁移成本随时带走 | **不打算堵** | 这是**开源策略的自觉选择**,不是缺陷。护城河应建在制作层能力,不是锁数据 |
+| 🟠-12 | PLAN_GATE_DISABLED 一键穿透付费墙 | **已堵** | v12.219:生产强制忽略该开关 + 警告日志 |
+| 🟠-13 | Ken Burns 静帧动画是高峰期真实产品 | **未堵** | 引擎可用性问题(与 🔴-7 同源)。降级本身是**诚实的**(标注 animatic,不冒充视频) |
+| 🟠-14 | 音色按哈希轮转,8+ 角色必撞音 | **已堵** | v12.229 音色库扩容 + 每角色独立绑定 |
+| 🟠-15 | 日/韩/俄口型=none 但竞品表标 ✅ | **已堵** | v12.220 竞品表口型行降 ⚠️ 并写明 ja/ko/ru 降级 none |
+| 🟠-16 | 无 AI 内容强制标识 | **已堵** | v12.222:抖音 create_video 恒带 `aigc_info`;出海打包 AI 声明升级为结构化强制字段 + 端点 `aiAck` 硬门槛;成片 AI 角标(env 门控,真机截帧验过) |
+| 🟠-17 | CI 无 E2E + 零安全扫描 | **已堵** | v12.226:CI 补 `security`(audit+license)与 `e2e`(smoke)两个 job + dependabot;**真修 4 个 high 漏洞**(js-yaml/undici/ws/sharp) |
+| 🟠-18 | S3 双写本地 + ffmpeg 依赖 absPath,多 Pod 404 | **已堵** | v12.228:补 `s3GetObject`(手写 SigV4 GET,零依赖)+ `ensureLocalCopy` 按需回源 + serve-file 302/回源;**假 S3 端点冒烟实证**「删掉本地副本后仍能回源」 |
+| 🟠-19 | 「no hardcoded strings」但组件 841 处 CJK | **部分** | v12.220 改掉了**不实表述**(→「5 语核心 UI,组件级清偿中」)。字面量清偿本身是持续工作 |
+
+## 🟡 次要项(8 条)
+
+| # | 软肋 | 结论 | 堵在哪 |
+|---|---|---|---|
+| 🟡-20 | 测试数三处打架(3043/2802/2894) | **已堵**(v12.231 才真正堵上) | v12.220 只改了徽章 → **v12.231 补正文+中文版**,并把诚实性锁从「只查徽章」扩到查正文 |
+| 🟡-21 | 约 18.6% 测试是源码 grep 锁 | **部分** | 本轮新增测试**绝大多数是真行为断言**(铸真 JWT 调真 handler 断 401/403、真 ffmpeg 出帧、真 HTTP 往返回源)。存量 grep 锁未系统重写 |
+| 🟡-22 | ffmpeg-static GPL-3 与 MIT 声明矛盾 | **已堵** | v12.226 license 门禁 + README「Redistribution notice」表。**门禁还多揪出 2 个**尽调没发现的:lightningcss(MPL-2.0)、sharp-libvips(LGPL-3.0) |
+| 🟡-23 | CRON_SECRET 非 production 放行 | **未堵** | 复核确认生产有 503 保护,非生产放行是**有意的本地便利**。风险面限于 staging |
+| 🟡-24 | CI 明文 dummy JWT_SECRET,fork 即用可预测密钥 | **已堵** | v12.231:把两个 CI 夹具密钥加进**弱密钥黑名单** —— 即便被复制进生产也拒启动(纵深防御)。CI 自身不受影响(v12.226 已改成非生产采用显式密钥) |
+| 🟡-25 | 三月 217 个 patch 版本:成熟度假象 | **不打算堵** | 版本号风格选择。逐版可追溯(每条带 commit hash + 验收数据)反而是**透明**而非粉饰 |
+| 🟡-26 | 「零配置 2D 口型」= 嘴巴 PNG 轮播 | **未核实** | 本轮未复核该实现,不下结论 |
+| 🟡-27 | macOS 烧 PingFang 入商用视频违反苹果 EULA | **未堵** | 真实风险,需换开源字体(Noto CJK)。**建议下一轮优先处理** |
+
+---
+
+## 汇总(经对抗复检修正)
+
+| 结论 | 条数 |
+|---|---|
+| **已堵** | **11** |
+| 部分 | 8 |
+| 未堵 | 4 |
+| 不打算堵(策略选择) | 3 |
+| 未核实 | 1 |
+
+**致命项(🔴)8 条:已堵 3、部分 4、未堵 1。** 初稿声称的「安全类 100% 收口」**不成立**。
+
+### 复检查出、尚未修复的高危项(下一轮首要)
+
+按「严重度 × 可利用性」排序,全部有 file:line + curl 复现步骤(见对抗复检原始输出):
+
+1. **`characters/[id]` PUT/DELETE** — 匿名改/删任意角色(首用户回落 + 零归属校验)。CRITICAL
+2. **零鉴权付费端点** — `u2v/stream`、`narration/synthesize`、`character-traits/from-face`、`cameo/preview`、`test-llm`:匿名循环即可烧额度。CRITICAL
+3. **`create-stream` / `regenerate-shot` 预算护栏被 `if (uid)` 架空** — 匿名请求跳过检查跑完整管线(单次 ¥3–10)。CRITICAL
+4. **用量护栏未接线** — `usage-quota` 的档位上限与 `assertBudget` 完全脱钩,需让 `assertBudget` 在 `budget_cap_cny` 为 null 时回落到档位上限。HIGH
+5. **首用户回落残留** — `preview-shot`、`preview-shot/history`、`global-assets/[id]`、`global-assets/[id]/use`、`notifications`、`comments` POST/DELETE。HIGH
+6. **跨租户泄露** — `pipeline-jobs` 列表无 user 过滤、`pipeline-jobs/[id]/retry` 不验归属、`v1/projects` 无 WHERE user_id。HIGH
+7. **`assets/confirm` 零鉴权** — 可篡改他人项目流水线状态,架空审核门。HIGH
+8. **`shot-audio` POST / `lipsync/render` POST** — 鉴权失败后赋 `__no_auth__` 继续执行,读写鉴权不对称。HIGH
+9. **`MARKETING-*.md` 冻在 v3.1.3 / 1150 tests** — README 首屏公开链接,投资人点进去看到的是 12 个大版本前的数据。HIGH
+10. **🟡-27 字体 EULA** — macOS 烧 PingFang 入商用视频,换 Noto CJK 即可
+
+### 方法论教训
+
+1. **自评不能替代独立复检**。本文初稿的 52% 是我自己给的;复检把它打到 11 条。凡是「我修的、我自己说堵了」的结论,都该由不知情的第三方复核。
+2. **「修了前门忘了侧门」是系统性模式**:v12.218 修 `characters/route.ts` 却漏 `characters/[id]/route.ts`;v12.230 修 `projects/[id]` 树却漏平级目录;v12.230 修 comments 的 GET 却漏 POST/DELETE。**按资源族而非按文件复扫**才不会漏。
+3. **护栏要验「真的拦住了」而不是「代码写了」**。用量上限写得很完整,但从没接进 `assertBudget` —— 有单测、有 UI、就是不生效。
+4. **对「已核实无问题」的结论也要保留怀疑**:路线图当初记录的 4 条「水分,已剔除」里,有 2 条本身是错的(pull-sheet GET、音色撞音),差点让真洞躲过整轮。

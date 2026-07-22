@@ -63,4 +63,17 @@ describe('v12.220 测试数门面不停留旧值', () => {
   it('CONTRIBUTING 不停留在 2800+', () => {
     expect(read('CONTRIBUTING.md').includes('2800+')).toBe(false);
   });
+
+  /**
+   * v12.231(对抗复检补漏):v12.220 我声称"测试数三处统一"已堵,但只改了**徽章** ——
+   * README 正文仍写 2802、Contributing 段仍写 2894/2894,中英双版皆然。
+   * 对抗方一眼就抓出「同一文件里三个数打架」。锁扩到正文,别再只守徽章。
+   */
+  for (const f of ['README.md', 'README.zh-CN.md']) {
+    it(`${f} 正文不含陈旧测试数 2802 / 2894`, () => {
+      const src = read(f);
+      expect(src.includes('2802')).toBe(false);
+      expect(src.includes('2894')).toBe(false);
+    });
+  }
 });
