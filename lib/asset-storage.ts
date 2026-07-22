@@ -188,6 +188,40 @@ export function normalizeAssetRow<T extends { media_urls?: string; persistent_ur
 }
 
 /**
+ * v12.228 — S3 回源时的候选扩展名。
+ *
+ * 背景:`resolveByKey` 是**按前缀扫本地目录**找文件的,所以它天然不需要预先知道扩展名。
+ * 但从 S3 回源必须给出完整 objectKey(`<key><ext>`),于是只能按本项目实际会产生的扩展名逐个试。
+ * 顺序按命中率排(成片 mp4 / 分镜图 png-jpg 最常被 serve-file 请求),命中即停,
+ * 未命中的候选只是一次 404 的 GET,成本可控。列表与 `extFromContentType` 的值域保持一致。
+ */
+const S3_FALLBACK_EXTS = ['.mp4', '.png', '.jpg', '.webp', '.mp3', '.wav', '.m4a', '.aac', '.webm', '.mov', '.gif', '.svg', '.bin'];
+
+/**
+ * 根据 key 拿到**本机可读**的文件;本地缺失时(且配了 S3)自动从 S3 回源一份。
+ *
+ * 病根(🟠-18 多 Pod serve-file 404):写侧虽然双写本地+S3,但本地副本**只在生成它的那个 Pod**。
+ * 负载均衡把 `/api/serve-file?key=X` 打到 Pod-B 时,`resolveByKey` 只 readdir 本 Pod 目录 → null → 404。
+ * 回源后本地就有了副本,后续该 Pod 上的 ffmpeg 类消费方(按 absPath 读)也一并受益。
+ *
+ * 单机(未配 S3):第一步就命中本地,**与原 `resolveByKey` 完全等价、零额外开销**。
+ */
+export async function resolveByKeyOrFetch(key: string): Promise<{ absPath: string; ext: string } | null> {
+  const local = resolveByKey(key);
+  if (local) return local;
+
+  if (!/^[a-f0-9]{16,64}$/i.test(key)) return null;
+  const { isS3Mode, ensureLocalCopy } = await import('./storage');
+  if (!isS3Mode()) return null;
+
+  for (const ext of S3_FALLBACK_EXTS) {
+    const absPath = await ensureLocalCopy(key, ext);
+    if (absPath) return { absPath, ext };
+  }
+  return null;
+}
+
+/**
  * 根据 key 查本地存储文件。找到返回绝对路径,否则 null。
  */
 export function resolveByKey(key: string): { absPath: string; ext: string } | null {

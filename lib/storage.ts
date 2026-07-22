@@ -181,6 +181,76 @@ export async function s3PutObject(cfg: S3Config, objectKey: string, body: Buffer
   return cfg.publicBaseUrl ? `${cfg.publicBaseUrl}/${objectKey}` : url.toString();
 }
 
+/**
+ * v12.228 — S3 兼容 GET(path-style)。找不到对象返回 null(404/403 都算"没有")。
+ *
+ * 为什么以前没有:写侧一直**双写本地**,单 Pod 下本地必有副本,从没人需要从 S3 读回来。
+ * 多 Pod 才暴露问题 —— Pod-A 写的文件,Pod-B 本地盘没有,而 `resolveByKey` 只 readdir 本地,
+ * 于是 `/api/serve-file?key=…` 在 Pod-B 上必 404。补上 GET 才谈得上"回源"。
+ * 同样手写 SigV4,零新依赖(不引 aws-sdk)。
+ */
+export async function s3GetObject(cfg: S3Config, objectKey: string): Promise<Buffer | null> {
+  const url = new URL(`${cfg.endpoint}/${cfg.bucket}/${objectKey}`);
+  const amzDate = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  // GET 无 body,payload hash 是空串的 sha256(AWS 规定)
+  const payloadSha256 = sha256Hex('');
+  const headers = sigv4Headers({
+    method: 'GET', url,
+    headers: { 'x-amz-content-sha256': payloadSha256 },
+    payloadSha256,
+    accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey,
+    region: cfg.region, service: 's3', amzDate,
+  });
+  const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404 || res.status === 403) return null;
+  if (!res.ok) throw new Error(`S3 GET ${res.status}: ${(await res.text()).slice(0, 120)}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * v12.228 — 按需回源:确保 `key+ext` 在**本机**有一份副本,返回其绝对路径;拿不到返回 null。
+ *
+ * 设计取舍(为什么是"按需回源"而不是路线图字面的"ffmpeg 全改成 S3 拉取→处理→回传"):
+ * ffmpeg 消费方散布在 video-composer / last-frame-extractor / film-health-io / video-anchor 等
+ * 十几处,逐处改成"拉取-处理-回传"改动面巨大且每处都要重写临时文件生命周期,风险远大于收益。
+ * 而它们真正需要的只是**一个能读到的本地路径**。所以把"保证本地有副本"收敛成这一个函数:
+ * 本地已有 → 直接用(单机永远走这条,**零行为变化、零额外 I/O**);本地缺失且配了 S3 → 从 S3 拉一份
+ * 落到同一位置,后续所有消费方(含 ffmpeg)照旧按 absPath 读。
+ */
+export async function ensureLocalCopy(key: string, ext: string): Promise<string | null> {
+  ensureRoot();
+  const absPath = path.join(LOCAL_STORAGE_ROOT, `${key}${ext}`);
+  if (fs.existsSync(absPath)) return absPath;
+
+  const cfg = s3ConfigFromEnv();
+  if (!cfg) return null; // 未配 S3 → 本地就是唯一真相,缺了就是真缺
+
+  try {
+    const buf = await s3GetObject(cfg, `${key}${ext}`);
+    if (!buf) return null;
+    // 临时名 + rename 原子落位(与 localDriver.put 同款,防并发读到半截文件)
+    const tmp = `${absPath}.part-${process.pid}`;
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, absPath);
+    return absPath;
+  } catch (e) {
+    console.warn(`[storage] S3 回源失败 ${key}${ext}: ${e instanceof Error ? e.message : e}`);
+    return null;
+  }
+}
+
+/** v12.228:当前是否 S3 模式(供 serve-file 决定要不要回源/重定向)。 */
+export function isS3Mode(): boolean {
+  return s3ConfigFromEnv() !== null;
+}
+
+/** v12.228:对象的公网直链(配了 S3_PUBLIC_BASE_URL 才有),供 serve-file 302 重定向。 */
+export function s3PublicUrl(objectKey: string): string | null {
+  const cfg = s3ConfigFromEnv();
+  if (!cfg || !cfg.publicBaseUrl) return null;
+  return `${cfg.publicBaseUrl}/${objectKey}`;
+}
+
 function makeS3Driver(cfg: S3Config): StorageDriver {
   return {
     id: 's3',

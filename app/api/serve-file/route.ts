@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { resolveByKey } from '@/lib/asset-storage';
+import { resolveByKey, resolveByKeyOrFetch } from '@/lib/asset-storage';
+import { isS3Mode, s3PublicUrl } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,11 +22,23 @@ export async function GET(request: NextRequest) {
 
   // ── 模式 1: 持久化资产 ──
   if (keyParam) {
-    const resolved = resolveByKey(keyParam);
-    if (!resolved) {
-      return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+    // v12.228(存储水平扩展 · 🟠-18):本地命中就直接服务(单机永远走这条,零行为变化)。
+    // 多 Pod + S3 时本地可能没有 —— 写侧虽双写本地,但本地副本**只在生成它的那个 Pod**,
+    // 负载均衡打到别的 Pod 就 404。此时按需回源:
+    //   · 配了 S3_PUBLIC_BASE_URL → 302 到公网直链(省一次回源流量,CDN 友好);
+    //   · 否则(私有桶)→ 从 S3 拉一份落本地再服务,顺带让本 Pod 的 ffmpeg 消费方也能用。
+    const local = resolveByKey(keyParam);
+    if (local) return serveLocalFile(request, local.absPath);
+
+    if (isS3Mode()) {
+      const resolved = await resolveByKeyOrFetch(keyParam);
+      if (resolved) {
+        const publicUrl = s3PublicUrl(`${keyParam}${resolved.ext}`);
+        if (publicUrl) return NextResponse.redirect(publicUrl, 302);
+        return serveLocalFile(request, resolved.absPath);
+      }
     }
-    return serveLocalFile(request, resolved.absPath);
+    return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
   }
 
   // ── 模式 3: 外链代理(只代理 http/https,流式转发) ──
