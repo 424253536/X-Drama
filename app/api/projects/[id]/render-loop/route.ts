@@ -16,6 +16,8 @@ import {
   deriveShotRenderStates, summarizeRenderLoop, isRenderLoopSettled,
   type ShotLike, type AssetLike,
 } from '@/lib/render-loop';
+import { requireProjectAccess } from '@/lib/auth-guard';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +37,11 @@ async function snapshot(projectId: string) {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const url = new URL(request.url);
 
   // 单次快照 (初始绘制 / 测试)

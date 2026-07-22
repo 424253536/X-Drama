@@ -15,13 +15,19 @@ import {
   buildCoverPrompts, pickProtagonist, getTitleSafeArea, COVER_ASPECT,
   type CoverCandidate,
 } from '@/lib/cover-candidates';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const safeArea = getTitleSafeArea();
   const rows = await listAssetsByType(id, 'cover-candidates');
   if (!rows.length) return NextResponse.json({ candidates: [], safeArea });
@@ -33,8 +39,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const proj = await getProject(id);
   if (!proj) return NextResponse.json({ error: '项目不存在' }, { status: 404 });
 

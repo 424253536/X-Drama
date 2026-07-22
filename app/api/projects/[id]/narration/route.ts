@@ -5,12 +5,18 @@ import { buildNarrationTrack } from '@/lib/narration-track';
 import { synthesizeNarrationTrack } from '@/lib/narration-synth';
 import { persistAsset } from '@/lib/asset-storage';
 import { cuesToSrt, narrationToTimelineSegments, type RenderedNarrationLike } from '@/lib/narration-timeline';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 
 /** GET → 项目落库的解说音轨 (含落盘 audio + srt). 没有 → null. */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const row = db.prepare(
     `SELECT data FROM project_assets WHERE project_id = ? AND type = 'narration' ORDER BY updated_at DESC LIMIT 1`,
   ).get(id) as { data: string } | undefined;
@@ -33,6 +39,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(id) as { id: string } | undefined;
   if (!project) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 

@@ -17,6 +17,7 @@ import {
   buildLedger, mergeLedger, applyDescriptionChange, addManualEntry,
   type AssetLedger, type ShotLike, type LedgerKind,
 } from '@/lib/asset-ledger';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,8 +46,12 @@ function loadShots(projectId: string): ShotLike[] {
   return Array.isArray(shots) ? shots : [];
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const shots = loadShots(id);
   const characters = (await listAssetsByType(id, 'character')).map((r) => {
     const d = parseData(r.data);

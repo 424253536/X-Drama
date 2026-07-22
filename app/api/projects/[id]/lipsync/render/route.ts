@@ -19,13 +19,18 @@ import {
   lipSyncEngineConfigured, listLipSyncProviders, dispatchLipSyncGenerate,
 } from '@/lib/lipsync-providers';
 import type { ScriptShot } from '@/types/agents';
+import { requireUser } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SETUP_HINT = '口型引擎未配置 —— 设置 LIPSYNC_API_URL 指向自托管 wav2lip/SadTalker/MuseTalk 服务即可启用(可选 LIPSYNC_API_KEY 鉴权)';
 
-export async function GET() {
+export async function GET(request: Request) {
+  // v12.230:只返回引擎能力信息(无项目数据),故不需要项目作用域守卫;
+  // 但与 v12.218 给 health/providers 的处理一致 —— 要求登录,避免匿名探测基础设施配置。
+  const _g = requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
   const configured = lipSyncEngineConfigured();
   const providers = listLipSyncProviders().map((p) => ({ id: p.id, name: p.name, available: (() => { try { return p.available(); } catch { return false; } })() }));
   return NextResponse.json({ configured, providers, hint: configured ? undefined : SETUP_HINT });

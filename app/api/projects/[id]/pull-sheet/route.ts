@@ -16,6 +16,7 @@ import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { buildPullSheetFromScript, toPullSheetCsv } from '@/lib/pull-sheet';
 import { getUserFromRequest } from '../../../auth/lib';
 import { getOwnedProject } from '@/lib/repos/project-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,10 @@ function firstUrl(mediaUrls: string | null): string | null {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
 
   // v11.1.1: 外部参考片拉片清单
   if (request.nextUrl.searchParams.get('external') === '1') {

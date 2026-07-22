@@ -3,12 +3,18 @@ import { db, now } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { normalizeAssetRow } from '@/lib/asset-storage';
 import { createAsset } from '@/lib/repos/asset-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 
 // 获取项目资产
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
 
   try {
     const assets = db.prepare(
@@ -38,6 +44,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 // 创建资产
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const body = await request.json();
 
   try {

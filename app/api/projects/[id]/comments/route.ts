@@ -28,6 +28,7 @@ import {
   type CommentTargetType,
 } from '@/lib/comments';
 import { broadcastNewComment, broadcastDeleteComment } from '@/lib/yjs-broadcast';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,6 +54,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   if (!projectId) return NextResponse.json({ error: '缺 projectId' }, { status: 400 });
 
   const targetType = request.nextUrl.searchParams.get('targetType') as CommentTargetType | null;

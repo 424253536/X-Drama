@@ -16,12 +16,17 @@ import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../../../auth/lib';
 import { recordCostLog, estimateTtsCostCny } from '@/lib/repos/cost-log-repo';
 import type { ScriptShot } from '@/types/agents';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const rows = await listAssetsByType(id, 'shot-audio');
   const shots = rows
     .filter((r) => typeof r.shot_number === 'number')

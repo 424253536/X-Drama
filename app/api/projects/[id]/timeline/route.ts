@@ -16,6 +16,7 @@ import { getUserFromRequest } from '../../../auth/lib';
 import type { Script, ScriptShot } from '@/types/agents';
 import { computeTracks, applyTrackEdits, resetTrackEdit, type SegmentOverride } from '@/lib/timeline-tracks';
 import { updateAsset } from '@/lib/repos/asset-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,11 +69,14 @@ function loadShotMedia(projectId: string): Map<number, { thumbnailUrl?: string; 
   return out;
 }
 
-export async function GET(
-  _request: NextRequest,
+export async function GET(request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const { script } = loadScript(projectId);
   if (!script || !Array.isArray(script.shots)) {
     return NextResponse.json({ shots: [], tracks: { bgm: [], subtitle: [] }, totalDuration: 0 });

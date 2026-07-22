@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { isValidResolution, transcodeToResolution } from '@/lib/video-transcode';
 import { checkPlan, planRejection, requiredTierForResolution } from '@/lib/plan-gate';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const type = request.nextUrl.searchParams.get('type') || 'mp4';
 
   const project = db.prepare('SELECT id, title FROM projects WHERE id = ?').get(projectId) as any;

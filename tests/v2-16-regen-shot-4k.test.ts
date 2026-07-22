@@ -41,6 +41,13 @@ vi.mock('../app/api/auth/lib', () => ({
   getUserFromRequest: () => ({ sub: 'test-user' }),
 }));
 
+// v12.230:路由补了项目作用域鉴权。本测试全程 mock DB、不建真项目,
+// 故直接 mock 守卫放行 —— 鉴权本身由 v12-218/v12-230 的专门用例覆盖。
+vi.mock('@/lib/auth-guard', () => ({
+  requireProjectAccess: async () => ({ ok: true, userId: 'test-user' }),
+  requireUser: () => ({ ok: true, userId: 'test-user' }),
+}));
+
 vi.mock('@/lib/config', () => ({
   get API_CONFIG() {
     return {

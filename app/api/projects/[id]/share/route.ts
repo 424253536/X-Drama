@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, now } from '@/lib/db';
 import { updateProjectById } from '@/lib/repos/project-repo';
 import { nanoid } from 'nanoid';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,8 +20,13 @@ export const dynamic = 'force-dynamic';
  * 共享页由 /app/share/[token]/page.tsx 按 read-only 呈现。
  */
 
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
 
   const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId) as any;
   if (!project) return NextResponse.json({ error: 'project not found' }, { status: 404 });
@@ -36,14 +42,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   await updateProjectById(projectId, { share_token: null, share_created_at: null });
   return NextResponse.json({ ok: true });
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const row = db.prepare('SELECT share_token, share_created_at FROM projects WHERE id = ?').get(projectId) as any;
   if (!row) return NextResponse.json({ error: 'project not found' }, { status: 404 });
   if (!row.share_token) return NextResponse.json({ enabled: false });

@@ -5,12 +5,15 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { db, now } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { GET, POST } from '@/app/api/projects/[id]/timeline/route';
+import { signToken } from '@/app/api/auth/lib';
 
 function mkReq(method: string, body?: any): any {
   const url = new URL('http://localhost/api/projects/x/timeline');
+  // v12.230:路由补了项目作用域鉴权,假请求必须带属主 token,否则恒 401。
+  const token = signToken({ id: SEEDED_USER_ID, role: 'user' });
   return {
     nextUrl: url,
-    headers: { get: () => null },
+    headers: { get: (k: string) => (k.toLowerCase() === 'authorization' ? `Bearer ${token}` : null) },
     json: async () => body || {},
   };
 }
@@ -48,6 +51,12 @@ function seedScript(projectId: string, shots: Array<{ shotNumber: number; durati
 
 describe('v3.1 F · GET /timeline', () => {
   it('returns empty when no script', async () => {
+    // v12.230:路由补了项目作用域鉴权 —— 项目必须存在且属本人,否则 403。
+    // 这里只建**空项目**(不挂 script 资产),测试语义(无剧本→空 shots)不变。
+    db.prepare(
+      `INSERT OR IGNORE INTO projects (id, user_id, title, status, created_at, updated_at)
+       VALUES (?, ?, 'test-tl-empty', 'active', ?, ?)`,
+    ).run('test-tl-empty', SEEDED_USER_ID, now(), now());
     const res = await GET(mkReq('GET'), { params: Promise.resolve({ id: 'test-tl-empty' }) });
     const body = await res.json();
     expect(body.shots).toEqual([]);

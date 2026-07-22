@@ -13,12 +13,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '../../../auth/lib';
 import { listRetakeState, synthesizeRetake, adoptTake, type VoiceRetakeJobPayload } from '@/lib/voice-retake';
 import { getOwnedProject } from '@/lib/repos/project-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const shots = await listRetakeState(id);
   return NextResponse.json({ count: shots.length, shots });
 }

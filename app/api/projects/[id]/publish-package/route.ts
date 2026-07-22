@@ -7,10 +7,11 @@
  * 缺件不报错,写进 warnings;附 exportHint(让前端一键导该平台 aspect 成片)。
  * 读免鉴权(与项目其它只读端点一致;真发布动作 v12.3.1 才加 auth+gate)。
  */
-import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getPlatformSpec, isPlatformId, type PlatformPack } from '@/lib/distribution';
 import { buildPublishPackage, resolveCoverChain } from '@/lib/publish-package';
+import { NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,11 @@ function parse(raw: string | null | undefined): any {
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const platform = new URL(request.url).searchParams.get('platform') || '';
   if (!isPlatformId(platform)) {
     return NextResponse.json({ error: `platform 必须是 ${'douyin/kuaishou/shipinhao/xiaohongshu/youtube_shorts/bilibili/tiktok'}` }, { status: 400 });

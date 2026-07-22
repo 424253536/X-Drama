@@ -12,6 +12,7 @@ import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { buildAAF } from '@/lib/aaf-export';
 import { type EdlShot } from '@/lib/edl-export';
 import { normalizeProjectFormat } from '@/lib/project-format';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,8 +22,13 @@ function firstUrl(raw: string | null | undefined): string | undefined {
   try { const a = JSON.parse(raw); return Array.isArray(a) ? a[0] : undefined; } catch { return undefined; }
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
 
   const scriptRows = await listAssetsByType(projectId, 'script');
   let script: any = {};

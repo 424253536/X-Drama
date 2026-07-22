@@ -7,15 +7,21 @@
  *
  * Auth: 与其它项目级只读报告端点(consistency / publish-readiness)一致,只读不强制登录。
  */
-import { NextResponse } from 'next/server';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { dialogueLinesFromShots, buildLipSyncPlan } from '@/lib/lipsync-plan';
 import type { ScriptShot } from '@/types/agents';
+import { NextResponse } from 'next/server';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,
+  // 未系统复扫 projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, id, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
 
   const scriptRows = await listAssetsByType(id, 'script');
   let script: { shots?: ScriptShot[] } = {};

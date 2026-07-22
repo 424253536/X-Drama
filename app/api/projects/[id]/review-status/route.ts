@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getUserFromRequest } from '../../../auth/lib';
 import { getReviewStatus, transitionReviewStatus, type ReviewStatus } from '@/lib/review-status';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,11 +32,14 @@ const ACTION_TO_STATUS: Record<string, ReviewStatus> = {
   withdraw: 'draft',
 };
 
-export async function GET(
-  _request: NextRequest,
+export async function GET(request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):本 GET 此前无鉴权 —— 知道 projectId 即可读取他人项目数据。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const status = getReviewStatus(projectId);
   return NextResponse.json(status);
 }

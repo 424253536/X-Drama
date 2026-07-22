@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { buildEDL, buildFCPXML, type EdlShot } from '@/lib/edl-export';
 import { normalizeProjectFormat } from '@/lib/project-format';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,11 @@ function firstUrl(raw: string | null | undefined): string | undefined {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+  // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
+  // projects/[id]/** —— 本路由当时漏网,任何人知道 projectId 即可调用。
+  const _g = await requireProjectAccess(request, projectId, 'view');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+
   const format = new URL(request.url).searchParams.get('format') === 'fcpxml' ? 'fcpxml' : 'edl';
 
   const scriptRows = await listAssetsByType(projectId, 'script');

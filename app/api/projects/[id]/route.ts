@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
 import { db, now } from '@/lib/db';
 import { getUserFromRequest } from '../../auth/lib';
 import { normalizeAssetRow } from '@/lib/asset-storage';
 import { listProjectAssets, getAsset, updateAssetDataInProject } from '@/lib/repos/asset-repo';
 import { getOwnedProject, deleteProjectCascade, setProjectArchived } from '@/lib/repos/project-repo';
+import { NextResponse } from 'next/server';
 import { requireProjectAccess } from '@/lib/auth-guard';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
