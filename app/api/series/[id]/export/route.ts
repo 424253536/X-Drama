@@ -15,13 +15,19 @@ import { getUserFromRequest } from '../../../auth/lib';
 import { listSeriesEpisodes } from '@/lib/repos/series-repo';
 import { listAssetsByType, upsertAsset } from '@/lib/repos/asset-repo';
 import { persistAsset } from '@/lib/asset-storage';
+import { acquireLock, releaseLock, makeLockOwner } from '@/lib/repos/resource-lock-repo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const MAX_EPISODES = 20;
-const inFlight = new Set<string>(); // 进程内 per-series 导出锁
+// v12.227(多实例就绪):导出并发锁从**进程内 Set** 换成 DB CAS 锁。
+// 病根:进程内 Set 在多实例下形同虚设 —— 第二个实例的 Set 是空的,同一系列会被两个
+// ffmpeg 同时导出,产物互相覆盖(season_video 指向谁看竞争结果)、CPU/磁盘双份消耗。
+// TTL 取 maxDuration 同量级(300s),持锁进程崩溃后靠 TTL 自动解锁,不会永久卡住导出。
+const EXPORT_LOCK_TTL_MS = 300_000;
+const exportLockKey = (seriesId: string) => `series-export:${seriesId}`;
 
 function urlOf(a: any): string | undefined {
   if (!a) return undefined;
@@ -57,9 +63,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  // 并发锁:同一系列正在导出 → 409(防多 Tab/脚本并发起多个 ffmpeg)
-  if (inFlight.has(id)) return NextResponse.json({ error: '该系列正在导出中,请稍候' }, { status: 409 });
-  inFlight.add(id);
+  // 并发锁:同一系列正在导出 → 409(防多 Tab/脚本/多实例并发起多个 ffmpeg)
+  const lockOwner = makeLockOwner('series-export');
+  if (!(await acquireLock(exportLockKey(id), EXPORT_LOCK_TTL_MS, lockOwner))) {
+    return NextResponse.json({ error: '该系列正在导出中,请稍候' }, { status: 409 });
+  }
 
   // 按集号收集各集成片 URL;无成片的集记入 skipped
   const urls: string[] = [];
@@ -68,7 +76,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const u = urlOf((await listAssetsByType(ep.id, 'final_video'))[0]);
     if (u) urls.push(u); else skipped.push(ep.episode_number ?? 0);
   }
-  if (urls.length === 0) { inFlight.delete(id); return NextResponse.json({ error: '已完成剧集均无成片文件' }, { status: 400 }); }
+  if (urls.length === 0) {
+    await releaseLock(exportLockKey(id), lockOwner).catch(() => { /* 释放失败靠 TTL 兜底 */ });
+    return NextResponse.json({ error: '已完成剧集均无成片文件' }, { status: 400 });
+  }
 
   const anchor = eps[0];               // 季产物挂集号最小的锚点集(GET 也从这读,保持一致)
   const aspect = completed[0].aspect || anchor.aspect || '16:9'; // 画幅取真实已完成集
@@ -88,7 +99,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (e) {
     return NextResponse.json({ error: '合集导出失败: ' + (e instanceof Error ? e.message : String(e)).slice(0, 160) }, { status: 502 });
   } finally {
-    inFlight.delete(id);
+    await releaseLock(exportLockKey(id), lockOwner).catch(() => { /* 释放失败靠 TTL 兜底 */ });
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 清理临时目录,防磁盘泄漏 */ }
   }
 }

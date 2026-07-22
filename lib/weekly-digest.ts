@@ -9,6 +9,7 @@
 import { getDbDriver } from './db-driver';
 import { createNotification } from './repos/notification-repo';
 import { emitNotification } from './event-bus';
+import { acquireLock, releaseLock, makeLockOwner } from './repos/resource-lock-repo';
 
 export const DIGEST_TYPE = 'weekly_digest';
 const WEEK_MS = 7 * 24 * 3600 * 1000;
@@ -49,13 +50,27 @@ export async function maybeSendWeeklyDigest(userId: string): Promise<DigestResul
   const stats: DigestStats = { created: created?.c ?? 0, completed: completed?.c ?? 0 };
   if (stats.created === 0 && stats.completed === 0) return 'no-activity';
 
-  await createNotification({
-    recipientUserId: userId,
-    type: DIGEST_TYPE,
-    sourceUserId: 'system',
-    sourceUserName: '青枫周报',
-    preview: digestPreview(stats),
-  });
+  // v12.227(多实例就绪):上面的「SELECT 查上次 → 再 INSERT」是典型 TOCTOU。
+  // GET /api/notifications 每次都会 fire-and-forget 触发本函数,两个请求同时打到不同实例时,
+  // 两边都查到「距上次 ≥7 天」→ 都发一条 → 用户收到**重复周报**(notifications 表无唯一约束)。
+  // 用跨实例锁当幂等令牌:TTL 7 天且**成功后不释放** —— 抢到的才发,其余一律当 'recent'。
+  // 仅在发送失败时释放,避免一次异常把该用户这一周的周报永久堵死。
+  const lockKey = `weekly-digest:${userId}`;
+  const lockOwner = makeLockOwner('digest');
+  if (!(await acquireLock(lockKey, WEEK_MS, lockOwner))) return 'recent';
+
+  try {
+    await createNotification({
+      recipientUserId: userId,
+      type: DIGEST_TYPE,
+      sourceUserId: 'system',
+      sourceUserName: '青枫周报',
+      preview: digestPreview(stats),
+    });
+  } catch (e) {
+    await releaseLock(lockKey, lockOwner).catch(() => { /* 释放失败靠 TTL 兜底 */ });
+    throw e;
+  }
   emitNotification(userId, { digest: true });
   return 'sent';
 }

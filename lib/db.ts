@@ -340,6 +340,19 @@ CREATE TABLE IF NOT EXISTS consent_log (
 CREATE INDEX IF NOT EXISTS idx_consent_log_user ON consent_log(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_consent_log_action ON consent_log(action, created_at);
 
+-- v12.227(多实例就绪):跨实例互斥锁(带 TTL)。
+-- 病根:长任务的并发防重此前用**进程内** Set(如系列导出的 inFlight),多实例下第二个实例
+-- 的 Set 是空的 → 同一系列被两个 ffmpeg 同时导出,产物互相覆盖、CPU/磁盘翻倍。
+-- 用 DB 做锁的理由:DB 本来就是多实例共享的,零新依赖;CAS 语义与 claimNextJob 一致。
+-- TTL 是防死锁的兜底 —— 持锁进程崩溃不会永久占锁,过期后自动可被抢占。
+CREATE TABLE IF NOT EXISTS resource_locks (
+  key TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_resource_locks_expires ON resource_locks(expires_at);
+
 -- v11.0.3: 任务进度事件 append-only 表 —— 取代 pipeline_jobs.progress_log 的
 -- 读改写(非原子,多副本/PG 下有 lost update;部署文档限位 #2)。INSERT 天然原子。
 -- 排序 (at, ord):job 同一时刻只被一个 worker 认领,进程内 ord 单调递增即可全序。

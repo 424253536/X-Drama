@@ -799,18 +799,42 @@ export class HybridOrchestrator {
     }
   }
 
-  // Wait for user at an intervention gate
+  /**
+   * 等待用户在人工闸门放行。
+   *
+   * v12.227(多实例就绪):除本地 resolver 外**同时订阅 event-bus 的 gate 频道**。
+   * 病根:原实现只认 `activeOrchestrators`(进程内 Map)—— 多实例下用户点「审核通过」的
+   * POST 可能落到没有该编排器的实例,直接 404,流水线挂死到 5 分钟超时。
+   * 现在 gate 路由改为向总线 emit:单机时总线就是同进程 EventEmitter(emit 即达,行为不变),
+   * 配了 REDIS_URL 则经 Redis 桥跨实例投递。两条路径先到先得,重复放行被 `done` 去重。
+   */
   async waitForGate(gateId: string, gateData: GateData): Promise<GateResult> {
     this.emit('gate', { gateId, ...gateData });
+    const { subscribe, gateChannel } = await import('@/lib/event-bus');
+    const projectId = this.projectId;
     return new Promise((resolve) => {
-      this.gateResolvers.set(gateId, resolve);
-      // Auto-continue after 5 minutes timeout
-      setTimeout(() => {
-        if (this.gateResolvers.has(gateId)) {
-          this.gateResolvers.delete(gateId);
-          resolve({ action: 'continue' });
-        }
-      }, 5 * 60 * 1000);
+      let done = false;
+      let unsub: (() => void) | null = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const finish = (r: GateResult) => {
+        if (done) return;
+        done = true;
+        try { unsub?.(); } catch { /* 退订失败不影响放行 */ }
+        if (timer) clearTimeout(timer);
+        this.gateResolvers.delete(gateId);
+        resolve(r);
+      };
+      // ① 同进程直调路径(resolveGate)—— 保留,向后兼容既有调用方
+      this.gateResolvers.set(gateId, (data: any) => finish(data as GateResult));
+      // ② 总线路径 —— 跨实例;无 projectId(单测/演示态)时跳过订阅
+      if (projectId) {
+        unsub = subscribe(gateChannel(projectId), (ev) => {
+          if (ev.gateId !== gateId) return;
+          finish({ action: String(ev.action ?? 'continue'), editedData: (ev as any).editedData });
+        });
+      }
+      // ③ 5 分钟超时自动放行(兜底,防用户离开导致流水线永久挂起)
+      timer = setTimeout(() => finish({ action: 'continue' }), 5 * 60 * 1000);
     });
   }
 

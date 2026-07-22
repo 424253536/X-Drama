@@ -38,6 +38,18 @@ const g = globalThis as unknown as { __qfmjPipelineWorker?: { timer: ReturnType<
 
 let active = 0;
 
+/**
+ * v12.227:tick 防重入。
+ *
+ * 病根:下面 tick() 的 `active++` 发生在 `await claimNextJob()` **之后**。
+ * SQLite 驱动全是 `Promise.resolve` 包同步调用,await 只让出 microtask,setInterval 的下一个
+ * macrotask 插不进来,所以单机看不出问题;但 **Postgres 驱动的 claimNextJob 是真网络 I/O(几十毫秒)**,
+ * 前一次 tick 还卡在 await 时,下一次 tick 已经开跑 —— 两次都读到 active=0 < MAX_ACTIVE,
+ * 各自认领一个 job 后才 active++,并发数被顶到 3~4,`MAX_ACTIVE=2` 形同虚设。
+ * (注:CAS 保证同一 job 不会被双认领,这里坏的是**并发上限**,不是任务正确性。)
+ */
+let ticking = false;
+
 // v12.21.0:终态失败回写 —— create 类任务耗尽重试仍失败 → 把项目标 'failed'
 // (否则多集批量里失败的集会永远停在 'active';单集创作同样受益)。仅 state='failed' 才回写。
 async function markProjectFailedIfTerminal(job: { type: string; projectId: string }, state: string): Promise<void> {
@@ -123,21 +135,30 @@ async function runJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJob>>>
 }
 
 async function tick(): Promise<void> {
-  if (Date.now() - lastOrphanSweep >= ORPHAN_SWEEP_MS) {
-    lastOrphanSweep = Date.now();
-    try {
-      const { recoverOrphanJobs } = await import('./repos/pipeline-job-repo');
-      const { requeued, expired } = await recoverOrphanJobs();
-      if (requeued || expired) console.log(`[PipelineWorker] orphan sweep: ${requeued} requeued, ${expired} expired`);
-    } catch { /* driver 未就绪 — 下个周期再试 */ }
-  }
-  while (active < MAX_ACTIVE) {
-    const job = await claimNextJob();
-    if (!job) return;
-    active++;
-    void runJob(job)
-      .catch((e) => console.error('[PipelineWorker] runJob error:', e))
-      .finally(() => { active--; });
+  // v12.227:防重入 —— 上一轮还在 await(Postgres 下是真网络 I/O)时直接跳过本轮,
+  // 否则两轮都读到 active=0 会把并发顶过 MAX_ACTIVE。SQLite 单机下本就不会重入,
+  // 该分支永不触发,行为零变化。
+  if (ticking) return;
+  ticking = true;
+  try {
+    if (Date.now() - lastOrphanSweep >= ORPHAN_SWEEP_MS) {
+      lastOrphanSweep = Date.now();
+      try {
+        const { recoverOrphanJobs } = await import('./repos/pipeline-job-repo');
+        const { requeued, expired } = await recoverOrphanJobs();
+        if (requeued || expired) console.log(`[PipelineWorker] orphan sweep: ${requeued} requeued, ${expired} expired`);
+      } catch { /* driver 未就绪 — 下个周期再试 */ }
+    }
+    while (active < MAX_ACTIVE) {
+      const job = await claimNextJob();
+      if (!job) return;
+      active++;
+      void runJob(job)
+        .catch((e) => console.error('[PipelineWorker] runJob error:', e))
+        .finally(() => { active--; });
+    }
+  } finally {
+    ticking = false;
   }
 }
 

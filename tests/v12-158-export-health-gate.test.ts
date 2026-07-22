@@ -10,7 +10,10 @@ describe('v12.158 · 导出体检闸门', () => {
     expect(src).toContain("reqBody?.ignoreHealth !== true");
     expect(src).toContain("error: 'health_gate'");
     expect(src).toContain('buildProjectHealth(e.id)');
-    expect(src.indexOf('health_gate')).toBeLessThan(src.indexOf('inFlight.has(id)')); // 闸门先于锁,拒绝不占锁
+    // 闸门先于锁,拒绝不占锁。
+    // v12.227:并发锁由进程内 `inFlight` Set 换成跨实例 DB CAS 锁(acquireLock),
+    // 断言锚点随之更新 —— 语义不变:体检不过要在**拿锁之前**就 409,否则会白占一把 5 分钟 TTL 的锁。
+    expect(src.indexOf('health_gate')).toBeLessThan(src.indexOf('acquireLock('));
   });
   it('UI:409 health_gate → confirm → ignoreHealth 重试', () => {
     const ui = fs.readFileSync('app/dashboard/series/[id]/page.tsx', 'utf-8');

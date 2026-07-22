@@ -66,6 +66,18 @@ export function commentChannel(projectId: string): string {
 export function pipelineChannel(jobId: string): string {
   return `pipeline:${jobId}`;
 }
+/**
+ * v12.227(多实例就绪):人工闸门放行频道。
+ *
+ * 病根:gate 放行原本靠 `activeOrchestrators`(进程内 Map)按 projectId 找编排器。
+ * 多实例下流水线跑在实例 A,而用户点「审核通过」的 POST 可能被负载均衡打到实例 B ——
+ * B 的 Map 里没有该 projectId → 返回 404,**流水线一直挂在 waitForGate 直到 5 分钟超时**,
+ * 用户点多少次都没反应。改走本总线:单机是同进程 EventEmitter(emit 即达,零行为变化),
+ * 配了 REDIS_URL 则自动经 Redis 桥跨实例投递。
+ */
+export function gateChannel(projectId: string): string {
+  return `gate:${projectId}`;
+}
 
 export function emitNotification(userId: string, extra: Record<string, unknown> = {}): void {
   if (!userId) return;
@@ -79,6 +91,21 @@ export function emitComment(projectId: string, extra: Record<string, unknown> = 
 export function emitPipeline(jobId: string, type: string, data: unknown): void {
   if (!jobId) return;
   busEmit(pipelineChannel(jobId), { type, at: Date.now(), data } as BusEvent);
+}
+/** v12.227: 放行人工闸门(gate 路由调用;编排器在 waitForGate 里订阅同频道)。 */
+export function emitGateResolve(
+  projectId: string,
+  gateId: string,
+  payload: { action?: string; editedData?: unknown },
+): void {
+  if (!projectId || !gateId) return;
+  busEmit(gateChannel(projectId), {
+    type: 'gate-resolve',
+    at: Date.now(),
+    gateId,
+    action: payload.action ?? 'continue',
+    editedData: payload.editedData,
+  } as BusEvent);
 }
 
 /** 订阅频道,返回退订函数。 */
