@@ -142,3 +142,44 @@ export async function assertOutboundUrlSafe(rawUrl: string): Promise<SsrfVerdict
 
   return { ok: true };
 }
+
+/**
+ * v12.235 —— 带 SSRF 校验的 fetch,**逐跳重验重定向**。
+ *
+ * 上一版(v12.234)刚写完 `assertOutboundUrlSafe` 就自查出一个致命缺口:
+ * 它只校验**初始 URL**,而 Node/undici 的 `fetch` 默认 `redirect: 'follow'` ——
+ * 攻击者只要给一个自己控制的公网地址,让它 302 到 `http://169.254.169.254/...`,
+ * 守卫全程放行,云 IAM 凭证照样被代理回来。**整道防线等于没做。**
+ *
+ * 又是同一个病:写了「解析层」的守卫,却没跟到「真正发请求」的消费方。
+ * 所以这里不再让调用方自己 fetch,而是提供唯一入口:redirect 设 manual,
+ * 每跳的 Location 都重新过一遍 assertOutboundUrlSafe,跳数封顶。
+ */
+export async function safeFetch(
+  rawUrl: string,
+  init: RequestInit = {},
+  opts: { maxRedirects?: number } = {},
+): Promise<Response> {
+  const maxRedirects = opts.maxRedirects ?? 5;
+  let url = rawUrl;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const verdict = await assertOutboundUrlSafe(url);
+    if (!verdict.ok) {
+      throw new Error(
+        hop === 0
+          ? `SSRF 拦截:${verdict.reason}`
+          : `SSRF 拦截(第 ${hop} 跳重定向):${verdict.reason}`,
+      );
+    }
+
+    const resp = await fetch(url, { ...init, redirect: 'manual' });
+    if (resp.status < 300 || resp.status >= 400) return resp;
+
+    const loc = resp.headers.get('location');
+    if (!loc) return resp; // 3xx 但没给 Location —— 原样交回,由调用方处理
+    // 相对跳转要按当前 URL 解析,否则 `/latest/meta-data` 这种相对路径会被漏判
+    url = new URL(loc, url).toString();
+  }
+  throw new Error(`SSRF 拦截:重定向超过 ${maxRedirects} 跳`);
+}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { assertOutboundUrlSafe } from '@/lib/ssrf-guard';
+import { safeFetch } from '@/lib/ssrf-guard';
 import { requireUser } from '@/lib/auth-guard';
 import fs from 'fs';
 import path from 'path';
@@ -58,18 +58,23 @@ export async function GET(request: NextRequest) {
   if (proxyUrl) {
     const _g = await requireUser(request);
     if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
-    const verdict = await assertOutboundUrlSafe(proxyUrl);
-    if (!verdict.ok) {
-      console.warn(`[serve-file] SSRF 拦截 user=${_g.userId} url=${proxyUrl} 原因=${verdict.reason}`);
-      return NextResponse.json({ error: `Blocked: ${verdict.reason}` }, { status: 403 });
-    }
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 30_000);
-      const upstream = await fetch(proxyUrl, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'ai-comic-studio-asset-proxy/1.0' },
-      });
+      // v12.235:改用 safeFetch —— v12.234 只在发请求**前**校验一次 URL,而 fetch 默认跟随 302,
+      // 攻击者用自己控制的公网地址 302 到 169.254.169.254 就能完整绕过守卫。safeFetch 逐跳重验。
+      let upstream: Response;
+      try {
+        upstream = await safeFetch(proxyUrl, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'ai-comic-studio-asset-proxy/1.0' },
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        const msg = e instanceof Error ? e.message : 'unknown';
+        console.warn(`[serve-file] SSRF 拦截 user=${_g.userId} url=${proxyUrl} → ${msg}`);
+        return NextResponse.json({ error: `Blocked: ${msg}` }, { status: 403 });
+      }
       clearTimeout(timer);
       if (!upstream.ok) {
         return NextResponse.json({ error: `Upstream ${upstream.status}` }, { status: upstream.status });

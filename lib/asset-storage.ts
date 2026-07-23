@@ -119,11 +119,19 @@ export async function persistAsset(
       ext = ext || path.extname(localPath);
     } else if (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://')) {
       // 外链: fetch 下来(30s 超时)
+      // v12.235:改走 safeFetch —— 本函数是**服务端按传入 URL 主动出站**的地方,而
+      // upload/character-face 等入口可由用户提供 imageUrl,此前零 IP 过滤,等于开放 SSRF;
+      // 且 fetch 默认跟随重定向,只校验初始 URL 挡不住 302 到云元数据。safeFetch 逐跳重验。
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 30_000);
       let resp: Response;
       try {
-        resp = await fetch(sourceUrl, { signal: controller.signal });
+        const { safeFetch } = await import('./ssrf-guard');
+        resp = await safeFetch(sourceUrl, { signal: controller.signal });
+      } catch (e) {
+        clearTimeout(timer);
+        console.warn(`[asset-storage] 出站被拒 ${sourceUrl.slice(0, 80)}: ${e instanceof Error ? e.message : 'unknown'}`);
+        return null;
       } finally {
         clearTimeout(timer);
       }
