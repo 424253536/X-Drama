@@ -112,9 +112,11 @@
     "jsdom": "^29.0.1",
     "puppeteer": "^25.0.4",
     "tsx": "^4.22.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "postcss": "^8.5.15"
   },
   "overrides": {
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "postcss": "$postcss"
   }
 }
