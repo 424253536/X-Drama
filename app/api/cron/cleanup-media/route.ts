@@ -40,8 +40,19 @@ function sweepDir(dir: string, maxAgeDays: number, dryRun: boolean): { removed: 
 
 async function handle(request: Request) {
   const url = new URL(request.url);
+  // v12.234(二轮对抗复检 · HIGH):原写 `if (secret && ...)` —— **CRON_SECRET 未设时整个守卫被短路**,
+  // 匿名 GET 一下就按 mtime 批量删 data/composed / exports / media 里的成片。
+  // 兄弟端点 run-scheduled-publishes 早就是「生产未设密钥 → 503 拒跑」,本端点漏了同款兜底;
+  // 而删除比发布更不可逆。护栏的默认必须是拒绝,不能是「没配置就等于不设防」。
   const secret = process.env.CRON_SECRET;
-  if (secret && url.searchParams.get('secret') !== secret) {
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: '未配置 CRON_SECRET,拒绝在生产无保护执行媒体清理' }, { status: 503 },
+      );
+    }
+    console.warn('[cron/cleanup-media] 未设 CRON_SECRET,非生产环境放行(生产会 503)');
+  } else if (url.searchParams.get('secret') !== secret) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const dryRun = url.searchParams.get('dryRun') === '1';

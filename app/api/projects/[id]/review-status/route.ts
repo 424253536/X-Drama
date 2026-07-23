@@ -11,19 +11,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest } from '../../../auth/lib';
 import { getReviewStatus, transitionReviewStatus, type ReviewStatus } from '@/lib/review-status';
 import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function resolveUserId(request: Request): string | null {
-  const payload = getUserFromRequest(request);
-  if (payload?.sub) return payload.sub;
-  // v12.218(安全止血):不再回落 DB 首用户,匿名用 sentinel(查空不泄露)
-  return '__no_auth__';
-}
 
 const ACTION_TO_STATUS: Record<string, ReviewStatus> = {
   submit: 'in_review',
@@ -49,8 +41,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const actorId = resolveUserId(request);
-  if (!actorId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234(二轮对抗复检 · HIGH):此处原是 `const actorId = resolveUserId(request); if (!actorId) 401`——
+  // 但 resolveUserId 的**返回类型虽写 string|null,函数体却永不返回 null**(匿名回落 '__no_auth__' 字符串)。
+  // '__no_auth__' 是 truthy,所以那个 401 是**永不触发的死检查**,看着有守卫其实等于没有。
+  // 更糟的是 transitionReviewStatus 不校验项目归属 → 任何人可 approve/withdraw **任意项目**的审核状态。
+  // 同文件 GET 有只读级守卫,POST 却裸奔,读写鉴权完全不对称。
+  const _g = await requireProjectAccess(request, projectId, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const actorId = _g.userId;
 
   let body: any = {};
   try { body = await request.json(); } catch { /* allow */ }

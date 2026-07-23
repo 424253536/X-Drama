@@ -8,16 +8,36 @@
  */
 import type { TitleSafeArea } from './cover-candidates';
 
-/** CJK 字体候选(env 优先 → macOS → 常见 Linux);返回路径列表,service 取首个存在的。 */
+/**
+ * CJK 字体候选(env 优先 → **开源可商用** → 系统专有字体兜底);返回路径列表,service 取首个存在的。
+ *
+ * v12.234(二轮对抗复检 · 🟡-27):此前 macOS 系统字体排在第一、第二位,开源 Noto/WQY 排其后 ——
+ * 于是 macOS 上生成封面标题必然取到系统专有字体,与 v12.233 声称的「开源优先」完全相反,
+ * 而封面是要对外分发的成片物料,烧进去的就是受专有 EULA 约束的字形。
+ * 现在把开源候选整体提前;系统字体保留在末位(总比无字体渲染成豆腐块强),仅在开源全缺时才轮到。
+ */
 export function coverFontCandidates(): string[] {
   const env = process.env.COVER_FONT_FILE || process.env.SUBTITLE_FONT_FILE;
+  const home = process.env.HOME || '';
   return [
     ...(env ? [env] : []),
-    '/System/Library/Fonts/PingFang.ttc',                    // macOS
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc', // Debian/Ubuntu
+    // ① 项目自带(部署方可直接放一份开源字体进仓)
+    `${process.cwd()}/data/fonts/NotoSansCJK-Regular.otf`,
+    // ② 常见 Linux 发行版的开源 CJK
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
     '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc',
     '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    // ③ macOS 上用户/brew 装的开源 CJK(Noto 与思源黑体同源,均 SIL OFL)
+    '/Library/Fonts/NotoSansCJKsc-Regular.otf',
+    '/Library/Fonts/SourceHanSansCN-Regular.otf',
+    ...(home ? [
+      `${home}/Library/Fonts/NotoSansCJKsc-Regular.otf`,
+      `${home}/Library/Fonts/SourceHanSansCN-Regular.otf`,
+    ] : []),
+    // ④ 最后兜底:系统专有字体(EULA 受限,仅在开源全缺时用)
+    '/System/Library/Fonts/PingFang.ttc',
+    '/System/Library/Fonts/STHeiti Medium.ttc',
   ];
 }
 

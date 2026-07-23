@@ -12,7 +12,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, now } from '@/lib/db';
-import { getUserFromRequest } from '../../../auth/lib';
 import type { Script, ScriptShot } from '@/types/agents';
 import { computeTracks, applyTrackEdits, resetTrackEdit, type SegmentOverride } from '@/lib/timeline-tracks';
 import { updateAsset } from '@/lib/repos/asset-repo';
@@ -20,15 +19,6 @@ import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function resolveUserId(request: Request): string | null {
-  const payload = getUserFromRequest(request);
-  if (payload?.sub) return payload.sub;
-  // v12.233(对抗复检收尾):删「无 token 回落 DB 第一个用户」——
-  // 那等于匿名即以第一注册用户身份读写,且把行为记到真人头上。
-  // 改哨兵:匿名请求查到的永远是空集,既不泄露也不误伤(与 v12.218 同款处理)。
-  return '__no_auth__';
-}
 
 function loadScript(projectId: string): { row: any; script: Script | null } {
   const row = db.prepare(
@@ -105,8 +95,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const actorId = resolveUserId(request);
-  if (!actorId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234(本版新增的全仓不变量自己抓到的,四路对抗 agent 均未报):
+  // 此处此前只有 `if (!actorId) 401`,而 actorId 永远是 '__no_auth__' 这个 truthy 哨兵 → 死检查。
+  // 本 handler 末尾直接 updateAsset() 覆写剧本,**全程没有任何归属校验** ——
+  // 也就是匿名请求可以重排/改写**任意项目**的分镜。GET 有 view 守卫,POST 却裸奔,又一处读写不对称。
+  const _g = await requireProjectAccess(request, projectId, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const actorId = _g.userId;
 
   let body: any = {};
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

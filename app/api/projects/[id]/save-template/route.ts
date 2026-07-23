@@ -5,6 +5,7 @@
  * → `extractTemplate`(算质量分 + 标签)→ `saveTemplate` 落 film_templates。payload 带一键起片预填。
  */
 import { NextResponse } from 'next/server';
+import { requireUser, requireProjectAccess } from '@/lib/auth-guard';
 import { getDbDriver } from '@/lib/db-driver';
 import { getUserFromRequest } from '../../../auth/lib';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
@@ -28,12 +29,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const d = getDbDriver();
 
-  const payloadUser = getUserFromRequest(request);
-  let userId = payloadUser?.sub || null;
-  if (!userId) {
-    // v12.233:v12.218 改哨兵时遗留的死查询,已删(查了不用,白打一次 DB)
-    userId = '__no_auth__';
-  }
+  // v12.234(二轮对抗复检 · HIGH):此前身份解析失败就赋 '__no_auth__' 然后**继续往下跑**,
+  // 于是匿名请求可以:① 用任意 projectId 读出他人项目的标题/分镜数/质量分/预览图(元数据枚举);
+  // ② 以 '__no_auth__' 为属主往模板市场写记录(垃圾灌入)。哨兵的意义是「查空」,
+  // 不是「无身份也放行」—— 写路径上遇到哨兵必须直接 401,而不是当成一个合法用户继续。
+  const _g = await requireProjectAccess(request, id, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
 
   const proj = await d.get<any>('SELECT title, style_id, locked_characters FROM projects WHERE id = ?', [id]);
   if (!proj) return NextResponse.json({ error: '项目不存在' }, { status: 404 });

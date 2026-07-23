@@ -512,7 +512,20 @@ export async function attachTextCard(
   const { findCjkFont } = await import('@/lib/text-control');
   const position = opts.position ?? 'end';
   const dur = Math.max(1.2, Math.min(opts.durationSec ?? (position === 'start' ? 2.2 : 3.2), 6));
-  const fontFile = findCjkFont() || '/System/Library/Fonts/STHeiti Light.ttc';
+  // v12.234(对抗复检二轮自查):此前硬编码兜底 '/System/Library/Fonts/STHeiti Light.ttc' ——
+  // v12.233 只改了 findCjkFont 的**解析顺序**,却漏了**消费方**:解析返回 null 时这里照样
+  // 指名要 macOS 系统字体,等于绕过刚建立的开源优先策略,字形照旧烧进商用成片。
+  //
+  // 但也不能简单「不指定 fontfile 让 ffmpeg 走默认」—— 实测截帧:默认字体**无 CJK 字形**,
+  // 中文全渲染成豆腐块 □□□□,ffmpeg 还 exit=0,等于静默产出废片(比报错更糟)。
+  // 所以:没有可用 CJK 字体时**明确失败**,让运营者去装字体,而不是拿废片糊弄。
+  const fontFile = findCjkFont();
+  if (!fontFile) {
+    throw new Error(
+      '[end-card] 找不到可用的 CJK 字体,拒绝生成文字卡(否则中文会渲染成豆腐块)。' +
+      '请安装 Noto Sans CJK / 思源黑体,或放 data/fonts/NotoSansCJK-Regular.otf,亦可用 CJK_FONT_FILE 指定。',
+    );
+  }
   const bg = opts.bg ?? 'blur';
   const ff = resolvedFFmpegPath;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'txtcard-'));
@@ -846,12 +859,22 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   let srtResyncPath: string | null = null;
   try {
     const hasAnyDialogue = validClips.some((c) => (c?.dialogue || '').trim().length > 0);
-    if (hasAnyDialogue) {
-      const { buildSrt, findCjkFont } = await import('@/lib/text-control');
-      const cjkFont = findCjkFont();
-      // FontName 用 PingFang SC / Noto Sans CJK SC 等 CJK 字体名, 找不到字体时让 libass 走默认
-      const fontName = cjkFont ? path.basename(cjkFont, path.extname(cjkFont)) : 'PingFang SC';
-      const fontDirFrag = cjkFont ? `:fontsdir='${path.dirname(cjkFont).replace(/\\/g, '/').replace(/:/g, '\\:')}'` : '';
+    const cjkFontForSub = (await import('@/lib/text-control')).findCjkFont();
+    // v12.234(对抗复检二轮自查):FontName 兜底此前写死 'PingFang SC' —— 本机没有该字体也照样
+    // 在 ASS 里指名要它,既绕过开源优先策略,又在字体缺失时渲染成豆腐块。
+    // 实测截帧证实:无 CJK 字体时 ffmpeg 仍 exit=0,但中文全是 □□□□(静默产废片,比报错更糟)。
+    // 所以:没有可用 CJK 字体 → **跳过字幕烧录并告警**(无字幕的成片可用;满屏豆腐块的不可用)。
+    if (hasAnyDialogue && !cjkFontForSub) {
+      console.warn(
+        '[subtitles] ⚠️ 找不到可用 CJK 字体,已跳过字幕烧录 —— 否则中文会渲染成豆腐块。' +
+        '请安装 Noto Sans CJK / 思源黑体,或用 CJK_FONT_FILE 指定。',
+      );
+    }
+    if (hasAnyDialogue && cjkFontForSub) {
+      const { buildSrt } = await import('@/lib/text-control');
+      const cjkFont = cjkFontForSub;
+      const fontName = path.basename(cjkFont, path.extname(cjkFont));
+      const fontDirFrag = `:fontsdir='${path.dirname(cjkFont).replace(/\\/g, '/').replace(/:/g, '\\:')}'`;
       const vertical = canvasH > canvasW;
       const captionStyle = options.captionStyle || 'clean';
 

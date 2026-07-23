@@ -18,9 +18,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  // v12.234(二轮对抗复检):原来只在 NODE_ENV==='production' 才 401 —— 而 staging/预览环境
+  // 通常也挂在公网上且 NODE_ENV 并非 production,等于把**全站用户名前缀检索**开放给匿名访问。
+  // 「dev 没设 JWT_SECRET」不是放开鉴权的理由:本地开发登录一下即可,不该拿线上环境的口子来换。
   const payload = getUserFromRequest(request);
-  // dev / demo 兜底 — 没 token 也允许 (因为 dev 经常没设 JWT_SECRET)
-  if (!payload && process.env.NODE_ENV === 'production') {
+  if (!payload) {
     return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 

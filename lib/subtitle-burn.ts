@@ -35,20 +35,50 @@ export interface SubtitleStyle {
   borderStyle?: number;
 }
 
+/**
+ * v12.234(二轮对抗复检 · 🟡-27 真正的缺口):CJK 平台预设此前把 fontName 写死为 macOS 专有字体名。
+ *
+ * v12.233 改了 `lib/text-control.ts` 的 findCjkFont() 让它开源优先,并对外宣称「字体 EULA 已合规」——
+ * 但**字幕烧录主路径根本不经过 findCjkFont**:它走 getSubtitleStyle() → PRESETS.fontName → ASS force_style。
+ * 也就是说抖音/快手/小红书的成片字幕,自始至终指名要 Apple 专有字体(EULA 不允许随片分发字形)。
+ * 改了解析函数却没跟到真正的消费方 —— 与本轮 video-composer 那两处是同一个病。
+ *
+ * 现在:预设里放占位符,`getSubtitleStyle()` 出口处解析成**本机实际可用的开源 CJK 字体名**;
+ * 一个都找不到时退到 'Noto Sans CJK SC' 这个开源名,让 libass 自行替换并留下告警。
+ */
+const CJK_AUTO = '__cjk_auto__';
+
+let cjkNameCache: string | null = null;
+export function resolveCjkFontName(): string {
+  if (cjkNameCache) return cjkNameCache;
+  let name = 'Noto Sans CJK SC'; // 兜底用开源字体名,绝不回落到系统专有字体
+  try {
+    // 延迟 require:本模块被大量纯字符串测试引用,不该在 import 期就摸文件系统
+    const { findCjkFont, isOpenLicenseFont } = require('./text-control') as typeof import('./text-control');
+    const p = findCjkFont();
+    if (p && isOpenLicenseFont(p)) {
+      const base = p.split('/').pop() || '';
+      name = base.replace(/\.(otf|ttf|ttc)$/i, '');
+    }
+  } catch { /* 解析失败就用开源兜底名 */ }
+  cjkNameCache = name;
+  return name;
+}
+
 const PRESETS: Record<SubtitlePlatform, SubtitleStyle> = {
   // 抖音: 大白字 + 粗黑边 + 居中偏下, 信息密度高也看得清
   douyin: {
-    fontName: 'PingFang SC', fontSize: 56, primaryColour: '&H00FFFFFF',
+    fontName: CJK_AUTO, fontSize: 56, primaryColour: '&H00FFFFFF',
     outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 120, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   // 快手: 比抖音更大更粗, 下沉一点
   kuaishou: {
-    fontName: 'PingFang SC', fontSize: 60, primaryColour: '&H00FFFFFF',
+    fontName: CJK_AUTO, fontSize: 60, primaryColour: '&H00FFFFFF',
     outlineColour: '&H00000000', outline: 5, shadow: 1, marginV: 140, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   // 小红书: 细一点, 暖白, 描边淡, 偏精致
   xiaohongshu: {
-    fontName: 'PingFang SC', fontSize: 48, primaryColour: '&H00F0F8FF',
+    fontName: CJK_AUTO, fontSize: 48, primaryColour: '&H00F0F8FF',
     outlineColour: '&H00404040', outline: 2, shadow: 0, marginV: 160, alignment: 2, bold: 0,
   },
   // YouTube: 规矩白字黑描边, 字号适中
@@ -62,7 +92,7 @@ const PRESETS: Record<SubtitlePlatform, SubtitleStyle> = {
     outlineColour: '&H00000000', outline: 4, shadow: 1, marginV: 180, alignment: 2, bold: -1, borderStyle: 4, backColour: '&H99000000',
   },
   default: {
-    fontName: 'PingFang SC', fontSize: 50, primaryColour: '&H00FFFFFF',
+    fontName: CJK_AUTO, fontSize: 50, primaryColour: '&H00FFFFFF',
     outlineColour: '&H00000000', outline: 3, shadow: 1, marginV: 100, alignment: 2, bold: 0,
   },
 };
@@ -93,6 +123,9 @@ export function getSubtitleStyle(platform: SubtitlePlatform | string, lang?: str
   const style = { ...(p ?? PRESETS.default) };
   const f = fontForLanguage(lang, style.fontName);
   if (f) style.fontName = f;
+  // v12.234:占位符在**唯一出口**解析成实际字体名 —— 放这里而非 PRESETS 定义处,
+  // 是为了不在模块 import 期摸文件系统(纯字符串测试不该被 fs 状态左右)。
+  if (style.fontName === CJK_AUTO) style.fontName = resolveCjkFontName();
   return style;
 }
 

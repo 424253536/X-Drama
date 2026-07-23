@@ -129,9 +129,17 @@ describe('v3.1 F · POST /timeline (reorder + duration)', () => {
   });
 
   it('returns 404 when no script', async () => {
+    // v12.234:POST 补了 edit 级项目守卫(此前只有一句永不触发的死检查,匿名可改任意项目分镜)。
+    // 守卫先于「剧本存在吗」执行,所以项目必须真实存在且归属本人,
+    // 否则拿到的是 403/404-无权限,测不到本用例真正想验的「有项目、无剧本 → 404」。
+    const pid = 'test-tl-noscript';
+    db.prepare(
+      `INSERT OR IGNORE INTO projects (id, user_id, title, status, created_at, updated_at)
+       VALUES (?, ?, ?, 'active', ?, ?)`,
+    ).run(pid, SEEDED_USER_ID, 'test-tl-project', now(), now());
     const res = await POST(
       mkReq('POST', { shotOrder: [1] }),
-      { params: Promise.resolve({ id: 'test-tl-noscript' }) },
+      { params: Promise.resolve({ id: pid }) },
     );
     expect(res.status).toBe(404);
   });

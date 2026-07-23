@@ -14,8 +14,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
-import { getUserFromRequest } from '../../../auth/lib';
 import {
   createProjectShareToken,
   listShareTokensForProject,
@@ -28,15 +28,6 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function resolveUserId(request: Request): string | null {
-  const payload = getUserFromRequest(request);
-  if (payload?.sub) return payload.sub;
-  // v12.233(对抗复检收尾):删「无 token 回落 DB 第一个用户」——
-  // 那等于匿名即以第一注册用户身份读写,且把行为记到真人头上。
-  // 改哨兵:匿名请求查到的永远是空集,既不泄露也不误伤(与 v12.218 同款处理)。
-  return '__no_auth__';
-}
 
 function isOwner(projectId: string, userId: string): boolean {
   const row = db.prepare(`SELECT user_id FROM projects WHERE id = ?`).get(projectId) as { user_id: string } | undefined;
@@ -54,8 +45,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const userId = resolveUserId(request);
-  if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234:此前是 `resolveUserId()` + `if (!userId) 401` —— 而 resolveUserId 虽声明 string|null,
+  // 函数体却永远返回 '__no_auth__'(truthy),那句 401 是**永不触发的死检查**。
+  // 类型签名说了谎,读代码的人(包括我自己)就以为这里有守卫。改用真守卫。
+  // (本文件后续的 isOwner / removeCollaborator(actor) 归属校验会把 '__no_auth__' 挡成 403,
+  //  所以不可利用;但返回 403 而非 401 会误导排障,且下一个改动者未必再补归属校验。)
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
   if (!isOwner(projectId, userId)) {
     return NextResponse.json({ error: '仅项目所有者可创建邀请' }, { status: 403 });
   }
@@ -85,8 +82,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const userId = resolveUserId(request);
-  if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234:此前是 `resolveUserId()` + `if (!userId) 401` —— 而 resolveUserId 虽声明 string|null,
+  // 函数体却永远返回 '__no_auth__'(truthy),那句 401 是**永不触发的死检查**。
+  // 类型签名说了谎,读代码的人(包括我自己)就以为这里有守卫。改用真守卫。
+  // (本文件后续的 isOwner / removeCollaborator(actor) 归属校验会把 '__no_auth__' 挡成 403,
+  //  所以不可利用;但返回 403 而非 401 会误导排障,且下一个改动者未必再补归属校验。)
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
   if (!isOwner(projectId, userId)) {
     return NextResponse.json({ error: '仅项目所有者可查看邀请列表' }, { status: 403 });
   }
@@ -118,8 +121,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const userId = resolveUserId(request);
-  if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234:此前是 `resolveUserId()` + `if (!userId) 401` —— 而 resolveUserId 虽声明 string|null,
+  // 函数体却永远返回 '__no_auth__'(truthy),那句 401 是**永不触发的死检查**。
+  // 类型签名说了谎,读代码的人(包括我自己)就以为这里有守卫。改用真守卫。
+  // (本文件后续的 isOwner / removeCollaborator(actor) 归属校验会把 '__no_auth__' 挡成 403,
+  //  所以不可利用;但返回 403 而非 401 会误导排障,且下一个改动者未必再补归属校验。)
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
 
   const token = request.nextUrl.searchParams.get('token');
   const userIdToRemove = request.nextUrl.searchParams.get('userId');
@@ -144,8 +153,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params;
-  const userId = resolveUserId(request);
-  if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
+  // v12.234:此前是 `resolveUserId()` + `if (!userId) 401` —— 而 resolveUserId 虽声明 string|null,
+  // 函数体却永远返回 '__no_auth__'(truthy),那句 401 是**永不触发的死检查**。
+  // 类型签名说了谎,读代码的人(包括我自己)就以为这里有守卫。改用真守卫。
+  // (本文件后续的 isOwner / removeCollaborator(actor) 归属校验会把 '__no_auth__' 挡成 403,
+  //  所以不可利用;但返回 403 而非 401 会误导排障,且下一个改动者未必再补归属校验。)
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
 
   let body: any = {};
   try { body = await request.json(); } catch { /* allow empty */ }

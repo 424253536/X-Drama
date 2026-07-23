@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
   // v12.232(对抗复检 CRITICAL 补漏):此前整块裹在 `if (uid)` 里 ——
   // **匿名请求直接跳过预算护栏**,跑完整 8-agent 管线(LLM+图像+视频,单次 ¥3–10)。
   // 「仅对已登录用户生效」这句注释本身就是漏洞说明书。现在:无 uid → 401,不再放行。
+  // v12.234:uid 从块级作用域提到函数级 —— 下面入队时要用它填 user_id(见入队处注释)。
+  let ownerUserId: string;
   {
     const { getUserFromRequest } = await import('@/app/api/auth/lib');
     const uid = getUserFromRequest(request)?.sub;
@@ -34,6 +36,7 @@ export async function POST(request: NextRequest) {
     if (!b.allow) {
       return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
     }
+    ownerUserId = uid;
   }
 
   // v2.18: idea 预处理 — 规则清洗 + (信息不足时) LLM 扩写
@@ -108,7 +111,10 @@ export async function POST(request: NextRequest) {
     const { enqueuePipelineJob, getJobProgressLog } = await import('@/lib/repos/pipeline-job-repo');
     const { ensurePipelineWorker } = await import('@/lib/pipeline-worker');
     const { subscribe, pipelineChannel } = await import('@/lib/event-bus');
-    const job = await enqueuePipelineJob({ type: 'create', projectId, payload: input });
+    // v12.234(二轮对抗复检发现的**我自己造的功能回归**):此处此前不传 userId → 任务 user_id=NULL。
+    // v12.233 把 listPipelineJobs 改成默认按 user 过滤之后,这些任务对**任何人**都不可见 ——
+    // 包括创建者自己。安全收口收对了,但漏了给写侧补上归属,等于把用户的任务列表清空。
+    const job = await enqueuePipelineJob({ type: 'create', projectId, userId: ownerUserId, payload: input });
     ensurePipelineWorker();
     const stream = new ReadableStream({
       start(controller) {

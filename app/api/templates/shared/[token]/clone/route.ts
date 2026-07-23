@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, requireProjectAccess } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { getUserFromRequest } from '../../../../auth/lib';
 import { createGlobalAsset } from '@/lib/repos/global-asset-repo'; // v9.0.3b: async, 双驱动
@@ -27,7 +28,11 @@ function resolveUserId(request: Request): string {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const userId = resolveUserId(request);
+  // v12.234(二轮对抗复检):文件头注释写着「要求 auth」,但 resolveUserId 匿名回落 '__no_auth__'
+  // 且后面没有任何 401 —— 注释承诺的守卫根本不存在,匿名即可克隆出一条 '__no_auth__' 属主的资产。
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
   const { token } = await params;
 
   const found = await getTemplateAssetForToken(token);

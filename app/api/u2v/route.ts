@@ -18,6 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { guardPaidEndpoint } from '@/lib/paid-endpoint-guard';
 import { db } from '@/lib/db';
 import { getUserFromRequest } from '../auth/lib';
 import { MinimaxService } from '@/services/minimax.service';
@@ -105,7 +106,13 @@ function resolveUserId(request: Request): string {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = resolveUserId(request);
+  // v12.234(二轮对抗复检 · CRITICAL):此处原本只有 `resolveUserId()` 回落 '__no_auth__',
+  // 然后拿这个哨兵去调 assertBudget —— 而哨兵在 users 表里查不到行,预算护栏直接 allow:true;
+  // plan-gate 又只在 10/15s 才触发。三者叠加的结果是:**匿名 curl 循环打 5s,无限烧 Minimax**。
+  // v12.232 给 u2v/**stream** 接了守卫却漏了这个**同步版**,又一次「修了前门忘了侧门」。
+  const _g = await guardPaidEndpoint(request, { pendingCostCny: 1.8 });
+  if (!_g.ok) return _g.response;
+  const userId = _g.userId;
 
   let body: any = {};
   try { body = await request.json(); } catch { /* swallow */ }
@@ -128,6 +135,7 @@ export async function POST(request: NextRequest) {
   }
 
   // v12.4.1: 预算硬上限护栏 —— 接入主管线视频端点(放在生成前,超限不发生费用)。
+  // 守卫已按最低价 ¥1.8 粗筛过一道;这里按**实际 duration** 精算再拦一次(10/15s 更贵)。
   {
     const { assertBudget } = await import('@/lib/budget-enforce');
     const b = await assertBudget({ userId, pendingCostCny: Math.max(1.8, duration * 0.3) });

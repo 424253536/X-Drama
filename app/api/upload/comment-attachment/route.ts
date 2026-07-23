@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth-guard';
 import { persistAsset } from '@/lib/asset-storage';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,9 @@ function inferType(mime: string): 'image' | 'video' | 'file' {
 }
 
 export async function POST(request: NextRequest) {
+  // v12.234(二轮对抗复检):此前无鉴权 —— 任何人可匿名往磁盘写 10MB/次 的图片或视频,无限重复。
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
   try {
     const ct = request.headers.get('content-type') || '';
     if (!ct.startsWith('multipart/form-data')) {

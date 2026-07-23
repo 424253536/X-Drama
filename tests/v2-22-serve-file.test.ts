@@ -1,14 +1,23 @@
 /**
  * v2.22 fix #3 — serve-file allow data/composed + data/exports + data/storage,
  * 同时锁死 /etc /tmp 之外的随机路径 (security).
+ *
+ * v12.234:`?path=` 模式改为**要求登录**(此前完全裸奔,可匿名读任意用户的成片/图/音)。
+ * 因此这些「路径白名单」用例现在都得先有身份 —— 这里 mock auth-guard 让 requireUser 通过,
+ * 保持本文件的关注点仍是**路径白名单本身**;鉴权与否另有一条独立用例守着(见文件末尾)。
  */
 import { describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+vi.mock('@/lib/auth-guard', () => ({
+  requireUser: vi.fn(async () => ({ ok: true, userId: 'u-test-serve-file' })),
+}));
+
 // 不 mock asset-storage — 直接走真路径
 const { GET } = await import('@/app/api/serve-file/route');
+const { requireUser } = await import('@/lib/auth-guard');
 
 function mkReq(qs: string): any {
   const url = new URL(`http://localhost:3000/api/serve-file?${qs}`);
@@ -83,5 +92,25 @@ describe('v2.22 fix #3 · serve-file path allowlist', () => {
     const req = mkReq('');
     const res = await GET(req);
     expect(res.status).toBe(400);
+  });
+});
+
+describe('v12.234 · serve-file 鉴权(?path= 不再裸奔)', () => {
+  it('未登录访问 ?path= → 401,且不泄露文件是否存在', async () => {
+    vi.mocked(requireUser).mockResolvedValueOnce({ ok: false, status: 401, message: '未登录' } as any);
+    const target = path.join(process.cwd(), 'data', 'composed', 'whatever.mp4');
+    const res = await GET(mkReq(`path=${encodeURIComponent(target)}`));
+    expect(res.status).toBe(401);
+  });
+
+  it('未登录访问 ?proxy= → 401(该模式全仓零调用方,纯攻击面)', async () => {
+    vi.mocked(requireUser).mockResolvedValueOnce({ ok: false, status: 401, message: '未登录' } as any);
+    const res = await GET(mkReq(`proxy=${encodeURIComponent('https://example.com/a.png')}`));
+    expect(res.status).toBe(401);
+  });
+
+  it('已登录但代理指向云元数据地址 → 403(旧正则放行的那个漏网之鱼)', async () => {
+    const res = await GET(mkReq(`proxy=${encodeURIComponent('http://169.254.169.254/latest/meta-data/')}`));
+    expect(res.status).toBe(403);
   });
 });

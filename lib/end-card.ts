@@ -190,7 +190,14 @@ export function normalizeHexColor(c?: string | null): string | null {
 export interface EndCardVfInput {
   w: number;
   h: number;
-  fontFile: string;       // 系统 CJK 字体绝对路径
+  /**
+   * CJK 字体绝对路径。v12.234 起类型允许 null,但**生产不会走到 null**:
+   * 上游 video-composer 在解析不到开源 CJK 字体时会直接抛错拒绝出片 ——
+   * 因为实测截帧证明,不指定 fontfile 时 ffmpeg 默认字体**没有 CJK 字形**,
+   * 中文全渲染成豆腐块 □□□□ 且进程仍 exit=0(静默产废片,比报错更糟)。
+   * 这里保留 null 分支只是防御性的:本函数是纯字符串构造,不该因为字体缺失而崩在测试里。
+   */
+  fontFile: string | null;
   titleFile?: string;     // 主标 textfile 路径(UTF-8,可含换行)
   sloganFile?: string;    // 副标 textfile 路径
   bg: 'blur' | 'solid';   // blur=用末帧模糊压暗(承接画面);solid=纯色卡
@@ -206,7 +213,9 @@ export interface EndCardVfInput {
 export function buildEndCardVf(input: EndCardVfInput): string {
   const { w, h, fontFile } = input;
   const L = endCardLayout(w, h);
-  const font = escapeDrawtextPath(fontFile);
+  // v12.234:无字体时省略 fontfile= 片段,而非硬塞 macOS 系统字体路径(那会绕过开源优先策略,
+  // 把受 EULA 约束的字形烧进对外分发的成片)。真正的「没字体怎么办」由上游决定:拒绝出片。
+  const fontFrag = fontFile ? `fontfile='${escapeDrawtextPath(fontFile)}':` : '';
   const parts: string[] = [];
 
   if (input.bg === 'blur') {
@@ -226,14 +235,14 @@ export function buildEndCardVf(input: EndCardVfInput): string {
   if (input.titleFile) {
     const tf = escapeDrawtextPath(input.titleFile);
     parts.push(
-      `drawtext=fontfile='${font}':textfile='${tf}':fontcolor=white:fontsize=${L.titleSize}` +
+      `drawtext=${fontFrag}textfile='${tf}':fontcolor=white:fontsize=${L.titleSize}` +
         `:line_spacing=${L.lineSpacing}:x=(w-text_w)/2:y=${L.titleY}`,
     );
   }
   if (input.sloganFile) {
     const sf = escapeDrawtextPath(input.sloganFile);
     parts.push(
-      `drawtext=fontfile='${font}':textfile='${sf}':fontcolor=${normalizeHexColor(input.accentColor) ? `${accent}` : '0xF3D9DE'}:fontsize=${L.sloganSize}` +
+      `drawtext=${fontFrag}textfile='${sf}':fontcolor=${normalizeHexColor(input.accentColor) ? `${accent}` : '0xF3D9DE'}:fontsize=${L.sloganSize}` +
         `:x=(w-text_w)/2:y=${L.sloganY}`,
     );
   }

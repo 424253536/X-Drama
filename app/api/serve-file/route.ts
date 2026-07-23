@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertOutboundUrlSafe } from '@/lib/ssrf-guard';
+import { requireUser } from '@/lib/auth-guard';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -14,6 +16,17 @@ export const dynamic = 'force-dynamic';
  *   1) ?key=<sha256>              持久化资产(v2.9+),服务 data/storage/assets/ 下的文件
  *   2) ?path=/tmp/xxx/final.mp4   兼容 v2.8 及之前的 /tmp 临时路径
  *   3) ?proxy=<http-url>          外链代理(Midjourney/Minimax 过期 CDN 的兜底)
+ *
+ * v12.234(二轮对抗复检 · CRITICAL)三个模式的鉴权语义是**有意分开**的:
+ *   · `?key=` **保持公开** —— key 是内容寻址的 SHA-256,本身即「不可猜的能力 URL」;
+ *     且 lip-sync 等外部引擎必须能用公网直链回源拉片,加 Bearer 会直接打断该链路。
+ *     这是一个**权衡后的决定**,不是遗漏:安全性来自 key 的不可枚举性,不是来自登录态。
+ *   · `?path=` **要求登录** —— 它能读 data/composed 等目录下**任意用户**的成片/图/音,
+ *     此前完全裸奔。服务端消费方(video-composer 等)是同进程直接读本地路径、不走 HTTP,
+ *     浏览器侧则自带会话 cookie,所以加鉴权对现有链路零影响。
+ *   · `?proxy=` **要求登录 + SSRF 守卫** —— 全仓**零调用方**,当前纯属攻击面:
+ *     原正则只拦 127./10./192.168./172.16-31./localhost,漏掉云元数据 169.254.169.254、
+ *     IPv6 回环、各种进制编码 IP 和「解析到内网的域名」。现改用 lib/ssrf-guard 做字面量+DNS 双层判定。
  */
 export async function GET(request: NextRequest) {
   const keyParam = request.nextUrl.searchParams.get('key');
@@ -43,12 +56,12 @@ export async function GET(request: NextRequest) {
 
   // ── 模式 3: 外链代理(只代理 http/https,流式转发) ──
   if (proxyUrl) {
-    // 防 SSRF: 拒绝内网地址 / 非 http(s)
-    if (!/^https?:\/\//i.test(proxyUrl)) {
-      return NextResponse.json({ error: 'Invalid proxy URL' }, { status: 400 });
-    }
-    if (/^https?:\/\/(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|0\.0\.0\.0)/i.test(proxyUrl)) {
-      return NextResponse.json({ error: 'Internal URL blocked' }, { status: 403 });
+    const _g = await requireUser(request);
+    if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+    const verdict = await assertOutboundUrlSafe(proxyUrl);
+    if (!verdict.ok) {
+      console.warn(`[serve-file] SSRF 拦截 user=${_g.userId} url=${proxyUrl} 原因=${verdict.reason}`);
+      return NextResponse.json({ error: `Blocked: ${verdict.reason}` }, { status: 403 });
     }
     try {
       const controller = new AbortController();
@@ -87,6 +100,9 @@ export async function GET(request: NextRequest) {
   //   3) data/exports (v2.16 P0.2 多分辨率 mp4)
   //   4) data/storage (持久化资产, 兜底)
   // 防 path traversal: 必须以这些前缀开头, 且不含 '..'.
+  const _gp = await requireUser(request);
+  if (!_gp.ok) return NextResponse.json({ message: _gp.message }, { status: _gp.status });
+
   const resolvedPath = path.resolve(filePath);
   const cwd = process.cwd();
   const allowedPrefixes = [

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertOutboundUrlSafe } from '@/lib/ssrf-guard';
+import { requireUser } from '@/lib/auth-guard';
 import { persistAsset } from '@/lib/asset-storage';
 
 export const runtime = 'nodejs';
@@ -23,6 +25,12 @@ export const dynamic = 'force-dynamic';
  * 返回: { url: string, size?: number, contentType?: string }
  */
 export async function POST(request: NextRequest) {
+  // v12.234(二轮对抗复检 · HIGH):此前**无任何鉴权**,且 JSON 模式把 imageUrl 直接喂给
+  // persistAsset() → fetch(),而 persistAsset 侧一个 IP 过滤都没有 —— 匿名请求即可让服务器
+  // 去拉 http://169.254.169.254/... 把云 IAM 凭证落盘成资产,再用返回的 key 从 serve-file 读回来。
+  // 现在:先登录,再过 ssrf-guard(字面量 + DNS 双层)。
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
   try {
     const contentType = request.headers.get('content-type') || '';
     let buffer: Buffer | null = null;
@@ -46,6 +54,13 @@ export async function POST(request: NextRequest) {
       // 安全:仅允许 http(s) / data: URI,挡掉 file:/// 之类的本地协议
       if (!/^(https?:|data:)/i.test(body.imageUrl)) {
         return NextResponse.json({ error: 'invalid imageUrl protocol' }, { status: 400 });
+      }
+      if (/^https?:/i.test(body.imageUrl)) {
+        const verdict = await assertOutboundUrlSafe(body.imageUrl);
+        if (!verdict.ok) {
+          console.warn(`[upload/character-face] SSRF 拦截 user=${_g.userId} 原因=${verdict.reason}`);
+          return NextResponse.json({ error: `Blocked: ${verdict.reason}` }, { status: 403 });
+        }
       }
       externalUrl = body.imageUrl;
     }

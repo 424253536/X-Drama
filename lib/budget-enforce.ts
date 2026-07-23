@@ -39,10 +39,16 @@ export async function getUserBudget(userId: string): Promise<UserBudget> {
 
   const selfCap = row?.budget_cap_cny != null ? Number(row.budget_cap_cny) : null;
   let capCny = selfCap;
-  if (capCny == null && row) {
+  if (capCny == null) {
+    // v12.234(二轮对抗复检 · 根因):此处原写 `if (capCny == null && row)`。那个 `&& row` 是致命的 ——
+    // **查不到用户时反而完全不设防**:row=undefined → 跳过回落 → capCny 保持 null →
+    // assertBudget 的 `capCny == null` 分支直接 allow:true,连本月已花多少都不查。
+    // 而 `'__no_auth__'` 这个匿名哨兵在 20+ 路由里用,它永远查不到 DB 行 ——
+    // 等于「匿名 = 无限额度」,把刚建的预算护栏在匿名场景下整个架空。
+    // 现在:查不到行 → 按 free 档兜底(最严),而不是按「不设防」兜底。护栏要 fail-closed。
     const { tierMonthlyCeilingCny } = await import('./usage-quota');
-    const tierCap = tierMonthlyCeilingCny(row.subscription_tier || 'free');
-    if (tierCap > 0) capCny = tierCap;   // -1(企业)= 不设防,保持 null
+    const tierCap = tierMonthlyCeilingCny(row?.subscription_tier || 'free');
+    if (tierCap > 0) capCny = tierCap;   // -1(企业)= 显式不设防,保持 null
   }
   return {
     capCny,
