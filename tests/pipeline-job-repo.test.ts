@@ -132,10 +132,18 @@ describe('v10.4.2 · 死信列表 / 重投', () => {
     db.prepare('UPDATE pipeline_jobs SET created_at = ? WHERE id = ?').run('2026-01-01T00:00:00.000Z', a.id);
     const b = await enqueuePipelineJob({ type: 'create', projectId: 'lb', payload: {} });
     await claimNextJob(); // a → running
-    const all = await listPipelineJobs();
+    // v12.233:listPipelineJobs 默认按 user 过滤(此前无过滤 → 任意登录用户可枚举全平台)。
+    // 本用例验的是「倒序 + state 过滤」,与租户无关,且建的 job 不带 user_id,
+    // 故显式 allUsers 保持原语义。
+    const all = await listPipelineJobs({ allUsers: true });
     expect(all.map((j) => j.id)).toEqual([b.id, a.id]); // 倒序
-    const queued = await listPipelineJobs({ state: 'queued' });
+    const queued = await listPipelineJobs({ state: 'queued', allUsers: true });
     expect(queued.map((j) => j.id)).toEqual([b.id]);
+  });
+
+  it('v12.233:不显式 allUsers 且无 userId → 空集(安全默认,不泄露他人任务)', async () => {
+    await enqueuePipelineJob({ type: 'create', projectId: 'safe-default', payload: {} });
+    expect(await listPipelineJobs()).toEqual([]);
   });
 
   it('requeueJob:仅 failed 可重投;attempts 保留(→续跑)、last_error 清空', async () => {

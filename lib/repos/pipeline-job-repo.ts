@@ -166,13 +166,30 @@ export async function failJob(id: string, error: string): Promise<PipelineJobSta
 }
 
 /** v10.4.2: 任务列表(死信 UI 消费;按创建时间倒序)。 */
-export async function listPipelineJobs(opts?: { state?: PipelineJobState; limit?: number }): Promise<PipelineJobRow[]> {
+/**
+ * 列任务。
+ *
+ * v12.233(对抗复检收尾 · 跨租户泄露):此前**无 user 过滤** —— 任意登录用户都能
+ * 枚举全平台最近 50 条任务,含他人 projectId 与 ideaPreview(创意前 60 字)。
+ * 路由注释当时写「单租户演示语义」,但生产一部署就是多租户,那句话等于给漏洞背书。
+ * 现在 `userId` 是**必须显式传入**的过滤条件;要全量(运维/admin)得显式传 `allUsers: true`,
+ * 让「我要跨租户读」变成代码里看得见的决定,而不是默认行为。
+ */
+export async function listPipelineJobs(
+  opts?: { state?: PipelineJobState; limit?: number; userId?: string; allUsers?: boolean },
+): Promise<PipelineJobRow[]> {
   const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 200);
-  const rows = opts?.state
-    ? await getDbDriver().query<any>(
-        `SELECT * FROM pipeline_jobs WHERE state = ? ORDER BY created_at DESC LIMIT ${limit}`, [opts.state])
-    : await getDbDriver().query<any>(
-        `SELECT * FROM pipeline_jobs ORDER BY created_at DESC LIMIT ${limit}`);
+  const conds: string[] = [];
+  const params: unknown[] = [];
+  if (opts?.state) { conds.push('state = ?'); params.push(opts.state); }
+  if (!opts?.allUsers) {
+    // 未显式要全量 → 必须按 user 过滤;没给 userId 就用查不到的哨兵(空集,绝不泄露)
+    conds.push('user_id = ?');
+    params.push(opts?.userId || '__no_auth__');
+  }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  const rows = await getDbDriver().query<any>(
+    `SELECT * FROM pipeline_jobs ${where} ORDER BY created_at DESC LIMIT ${limit}`, params);
   return rows.map(rowToJob);
 }
 

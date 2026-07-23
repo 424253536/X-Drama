@@ -41,11 +41,8 @@ function resolveUserId(request: Request): { id: string; name: string; avatarUrl:
     const user = getUserById(payload.sub);
     if (user) return { id: user.id, name: user.name, avatarUrl: user.avatarUrl };
   }
-  // demo / 未登录 — 用 seeded 第一个用户兜底, 便于 dev 跑
-  const fallback = db.prepare('SELECT id, name, avatar_url FROM users LIMIT 1').get() as
-    | { id: string; name: string; avatar_url: string | null }
-    | undefined;
-  if (fallback) return { id: fallback.id, name: fallback.name, avatarUrl: fallback.avatar_url };
+  // v12.233(对抗复检收尾):删「未登录用第一个用户兜底」——
+  // 那等于匿名可以第一注册用户的身份在任意项目发/删评论。未登录直接 null,调用方 401。
   return null;
 }
 

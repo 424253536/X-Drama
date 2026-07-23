@@ -146,34 +146,74 @@ export function stripNonDialogueBrackets(text: string): string {
  * 系统找 CJK 字体路径, 让 ffmpeg subtitles filter 能用.
  * 找不到返 null, 调用方走 fallback (拼 subtitles filter 不指定 fontsdir, libass 走默认).
  *
- * 顺序:
+ * 顺序(v12.233 调整 —— 开源字体优先,规避商用授权风险 🟡-27):
  *   1. env CJK_FONT_FILE 指定 (运维覆盖)
- *   2. macOS 内置: /System/Library/Fonts/PingFang.ttc / STSong.ttc / Hiragino Sans GB
- *   3. Linux 常见: /usr/share/fonts/.../Noto Sans CJK / WenQuanYi
- *   4. 项目自带: data/fonts/cjk.ttf (留给 docker 镜像预装)
+ *   2. **开源可商用**字体:项目自带 data/fonts/ → Linux 系统 Noto CJK / 文泉驿
+ *   3. macOS 系统内置(PingFang 等)—— **仅最后兜底并告警**
+ *
+ * 为什么调顺序:PingFang 等 macOS 系统字体受 Apple EULA 约束,**把字形烧进对外分发的
+ * 商用视频属于越界使用**。此前 macOS 排第一 → 本机跑出的每条商用成片都踩这条线。
+ * 现在开源字体(Noto CJK / WenQuanYi,SIL OFL / Apache-2.0,明确允许商用嵌入)优先;
+ * 只有一个开源字体都找不到时才退回系统字体,并打警告告诉运营者该装字体了。
  */
+
+/** 开源可商用 CJK 字体候选(SIL OFL / Apache-2.0,允许嵌入分发)。 */
+const OPEN_LICENSE_CJK_FONTS = [
+  // 项目自带(docker / 自部署预装 —— 最可控)
+  path.join(process.cwd(), 'data', 'fonts', 'NotoSansCJK-Regular.otf'),
+  path.join(process.cwd(), 'data', 'fonts', 'cjk.ttf'),
+  // Linux 常见发行版路径
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+  '/usr/share/fonts/truetype/arphic/uming.ttc',
+  // macOS 上用 brew/手动装的开源 CJK(Noto 与思源黑体同源,均 SIL OFL)
+  '/Library/Fonts/NotoSansCJKsc-Regular.otf',
+  '/Library/Fonts/SourceHanSansCN-Regular.otf',
+  path.join(process.env.HOME || '', 'Library/Fonts/NotoSansCJKsc-Regular.otf'),
+  path.join(process.env.HOME || '', 'Library/Fonts/SourceHanSansCN-Regular.otf'),
+  path.join(process.env.HOME || '', 'Library/Fonts/SourceHanSansCN-Normal.otf'),
+];
+
+/** macOS 系统内置 CJK —— 受 Apple EULA 约束,仅兜底。 */
+const SYSTEM_FALLBACK_CJK_FONTS = [
+  '/System/Library/Fonts/PingFang.ttc',
+  '/System/Library/Fonts/STHeiti Light.ttc',
+  '/System/Library/Fonts/STHeiti Medium.ttc',
+  '/System/Library/Fonts/Hiragino Sans GB.ttc',
+  '/Library/Fonts/Songti.ttc',
+];
+
+let warnedSystemFont = false;
+
 export function findCjkFont(): string | null {
   const envFont = process.env.CJK_FONT_FILE;
   if (envFont && fs.existsSync(envFont)) return envFont;
 
-  const candidates = [
-    // macOS
-    '/System/Library/Fonts/PingFang.ttc',
-    '/System/Library/Fonts/STHeiti Light.ttc',
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
-    '/Library/Fonts/Songti.ttc',
-    // Linux common
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-    '/usr/share/fonts/truetype/arphic/uming.ttc',
-    '/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc',
-    // 项目自带 (docker / 自部署预装)
-    path.join(process.cwd(), 'data', 'fonts', 'cjk.ttf'),
-    path.join(process.cwd(), 'data', 'fonts', 'NotoSansCJK-Regular.otf'),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
+  for (const p of OPEN_LICENSE_CJK_FONTS) {
+    if (p && fs.existsSync(p)) return p;
+  }
+
+  // 一个开源字体都没有 → 退回系统字体,但要让运营者知道自己踩在哪条线上
+  for (const p of SYSTEM_FALLBACK_CJK_FONTS) {
+    if (fs.existsSync(p)) {
+      if (!warnedSystemFont) {
+        warnedSystemFont = true;
+        console.warn(
+          `[fonts] ⚠️ 未找到开源 CJK 字体,回退系统字体 ${path.basename(p)}。` +
+          '系统字体(PingFang 等)受 Apple EULA 约束,**烧进对外分发的商用视频属越界使用**。' +
+          '请装 Noto Sans CJK 或放 data/fonts/NotoSansCJK-Regular.otf,亦可用 CJK_FONT_FILE 指定。',
+        );
+      }
+      return p;
+    }
   }
   return null;
+}
+
+/** v12.233:该字体是否开源可商用(供体检/合规提示判断)。 */
+export function isOpenLicenseFont(fontPath: string | null): boolean {
+  if (!fontPath) return false;
+  if (process.env.CJK_FONT_FILE && fontPath === process.env.CJK_FONT_FILE) return true; // 运维显式指定,视为已确认
+  return !SYSTEM_FALLBACK_CJK_FONTS.includes(fontPath);
 }

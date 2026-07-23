@@ -15,6 +15,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!payload) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
+
+  // v12.233(对抗复检收尾):此前只验登录、**不验归属** ——
+  // 任意登录用户可重投他人失败任务,重新触发对方的 AI 生成流水线、烧对方预算。
+  const existing = await getPipelineJob(id);
+  if (!existing) return NextResponse.json({ message: '任务不存在' }, { status: 404 });
+  if (existing.userId && existing.userId !== payload.sub) {
+    return NextResponse.json({ message: '任务不存在' }, { status: 404 }); // 用 404 不泄露"该 id 存在"
+  }
+
   const ok = await requeueJob(id);
   if (!ok) {
     const job = await getPipelineJob(id);

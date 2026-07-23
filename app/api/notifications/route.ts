@@ -28,8 +28,10 @@ function resolveUserId(request: Request): string | null {
   const payload = getUserFromRequest(request);
   if (payload?.sub) return payload.sub;
   // demo 兜底
-  const fallback = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-  return fallback?.id || null;
+  // v12.233(对抗复检收尾):删「无 token 回落 DB 第一个用户」——
+  // 那等于匿名即以第一注册用户身份读写,且把行为记到真人头上。
+  // 改哨兵:匿名请求查到的永远是空集,既不泄露也不误伤(与 v12.218 同款处理)。
+  return '__no_auth__';
 }
 
 export async function GET(request: NextRequest) {

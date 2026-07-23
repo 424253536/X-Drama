@@ -65,7 +65,7 @@
 | 🟡-24 | CI 明文 dummy JWT_SECRET,fork 即用可预测密钥 | **已堵** | v12.231:把两个 CI 夹具密钥加进**弱密钥黑名单** —— 即便被复制进生产也拒启动(纵深防御)。CI 自身不受影响(v12.226 已改成非生产采用显式密钥) |
 | 🟡-25 | 三月 217 个 patch 版本:成熟度假象 | **不打算堵** | 版本号风格选择。逐版可追溯(每条带 commit hash + 验收数据)反而是**透明**而非粉饰 |
 | 🟡-26 | 「零配置 2D 口型」= 嘴巴 PNG 轮播 | **未核实** | 本轮未复核该实现,不下结论 |
-| 🟡-27 | macOS 烧 PingFang 入商用视频违反苹果 EULA | **未堵** | 真实风险,需换开源字体(Noto CJK)。**建议下一轮优先处理** |
+| 🟡-27 | macOS 烧 PingFang 入商用视频违反苹果 EULA | **已堵** | v12.233:`findCjkFont` 改**开源优先**(项目自带 → Noto CJK → 思源黑体,均 SIL OFL 可商用),macOS 系统字体降为最后兜底并告警;新增 `isOpenLicenseFont`。本机实测由 `STHeiti Light` 改为 `SourceHanSansCN-Regular.otf` |
 
 ---
 
@@ -89,12 +89,14 @@
 2. ~~**零鉴权付费端点** ×5~~ → **v12.232 已修**(抽 `lib/paid-endpoint-guard` 统一登录+预算;`test-llm` 生产 404)。live 匿名全 401。
 3. ~~**`create-stream` / `regenerate-shot` 预算护栏被 `if (uid)` 架空**~~ → **v12.232 已修**(无 uid → 401;regenerate-shot 补 projectId 归属校验)。live 匿名 401、他人 token 403。
 4. ~~**用量护栏未接线**~~ → **v12.232 已修**:`getUserBudget` 在用户未自设时回落订阅档位上限,**档位上限首次具备执法力**(新增用例:free 档花 ¥20 超 ¥5 → 真的拦)。
-5. **首用户回落残留** — `preview-shot`、`preview-shot/history`、`global-assets/[id]`、`global-assets/[id]/use`、`notifications`、`comments` POST/DELETE。HIGH
-6. **跨租户泄露** — `pipeline-jobs` 列表无 user 过滤、`pipeline-jobs/[id]/retry` 不验归属、`v1/projects` 无 WHERE user_id。HIGH
-7. **`assets/confirm` 零鉴权** — 可篡改他人项目流水线状态,架空审核门。HIGH
-8. **`shot-audio` POST / `lipsync/render` POST** — 鉴权失败后赋 `__no_auth__` 继续执行,读写鉴权不对称。HIGH
-9. **`MARKETING-*.md` 冻在 v3.1.3 / 1150 tests** — README 首屏公开链接,投资人点进去看到的是 12 个大版本前的数据。HIGH
-10. **🟡-27 字体 EULA** — macOS 烧 PingFang 入商用视频,换 Noto CJK 即可
+5. ~~**首用户回落残留**~~ → **v12.233 已修**。宽扫查出**实际 23 处**(报告只列 6 个,近 4 倍)——22 处 HTTP 入口改哨兵,3 处 v12.218 遗留死查询清掉,`create-pipeline` 那处复核后保留并注明(非 HTTP 入口)。留**全仓不变量**防第四次复发。
+6. ~~**跨租户泄露**~~ → **v12.233 已修**。`listPipelineJobs` 默认按 user 过滤(要全量须显式 `allUsers`)、`retry` 补归属校验;`v1/projects` **如实处理** —— API_KEYS 是平台级共享凭据不绑用户,加过滤修不了,故默认关闭 + 写明边界。
+7. ~~**`assets/confirm` 零鉴权**~~ → **v12.233 已修**(补 edit 守卫)。live 匿名 401。
+8. ~~**`shot-audio` / `lipsync/render` POST 读写不对称**~~ → **v12.233 已修**(补 edit 守卫,不再赋 `__no_auth__` 继续跑)。live 匿名 401。
+9. ~~**`MARKETING-*.md` 冻在 v3.1.3 / 1150 tests**~~ → **v12.233 已修**(18 处更新 + 诚实性锁从 README 扩到 MARKETING)。
+10. ~~**🟡-27 字体 EULA**~~ → **v12.233 已修**。`findCjkFont` 改开源优先(PingFang 从第一降为最后兜底并告警);本机实测已解析到思源黑体(SIL OFL)。
+
+**清单 10 项全部完成**(v12.232 修前 4 项,v12.233 修后 6 项)。
 
 ### 方法论教训
 

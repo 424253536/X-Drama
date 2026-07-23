@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setAssetsConfirmedByTypes, setAssetConfirmed } from '@/lib/repos/asset-repo';
+import { requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,12 @@ export async function POST(request: NextRequest) {
     if (!projectId) {
       return NextResponse.json({ error: 'Missing projectId' }, { status: 400 });
     }
+
+    // v12.233(对抗复检收尾):此前**零鉴权** —— 任何人可确认他人项目的任意资产
+    // (含 final_video/music/timeline),直接篡改流水线状态、**架空 enableGates 人工审核门**。
+    // 确认资产属写操作,要 edit 级。
+    const g = await requireProjectAccess(request, projectId, 'edit');
+    if (!g.ok) return NextResponse.json({ message: g.message }, { status: g.status });
 
     // 根据 agentRole 确定要确认的资产类型
     const roleTypeMap: Record<string, string[]> = {

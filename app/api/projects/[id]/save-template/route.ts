@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const payloadUser = getUserFromRequest(request);
   let userId = payloadUser?.sub || null;
   if (!userId) {
-    const first = await d.get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
+    // v12.233:v12.218 改哨兵时遗留的死查询,已删(查了不用,白打一次 DB)
     userId = '__no_auth__';
   }
 

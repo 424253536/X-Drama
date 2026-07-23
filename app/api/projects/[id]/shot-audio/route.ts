@@ -47,12 +47,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // body.voiceId → 全片统一(back-compat);否则按角色路由(v9.7.4)
   const forceVoice = (body.voiceId || '').trim();
 
-  // 成本记账用 userId(token 优先,否则首个用户)
-  let userId = getUserFromRequest(request)?.sub || null;
-  if (!userId) {
-    const first = await getDbDriver().get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
-    userId = '__no_auth__';
-  }
+  // v12.233(对抗复检收尾):此前身份解析失败会赋 '__no_auth__' **然后继续往下跑** ——
+  // 即匿名请求照样为整个项目逐镜调 MiniMax TTS。GET 有守卫而 POST 裸奔,读写鉴权不对称。
+  // 现在:POST 是写操作 + 会花钱,要 edit 级守卫,拦下才谈记账。
+  const _g = await requireProjectAccess(request, id, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
 
   const scriptRows = await listAssetsByType(id, 'script');
   let script: { shots?: ScriptShot[] } = {};

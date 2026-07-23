@@ -76,4 +76,17 @@ describe('v12.220 测试数门面不停留旧值', () => {
       expect(src.includes('2894')).toBe(false);
     });
   }
+
+  /**
+   * v12.233(对抗复检收尾):MARKETING-*.md 曾**冻在 v3.1.3 / 1150 tests** ——
+   * 而它们是 README 首屏「🔥 Pitch / 营销文案」的公开链接,
+   * 投资人点进去看到的是 12 个大版本前、测试数少 3 倍的数据。锁上防再冻。
+   */
+  for (const f of ['docs/MARKETING-en.md', 'docs/MARKETING-zh.md']) {
+    it(`${f} 不停留在 v3.1.3 / 1150 tests`, () => {
+      const src = read(f);
+      expect(src.includes('v3.1.3')).toBe(false);
+      expect(/\b1150\b/.test(src)).toBe(false);
+    });
+  }
 });

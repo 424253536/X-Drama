@@ -294,6 +294,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     orchestrator.setProjectId(projectId);
 
     // 获取第一个可用用户ID（如果没有用户则创建一个）—— 提到 try 外, 后续阶段也要用
+    // v12.233 复核保留:这里**不是 HTTP 入口**,而是管线内部为资产落库找归属。
+    // 调用方(create-stream / pipeline-worker)已在入口做过鉴权(v12.232 起匿名 401),
+    // 走到这里时身份已确定;此处只是「DB 里一个用户都没有」的冷启动兜底。
     let userId = 'WM-U2zcG9DmjuJ06NS9D9'; // 默认使用已存在的用户
     try {
       const user = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;

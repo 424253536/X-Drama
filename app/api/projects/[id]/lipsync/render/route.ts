@@ -19,7 +19,7 @@ import {
   lipSyncEngineConfigured, listLipSyncProviders, dispatchLipSyncGenerate,
 } from '@/lib/lipsync-providers';
 import type { ScriptShot } from '@/types/agents';
-import { requireUser } from '@/lib/auth-guard';
+import { requireUser, requireProjectAccess } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,11 +52,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     visemes?: Array<{ t: number; viseme: string; mouthOpen: number }>;
   };
   const d = getDbDriver();
-  let userId = getUserFromRequest(request)?.sub || null;
-  if (!userId) {
-    const first = await d.get<{ id: string }>('SELECT id FROM users ORDER BY created_at ASC LIMIT 1', []);
-    userId = '__no_auth__';
-  }
+  // v12.233(对抗复检收尾):此前身份解析失败赋 '__no_auth__' **然后继续执行** ——
+  // 即匿名请求照样调用外部 Lipsync 服务(wav2lip/SadTalker)并计费。
+  // GET 要登录而 POST 裸奔,读写鉴权不对称。POST 是写操作 + 花钱 → edit 级守卫。
+  const _g = await requireProjectAccess(request, id, 'edit');
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
+  const userId = _g.userId;
 
   // 1) 说话人脸:body 优先,否则取该镜分镜图
   let faceUrl = (body.faceUrl || '').trim();

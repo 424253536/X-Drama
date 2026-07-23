@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
   const payload = getUserFromRequest(request);
   let userId = payload?.sub;
   if (!userId) {
-    const first = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
-    userId = first?.id || 'demo-user';
+    // v12.233(对抗复检收尾):删首用户回落 —— 匿名不该以第一注册用户身份读写 IDE 资产。
+    userId = '__no_auth__';
   }
 
   const out: MentionableAsset[] = [];
