@@ -18,18 +18,21 @@ export async function POST(request: NextRequest) {
 
   // v12.4.1: 预算硬上限护栏 —— 主创作链路接入(此前只 preview-shot 接,主管线零拦截)。
   // 放在任何 LLM 调用(下面 normalizeIdea 扩写)之前 → 超限前不发生任何费用(成本红线)。
-  // 仅对已登录用户生效;无预算上限的用户 assertBudget 永远放行,实际是 no-op。
+  // v12.232(对抗复检 CRITICAL 补漏):此前整块裹在 `if (uid)` 里 ——
+  // **匿名请求直接跳过预算护栏**,跑完整 8-agent 管线(LLM+图像+视频,单次 ¥3–10)。
+  // 「仅对已登录用户生效」这句注释本身就是漏洞说明书。现在:无 uid → 401,不再放行。
   {
     const { getUserFromRequest } = await import('@/app/api/auth/lib');
     const uid = getUserFromRequest(request)?.sub;
-    if (uid) {
-      const { assertBudget } = await import('@/lib/budget-enforce');
-      // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 ¥6 对 Kling 20 镜低估 5-10 倍
-      const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
-      const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }) });
-      if (!b.allow) {
-        return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
-      }
+    if (!uid) {
+      return new Response(JSON.stringify({ error: '创作需要登录', code: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    const { assertBudget } = await import('@/lib/budget-enforce');
+    // v12.172:动态估算(镜数×引擎秒单价;创建时剧本未出按 8 镜保守)—— 固定 ¥6 对 Kling 20 镜低估 5-10 倍
+    const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
+    const b = await assertBudget({ userId: uid, pendingCostCny: estimatePipelineCostCny({ videoProvider }) });
+    if (!b.allow) {
+      return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
     }
   }
 

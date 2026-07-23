@@ -9,6 +9,15 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // ↓ create-stream 路由文件依赖很多服务 — 我们只 stub 关键模块, 让它跑到 thin-idea 分支
+// v12.232:create-stream 的预算护栏此前裹在 if(uid) 里(匿名跳过),现改为无 uid → 401。
+// 本测试验的是 thin-idea 闸门,不是鉴权,故 mock 成已登录 + 预算放行。
+vi.mock('@/app/api/auth/lib', () => ({
+  getUserFromRequest: () => ({ sub: 'test-user', role: 'user' }),
+}));
+vi.mock('@/lib/budget-enforce', () => ({
+  assertBudget: async () => ({ allow: true, guard: { level: 'none', allow: true, message: '' } }),
+}));
+
 vi.mock('@/lib/db', () => ({
   db: {
     prepare: () => ({

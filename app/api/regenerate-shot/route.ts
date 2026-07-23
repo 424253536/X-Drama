@@ -22,16 +22,23 @@ export async function POST(request: NextRequest) {
 
   // v12.172:预算护栏 —— 此前本路由(单镜重生/批量补渲/阶段重做)完全绕过 assertBudget,
   // force 反复补渲可无上限烧钱。dryRun 免检(零成本)。
-  if (dryRun !== true) {
-    const { getUserFromRequest } = await import('../auth/lib');
-    const uid = getUserFromRequest(request)?.sub;
-    if (uid) {
+  // v12.232(对抗复检 CRITICAL 补漏):两处缺陷一并修 ——
+  //  ① 预算检查此前裹在 `if (uid)` 里,**匿名请求跳过护栏**直接跑完整重渲管线(MJ+Kling/Minimax+ffmpeg);
+  //  ② 全程**不校验 projectId 归属**,已登录用户可对他人项目触发重渲、烧对方额度。
+  // dryRun 仍免检(零成本),但归属校验对 dryRun 也要做 —— 否则可拿它探测他人项目是否存在。
+  {
+    const { requireProjectAccess } = await import('@/lib/auth-guard');
+    const g = await requireProjectAccess(request, projectId, 'edit');
+    if (!g.ok) {
+      return new Response(JSON.stringify({ error: g.message, code: 'forbidden' }), { status: g.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (dryRun !== true) {
       const { assertBudget } = await import('@/lib/budget-enforce');
       const { estimatePipelineCostCny } = await import('@/lib/budget-estimate');
       const pending = shotNumber
         ? estimatePipelineCostCny({ shotCount: 1, videoShots: 1, videoProvider, secondsPerShot: 8, skipImages: true })
         : estimatePipelineCostCny({ videoProvider, skipImages: stage === 'failed-videos' });
-      const b = await assertBudget({ userId: uid, pendingCostCny: pending });
+      const b = await assertBudget({ userId: g.userId, pendingCostCny: pending });
       if (!b.allow) {
         return new Response(JSON.stringify({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }), { status: 402, headers: { 'Content-Type': 'application/json' } });
       }

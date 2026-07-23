@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildProfileFromLibraryRow, serializeProfile, parseProfile } from '@/lib/character-studio';
 import { getCharacter, updateCharacterProfile } from '@/lib/repos/character-repo'; // v9.0.3c: async, 双驱动
+import { requireUser } from '@/lib/auth-guard';
 
 export const runtime = 'nodejs';
 
@@ -15,11 +16,15 @@ export const runtime = 'nodejs';
  *   - generate=true: 逐视图调 image provider 链真出图, 把 imageUrl 填回 turnaround + image_urls
  */
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const row = await getCharacter(id);
+    // v12.232(对抗复检补漏):此前**零鉴权**。知道 characterId 即可读他人角色档案(identityBlock/turnaround/voiceProfile)。
+  const _u = requireUser(request);
+  if (!_u.ok) return NextResponse.json({ message: _u.message }, { status: _u.status });
+const row = await getCharacter(id);
   if (!row) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
+  if (row.user_id !== _u.userId) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   // 已落库优先; 否则实时构建 (不落库)
   const stored = parseProfile(row.profile);
   const profile = stored ?? buildProfileFromLibraryRow(row);
@@ -28,9 +33,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const row = await getCharacter(id);
+    // v12.232(对抗复检补漏):此前**零鉴权**。POST 还会**触发图像生成并写回**,匿名即可烧他人算力。
+  const _u = requireUser(req);
+  if (!_u.ok) return NextResponse.json({ message: _u.message }, { status: _u.status });
+const row = await getCharacter(id);
   if (!row) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
+  if (row.user_id !== _u.userId) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   const body = await req.json().catch(() => ({} as any));
   const generate = body?.generate === true;
   const style: string | undefined = typeof body?.style === 'string' ? body.style : undefined;

@@ -1,10 +1,21 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth-guard';
 import { API_CONFIG } from '@/lib/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  // v12.232(对抗复检补漏):此前**零鉴权**,匿名 GET 即用生产密钥打 OpenAI,循环即烧额度。
+  // 这是纯手工调试端点(全仓无任何调用方),所以:
+  //   · 生产环境直接 404 —— 调试端点本就不该在生产可达;
+  //   · 非生产要求登录 —— 挡住同网段的随手探测。
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  }
+  const _u = requireUser(request);
+  if (!_u.ok) return NextResponse.json({ message: _u.message }, { status: _u.status });
+
   const model = API_CONFIG.openai.model;
   const start = Date.now();
 

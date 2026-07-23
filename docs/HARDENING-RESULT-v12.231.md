@@ -85,10 +85,10 @@
 
 按「严重度 × 可利用性」排序,全部有 file:line + curl 复现步骤(见对抗复检原始输出):
 
-1. **`characters/[id]` PUT/DELETE** — 匿名改/删任意角色(首用户回落 + 零归属校验)。CRITICAL
-2. **零鉴权付费端点** — `u2v/stream`、`narration/synthesize`、`character-traits/from-face`、`cameo/preview`、`test-llm`:匿名循环即可烧额度。CRITICAL
-3. **`create-stream` / `regenerate-shot` 预算护栏被 `if (uid)` 架空** — 匿名请求跳过检查跑完整管线(单次 ¥3–10)。CRITICAL
-4. **用量护栏未接线** — `usage-quota` 的档位上限与 `assertBudget` 完全脱钩,需让 `assertBudget` 在 `budget_cap_cny` 为 null 时回落到档位上限。HIGH
+1. ~~**`characters/[id]` PUT/DELETE** — 匿名改/删任意角色~~ → **v12.232 已修**(三 handler 接 requireUser + 归属校验,非本人 404;studio 子路由一并修)。live 按原始 curl 复现打过,数据实测未被改未被删。
+2. ~~**零鉴权付费端点** ×5~~ → **v12.232 已修**(抽 `lib/paid-endpoint-guard` 统一登录+预算;`test-llm` 生产 404)。live 匿名全 401。
+3. ~~**`create-stream` / `regenerate-shot` 预算护栏被 `if (uid)` 架空**~~ → **v12.232 已修**(无 uid → 401;regenerate-shot 补 projectId 归属校验)。live 匿名 401、他人 token 403。
+4. ~~**用量护栏未接线**~~ → **v12.232 已修**:`getUserBudget` 在用户未自设时回落订阅档位上限,**档位上限首次具备执法力**(新增用例:free 档花 ¥20 超 ¥5 → 真的拦)。
 5. **首用户回落残留** — `preview-shot`、`preview-shot/history`、`global-assets/[id]`、`global-assets/[id]/use`、`notifications`、`comments` POST/DELETE。HIGH
 6. **跨租户泄露** — `pipeline-jobs` 列表无 user 过滤、`pipeline-jobs/[id]/retry` 不验归属、`v1/projects` 无 WHERE user_id。HIGH
 7. **`assets/confirm` 零鉴权** — 可篡改他人项目流水线状态,架空审核门。HIGH

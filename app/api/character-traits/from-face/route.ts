@@ -18,11 +18,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { traitsFromFace } from '@/lib/character-traits';
+import { guardPaidEndpoint } from '@/lib/paid-endpoint-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  // v12.232(对抗复检 CRITICAL 补漏):此前**零鉴权零预算** —— GPT-4o Vision 人脸特征提取,
+  // 匿名循环调用即可持续烧额度。登录 + 预算一并前置,拦下才花钱。
+  const _pg = await guardPaidEndpoint(request, { pendingCostCny: 0.05 });
+  if (!_pg.ok) return _pg.response;
   let body: any = {};
   try { body = await request.json(); } catch { /* swallow */ }
 

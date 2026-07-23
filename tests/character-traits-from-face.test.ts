@@ -12,6 +12,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock @/lib/config 提供假 OPENAI key (否则 traitsFromFace 早退)
+// v12.232:端点补了「登录 + 预算」付费守卫。本测试全 mock、不建真用户,
+// 故直接 mock 守卫放行 —— 守卫本身由 v12-232-paid-and-ownership.test.ts 覆盖。
+vi.mock('@/lib/paid-endpoint-guard', () => ({
+  guardPaidEndpoint: async () => ({ ok: true, userId: 'test-user' }),
+}));
+
 vi.mock('@/lib/config', () => ({
   API_CONFIG: {
     openai: {

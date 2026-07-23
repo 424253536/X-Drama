@@ -20,12 +20,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { scoreCameoImage } from '@/lib/cameo-vision';
+import { guardPaidEndpoint } from '@/lib/paid-endpoint-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;  // vision 调用通常 2-5s,预留 30s
 
 export async function POST(request: NextRequest) {
+  // v12.232(对抗复检 CRITICAL 补漏):此前**零鉴权零预算** —— GPT-4o Vision 评分,可传 10MB 大图,
+  // 匿名循环调用即可持续烧额度。登录 + 预算一并前置,拦下才花钱。
+  const _pg = await guardPaidEndpoint(request, { pendingCostCny: 0.05 });
+  if (!_pg.ok) return _pg.response;
   try {
     const contentType = request.headers.get('content-type') || '';
 
