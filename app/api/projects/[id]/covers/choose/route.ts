@@ -7,6 +7,7 @@
  * Auth: 登录 + 属主/可编辑(与发布动作一致,改项目素材)。
  */
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import path from 'path';
 import { getUserFromRequest } from '../../../../auth/lib';
 import { db } from '@/lib/db';
@@ -50,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: e instanceof Error ? e.message.slice(0, 200) : 'cover burn failed' }, { status: 500 });
   }
 
-  const url = `/api/serve-file?path=${encodeURIComponent(result.outputPath)}`;
+  const url = `${serveFilePathUrl(result.outputPath)}`;
   await deleteAssetsByType(id, 'chosen-cover');
   await createAsset({
     projectId: id, type: 'chosen-cover', name: '定版封面',

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { API_CONFIG } from '@/lib/config';
 import { withVerticalHints } from '@/lib/vertical-composition';
 // v2.18.1: 复用 polish 那套 4 级 JSON fallback (LLM 对中文长文本经常返回非法 JSON)
@@ -104,7 +105,7 @@ function persistBase64ToFile(dataUri: string, label: string): string {
     const filePath = path.join(tmpDir, `${label.replace(/[^a-zA-Z0-9_-]/g, '_')}-${Date.now()}.${ext}`);
     fs.writeFileSync(filePath, buf);
     console.log(`[ImagePersist] Saved ${(buf.length / 1024).toFixed(0)}KB → ${filePath}`);
-    return `/api/serve-file?path=${encodeURIComponent(filePath)}`;
+    return `${serveFilePathUrl(filePath)}`;
   } catch (e) {
     console.error('[ImagePersist] Failed to save base64:', e);
     return dataUri; // 失败则回退到原始 data URI
@@ -4127,7 +4128,7 @@ ${shots.map((s, i) => {
             const dir: 'in' | 'out' | 'pan' = movementToKenBurns(shotMove)
               ?? (['in', 'out', 'pan'] as const)[i % 3];
             const localMp4 = await stillFrameToVideo(stillImage, fv.duration || 8, undefined, dir);
-            fv.videoUrl = `/api/serve-file?path=${encodeURIComponent(localMp4)}`;
+            fv.videoUrl = `${serveFilePathUrl(localMp4)}`;
             (fv as any).isAnimatic = true;
             this.emit('videoClip', fv);
             this.emit('agentTalk', {
@@ -4160,7 +4161,7 @@ ${shots.map((s, i) => {
         for (const kf of keyFrames) {
           const video = videos.find(v => v.shotNumber === kf.shotNumber);
           if (video) {
-            video.coverImageUrl = `/api/serve-file?path=${encodeURIComponent(kf.coverImagePath)}`;
+            video.coverImageUrl = `${serveFilePathUrl(kf.coverImagePath)}`;
           }
         }
 
@@ -4168,7 +4169,7 @@ ${shots.map((s, i) => {
           this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `已提取 ${keyFrames.length} 张关键帧封面图 ✅` });
           this.emit('coverImages', keyFrames.map(kf => ({
             shotNumber: kf.shotNumber,
-            coverImageUrl: `/api/serve-file?path=${encodeURIComponent(kf.coverImagePath)}`,
+            coverImageUrl: `${serveFilePathUrl(kf.coverImagePath)}`,
           })));
         }
       } catch (e) {
@@ -4519,7 +4520,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
               const dur = estimateSpeechDuration(t.dialogue);
               const silenceFile = await createSilenceMp3(dur);
               // 包装成 serve-file url, 让下游 ffmpeg 能读到
-              const silenceUrl = `/api/serve-file?path=${encodeURIComponent(silenceFile)}`;
+              const silenceUrl = `${serveFilePathUrl(silenceFile)}`;
               voiceoverClips.push({ shotNumber: t.shotNumber || 0, audioUrl: silenceUrl });
               const warn = `🔇 第 ${t.shotNumber} 镜 TTS 失败, 用 ${dur.toFixed(1)}s 静音兜底 (原因: ${errMsg.slice(0, 60)})`;
               audioWarnings.push(warn);
@@ -4670,7 +4671,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
             // composer 接受任何 http URL 或者 fs path; 用 file:// 形式包装一下
             // 实际 composer 的 downloadFile 会判断 https? 协议, 非 http 走 fs.copyFileSync
             // 这里直接 serve-file 形式让 composer 走文件路径
-            musicUrl = `/api/serve-file?path=${encodeURIComponent(concatPath)}`;
+            musicUrl = `${serveFilePathUrl(concatPath)}`;
             console.log(`[Editor] Multi-act BGM done: ${concatPath}`);
             this.emit('agentTalk', { role: AgentRole.EDITOR, text: '🎵 三幕配乐拼接完成!' });
           } catch (e) {
@@ -4821,7 +4822,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
           if (!img) continue; // 无图无素材 → 交给 missing-video 记账
           try {
             const p = await stillFrameToVideo(img, t.duration || 4, undefined, dirs[k % 3], dims);
-            t.videoUrl = `/api/serve-file?path=${encodeURIComponent(p)}`;
+            t.videoUrl = `${serveFilePathUrl(p)}`;
             this.qualityLedger.push({ shot: t.shotNumber ?? 0, kind: 'kenburns-fallback', detail: dirs[k % 3] }); // v12.66
             console.log(`[Editor] v12.62 Ken Burns 兜底: 镜 ${t.shotNumber} (${dirs[k % 3]}, ${dims.w}x${dims.h})`);
           } catch (e) {
@@ -4896,7 +4897,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
           },
         });
 
-        finalVideoUrl = `/api/serve-file?path=${encodeURIComponent(result.outputPath)}`;
+        finalVideoUrl = `${serveFilePathUrl(result.outputPath)}`;
         console.log(`[Editor] Final video: ${result.clipCount} clips, ${result.totalDuration}s, music=${result.hasMusic}, voiceover=${result.hasVoiceover}, highlights=${result.highlights.length}`);
 
         // v12.51.0/v12.53.0 商业题材自动拼结构化文字卡(文字全走 ffmpeg drawtext,根治模型烤乱码):
@@ -4921,7 +4922,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
             const r = await appendEndCard(outPath, { title: ec.title, slogan: ec.slogan, w, h, bg: 'blur' });
             if (r.appended) { outPath = r.outputPath; console.log(`[Editor] 商业片尾卡: "${ec.title}"`); this.emit('agentTalk', { role: AgentRole.EDITOR, text: `🏷️ 自动生成干净 CTA 片尾卡:「${ec.title}」` }); }
           }
-          if (outPath !== result.outputPath) finalVideoUrl = `/api/serve-file?path=${encodeURIComponent(outPath)}`;
+          if (outPath !== result.outputPath) finalVideoUrl = `${serveFilePathUrl(outPath)}`;
         } catch (e) {
           console.warn('[Editor] 文字卡拼接失败(非阻塞,跳过):', e instanceof Error ? e.message : e);
         }
@@ -4958,7 +4959,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
               transitionDuration: 0.1, // 极短转场
               musicVolume: 0.3,
             });
-            finalVideoUrl = `/api/serve-file?path=${encodeURIComponent(simpleResult.outputPath)}`;
+            finalVideoUrl = `${serveFilePathUrl(simpleResult.outputPath)}`;
             console.log(`[Editor] Simplified compose succeeded: ${simpleResult.clipCount} clips`);
             this.emit('agentTalk', { role: AgentRole.EDITOR, text: `✅ 简化合成成功！${simpleResult.clipCount}个片段` });
           } catch (e2) {
@@ -4978,7 +4979,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
                 validVideoClips.map(t => t.videoUrl),
                 musicUrl || undefined,
               );
-              finalVideoUrl = `/api/serve-file?path=${encodeURIComponent(concatOut)}`;
+              finalVideoUrl = `${serveFilePathUrl(concatOut)}`;
               audioWarnings.push('🎬 已用最稳定 concat 模式合成 (无转场 / 无配音)');
               this.emit('agentTalk', { role: AgentRole.EDITOR, text: `✅ concat 模式成功:${validVideoClips.length} 段已拼成完整成片(无转场/配音)` });
             } catch (e3) {
@@ -5360,7 +5361,7 @@ ${characterBibleBlock}${producerContext}
       const { movementToKenBurns } = await import('@/lib/emotion-camera');
       const dir = movementToKenBurns((storyboard as any).cameraMovement || storyboard.prompt) ?? 'in';
       const localMp4 = await stillFrameToVideo(storyboard.imageUrl, duration, undefined, dir);
-      videoUrl = `/api/serve-file?path=${encodeURIComponent(localMp4)}`;
+      videoUrl = `${serveFilePathUrl(localMp4)}`;
       isAnimatic = true;
       console.warn(`[Regenerate] Shot ${shotNumber} 所有引擎失败 → Ken Burns animatic(${dir})`);
     }

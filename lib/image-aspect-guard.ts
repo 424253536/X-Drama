@@ -8,6 +8,7 @@
  * 尺寸落持久目录。ffprobe/ffmpeg 缺失或任一步失败 → 原 URL 诚实返回(不阻塞)。
  */
 import { execFile } from 'child_process';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { promisify } from 'util';
 import path from 'path';
 import { persistentMediaDir } from './media-persist';
@@ -72,7 +73,7 @@ export async function ensureImageAspect(url: string, targetAspect: string, label
       '-frames:v', '1', outPath,
     ], { timeout: 60_000 });
     console.log(`[AspectGuard] ${label}: ${dims.width}x${dims.height} → ${w}x${h}(画幅漂移,已中央裁切)`);
-    return `/api/serve-file?path=${encodeURIComponent(outPath)}`;
+    return `${serveFilePathUrl(outPath)}`;
   } catch (e) {
     console.warn(`[AspectGuard] ${label} 守门失败,原图透传:`, e instanceof Error ? e.message.slice(0, 60) : e);
     return url;

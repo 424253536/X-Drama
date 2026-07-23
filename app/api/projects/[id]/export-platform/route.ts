@@ -10,6 +10,7 @@
  * Auth: 登录用户.
  */
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import fs from 'fs';
 import { getUserFromRequest } from '../../../auth/lib';
 import { db } from '@/lib/db';
@@ -110,7 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       aspect: result.aspect,
       width: result.width,
       height: result.height,
-      url: `/api/serve-file?path=${encodeURIComponent(result.outputPath)}`,
+      url: `${serveFilePathUrl(result.outputPath)}`,
       subtitled: !!subtitlePath, // v12.3.0: 是否真烧了字幕(平台样式 + 找到 SRT)
       fromRemote: !!tempInput,   // v12.3.4: 源是云/远端成片(已下载到临时文件再导)
     });

@@ -887,7 +887,15 @@ export function seed() {
       // demo 账号凭据默认给普通 member 角色,避免公网部署时
       // 把 admin 接口(/api/admin/*、waitlist 管理、完整用量统计)暴露给任何人。
       // 本地若需 admin 调试:启动时设 DEMO_ADMIN=1。
-      const demoRole = process.env.DEMO_ADMIN === '1' ? 'admin' : 'member';
+      // v12.236(第三轮对抗复检):原写法只看 DEMO_ADMIN==='1' —— 开发者本地调完忘了还原、
+      // 或部署时把整份 env 拷到生产,demo 账号就直接是 admin(而 /api/admin/* 只查 role)。
+      // 「配错就等于不设防」的开关必须在生产强制失效,同 v12.222 对 PLAN_GATE_DISABLED 的处理。
+      const wantAdmin = process.env.DEMO_ADMIN === '1';
+      const isProd = process.env.NODE_ENV === 'production';
+      if (wantAdmin && isProd) {
+        console.warn('[db] ⚠️ 生产环境忽略 DEMO_ADMIN=1 —— demo 账号一律 member,拒绝把 admin 接口交给公开凭据');
+      }
+      const demoRole = wantAdmin && !isProd ? 'admin' : 'member';
 
       db.prepare(`INSERT INTO users (id, email, password_hash, name, role, avatar_url, locale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
         demoUserId, 'demo@qfmanju.ai', passwordHash, '青枫漫剧 Demo', demoRole, AVATAR, 'zh', now()

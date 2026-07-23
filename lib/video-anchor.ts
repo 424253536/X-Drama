@@ -7,6 +7,7 @@
  * ffmpeg 均匀抽帧落持久目录;任一步失败返回 [](调用方按无参考处理)。
  */
 import { execFile } from 'child_process';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
@@ -31,7 +32,7 @@ export async function extractAnchorFrames(videoUrlOrPath: string, n = 3): Promis
       const t = pad + (usable * (i + 0.5)) / Math.max(1, n);
       const out = path.join(outDir, `vanchor-${Date.now()}-${i}.jpg`);
       await execFileAsync('ffmpeg', ['-y', '-ss', String(t.toFixed(2)), '-i', src, '-frames:v', '1', '-q:v', '2', out], { timeout: 60_000 });
-      if (fs.existsSync(out)) urls.push(`/api/serve-file?path=${encodeURIComponent(out)}`);
+      if (fs.existsSync(out)) urls.push(`${serveFilePathUrl(out)}`);
     }
     return urls;
   } catch { return []; }

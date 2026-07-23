@@ -110,8 +110,12 @@ export function fontForLanguage(lang?: string | null, presetFont?: string, env: 
   if (env.SUBTITLE_FONT) return env.SUBTITLE_FONT;
   const l = (lang || '').toLowerCase();
   const isDarwin = platform === 'darwin';
-  if (l === 'ko') return isDarwin ? 'Apple SD Gothic Neo' : 'Noto Sans KR';
-  if (l === 'ja') return isDarwin ? 'Hiragino Sans' : 'Noto Sans JP';
+  // v12.236(第三轮对抗复检):darwin 分支原本返回 'Apple SD Gothic Neo' / 'Hiragino Sans' ——
+  // 都是 Apple 专有字体,EULA 不允许随商用成片分发字形。v12.234 只把 PRESETS 的中文档改掉了,
+  // ko/ja 这两条**语种覆盖**会在出口处把已解析好的开源字体名整个替换回专有名 —— 又是漏了侧门。
+  // 现在统一给开源名(Noto Sans KR/JP,SIL OFL);本机没装则由 libass 自行替换,与其他语种同待遇。
+  if (l === 'ko') return 'Noto Sans KR';
+  if (l === 'ja') return 'Noto Sans JP';
   if (l === 'ru' || l === 'de' || l === 'fr' || l === 'es' || l === 'pt') return isDarwin ? (presetFont || null) : 'DejaVu Sans';
   if (l === 'zh') return isDarwin ? (presetFont || null) : 'Noto Sans CJK SC';
   return null; // 未指定语种 → 不覆盖预设(YouTube 等西文平台的 Arial 必须保留;CI Linux 抓到的真行为 bug)

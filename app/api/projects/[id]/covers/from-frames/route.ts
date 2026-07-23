@@ -8,6 +8,7 @@
  * 零 T2I 额度消耗;VLM 全挂时按采样序返回(scored:false)。
  */
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
@@ -73,7 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!fs.existsSync(file)) continue;
       const s = await scoreShotStyle(file);
       frames.push({
-        url: `/api/serve-file?path=${encodeURIComponent(file)}`,
+        url: `${serveFilePathUrl(file)}`,
         timeSec: t,
         quality: s?.quality ?? 0,
         hasBakedText: s?.hasBakedText ?? false,

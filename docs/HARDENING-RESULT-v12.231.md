@@ -65,7 +65,7 @@
 | 🟡-24 | CI 明文 dummy JWT_SECRET,fork 即用可预测密钥 | **已堵** | v12.231:把两个 CI 夹具密钥加进**弱密钥黑名单** —— 即便被复制进生产也拒启动(纵深防御)。CI 自身不受影响(v12.226 已改成非生产采用显式密钥) |
 | 🟡-25 | 三月 217 个 patch 版本:成熟度假象 | **不打算堵** | 版本号风格选择。逐版可追溯(每条带 commit hash + 验收数据)反而是**透明**而非粉饰 |
 | 🟡-26 | 「零配置 2D 口型」= 嘴巴 PNG 轮播 | **未核实** | 本轮未复核该实现,不下结论 |
-| 🟡-27 | macOS 烧 PingFang 入商用视频违反苹果 EULA | **已堵** | v12.233:`findCjkFont` 改**开源优先**(项目自带 → Noto CJK → 思源黑体,均 SIL OFL 可商用),macOS 系统字体降为最后兜底并告警;新增 `isOpenLicenseFont`。本机实测由 `STHeiti Light` 改为 `SourceHanSansCN-Regular.otf` |
+| 🟡-27 | macOS 烧 PingFang 入商用视频违反苹果 EULA | **已堵(v12.236 才真正堵完)** | v12.233 只改了**解析函数** `findCjkFont`(开源优先 + `isOpenLicenseFont`),当时标「已堵」是**误判** —— 真正把字形烧进成片的消费方原封不动。v12.234 补齐三条:`services/video-composer.ts` 两处硬编码兜底、`lib/subtitle-burn.ts` 四个平台预设写死的专有字体名、`lib/cover-title-burn.ts` 候选顺序;并改为**找不到开源字体就报错拒绝出片**(实测:不指定 fontfile 时 ffmpeg exit=0 但中文渲成豆腐块)。v12.236 再补 `fontForLanguage` 的 ko/ja 分支(darwin 上仍返回 Apple 专有字体名)。**实渲截帧验收**:字幕帧与片尾卡帧均为真中文字形,解析到 `SourceHanSansCN-Regular`(SIL OFL) |
 
 ---
 
@@ -94,7 +94,7 @@
 7. ~~**`assets/confirm` 零鉴权**~~ → **v12.233 已修**(补 edit 守卫)。live 匿名 401。
 8. ~~**`shot-audio` / `lipsync/render` POST 读写不对称**~~ → **v12.233 已修**(补 edit 守卫,不再赋 `__no_auth__` 继续跑)。live 匿名 401。
 9. ~~**`MARKETING-*.md` 冻在 v3.1.3 / 1150 tests**~~ → **v12.233 已修**(18 处更新 + 诚实性锁从 README 扩到 MARKETING)。
-10. ~~**🟡-27 字体 EULA**~~ → **v12.233 已修**。`findCjkFont` 改开源优先(PingFang 从第一降为最后兜底并告警);本机实测已解析到思源黑体(SIL OFL)。
+10. ~~**🟡-27 字体 EULA**~~ → **v12.233 只修了一半(当时误标已修),v12.234 + v12.236 才修完**。v12.233 改的是解析函数;真正烧进片子的三条消费方路径(video-composer 两处硬编码、subtitle-burn 四个平台预设、cover-title-burn 候选顺序)直到 v12.234 才改,`fontForLanguage` 的 ko/ja 分支直到 v12.236 才改。**教训**:改了「解析/判定函数」不等于护栏生效,必须跟到每一个消费方。
 
 **清单 10 项全部完成**(v12.232 修前 4 项,v12.233 修后 6 项)。
 

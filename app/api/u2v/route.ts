@@ -14,7 +14,8 @@
  *   400 → { error } (缺字段 / imageUrl 协议非法)
  *   422 → { error } (Minimax 配置缺 / 上游失败)
  *
- * Auth: JWT 优先, 缺时 fallback 到 DB 第一个用户(Demo 模式)。
+ * Auth: v12.234 起**强制登录**(guardPaidEndpoint:未登录 401 / 超预算 402)。
+ *       此前注释写「缺 token 回落 DB 第一个用户(Demo 模式)」,那是 v12.233 之前的行为,已废除。
  */
 
 import { NextRequest, NextResponse } from 'next/server';

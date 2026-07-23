@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { getUserFromRequest } from '@/app/api/auth/lib';
 import { getOwnedProject } from '@/lib/repos/project-repo';
 import { listAssetsByType, upsertAsset } from '@/lib/repos/asset-repo';
@@ -179,7 +180,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const ec = await appendEndCard(vPath, { title: endCard.title, slogan: endCard.slogan, w, h, durationSec: endCard.durationSec, bg: endCard.bg === 'solid' ? 'solid' : 'blur' });
         vPath = ec.outputPath;
       }
-      const vUrl = `/api/serve-file?path=${encodeURIComponent(vPath)}`;
+      const vUrl = `${serveFilePathUrl(vPath)}`;
       await upsertAsset({
         projectId: id, type: 'ab_variant', name: `Hook变体${vi + 1}: ${hv.title.slice(0, 20)}`,
         data: { hookTitle: hv.title, aspect, width: w, height: h }, mediaUrls: [vUrl], persistentUrl: vUrl, shotNumber: vi + 1,
@@ -190,7 +191,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const serveUrl = `/api/serve-file?path=${encodeURIComponent(outputPath)}`;
+  const serveUrl = `${serveFilePathUrl(outputPath)}`;
   await upsertAsset({
     projectId: id, type: 'final_video', name: '最终成片',
     data: { duration: result.totalDuration, hasBgm: result.hasMusic, hasVoiceover: result.hasVoiceover, audible: !!(result.hasMusic || result.hasVoiceover), aspect, width: w, height: h, recomposed: true, hookCard: hookAppended, endCard: cardAppended },

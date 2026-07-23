@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/lib/config';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { emotionToMinimaxEmotion } from '@/lib/emotion-tag';
 import fs from 'fs';
 import os from 'os';
@@ -63,7 +64,7 @@ function persistHexAudioToFile(hex: string, ext: 'mp3' | 'wav' = 'mp3'): string 
   const fullPath = path.join(dir, filename);
   const buf = Buffer.from(hex, 'hex');
   fs.writeFileSync(fullPath, buf);
-  return `/api/serve-file?path=${encodeURIComponent(fullPath)}`;
+  return `${serveFilePathUrl(fullPath)}`;
 }
 
 // v2.17 P0.2: API 用量追踪 — 失败时落 api_usage_events + 升级 quota alerts

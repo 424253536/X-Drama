@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeFetch } from '@/lib/ssrf-guard';
+import { verifyServeFileSig } from '@/lib/serve-file-sign';
 import { requireUser } from '@/lib/auth-guard';
 import fs from 'fs';
 import path from 'path';
@@ -107,6 +108,15 @@ export async function GET(request: NextRequest) {
   // 防 path traversal: 必须以这些前缀开头, 且不含 '..'.
   const _gp = await requireUser(request);
   if (!_gp.ok) return NextResponse.json({ message: _gp.message }, { status: _gp.status });
+
+  // v12.236(第三轮对抗复检 · 跨用户 IDOR):仅「登录 + 目录白名单」挡不住越权 ——
+  // 成片名是 final-<时间戳>.mp4,任何登录用户拿到路径(SSE/日志泄露)即可读他人成片。
+  // 现在要求 HMAC 签名:URL 必须是服务端经 serveFilePathUrl() 签发过的,伪造不了签名就 403。
+  const sig = request.nextUrl.searchParams.get('sig');
+  if (!verifyServeFileSig(filePath, sig)) {
+    console.warn(`[serve-file] path= 未签名/签名无效 user=${_gp.userId} path=${filePath.slice(0, 80)}`);
+    return NextResponse.json({ error: 'Unsigned or invalid path signature' }, { status: 403 });
+  }
 
   const resolvedPath = path.resolve(filePath);
   const cwd = process.cwd();

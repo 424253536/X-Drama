@@ -7,6 +7,7 @@
  * 安全:登录 + 属主/可编辑守卫。
  */
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { db } from '@/lib/db';
 import { getUserFromRequest } from '../../../auth/lib';
 import { canEditProject } from '@/lib/project-share';
@@ -44,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { reframeVideo } = await import('@/services/video-composer');
     const { outputPath, w, h } = await reframeVideo(finalUrl, target, mode);
-    const altUrl = `/api/serve-file?path=${encodeURIComponent(outputPath)}`;
+    const altUrl = `${serveFilePathUrl(outputPath)}`;
     await upsertAsset({
       projectId: id, type: 'final_video_alt', name: `成片·${target}`,
       data: { aspect: target, mode, w, h, source: 'reframe' },

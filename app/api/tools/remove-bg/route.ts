@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { getUserFromRequest } from '@/app/api/auth/lib';
 import { bgRemovalAvailable, removeBackground } from '@/lib/image-tools/bg-removal';
 import fs from 'fs';
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     const outDir = path.join(process.cwd(), 'data', 'cutouts');
     const { outputPath, method } = await removeBackground(imageUrl, { model: body?.model, outputDir: outDir });
     if (!fs.existsSync(outputPath)) return NextResponse.json({ message: '抠图未产出文件' }, { status: 500 });
-    const serveUrl = `/api/serve-file?path=${encodeURIComponent(outputPath)}`;
+    const serveUrl = `${serveFilePathUrl(outputPath)}`;
     return NextResponse.json({ ok: true, cutoutUrl: serveUrl, method });
   } catch (e) {
     return NextResponse.json({ message: `抠图失败: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });

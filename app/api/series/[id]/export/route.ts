@@ -8,6 +8,7 @@
  * ④ 返回 skipped(无成片被跳过的集);⑤ 画幅取已完成集。
  */
 import { NextResponse } from 'next/server';
+import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -88,7 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { concatVideos } = await import('@/services/video-composer');
     const { outputPath, count } = await concatVideos(urls, aspect, tmpDir);
     // 持久化:从 tmp 落到 storage(否则重启/清理后 URL 失效);失败兜底用 tmp serve-file URL
-    const tmpUrl = `/api/serve-file?path=${encodeURIComponent(outputPath)}`;
+    const tmpUrl = `${serveFilePathUrl(outputPath)}`;
     const persisted = await persistAsset(tmpUrl, { ext: 'mp4' }).catch(() => null);
     const videoUrl = persisted?.url || tmpUrl;
     await upsertAsset({

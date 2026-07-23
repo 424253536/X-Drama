@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { getUserFromRequest } from '../auth/lib';
 import {
@@ -61,8 +62,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: Request) {
+  // v12.236(第三轮对抗复检):与 v12.234 已修的 templates/shared clone **完全同款** ——
+  // 匿名请求拿到 '__no_auth__' 后继续执行 createGlobalAsset,往全局资产库写垃圾记录;
+  // 且 GET/PATCH/DELETE 的 `asset.userId !== userId` 守门对哨兵无效(同一哨兵值互相可见),
+  // 于是匿名写入的资产又能被任意匿名请求读改删。上一版按清单逐个修,这个文件不在清单里就漏了 ——
+  // 所以本版把不变量测试从「哨兵+写操作」扩到**所有 handler**,而不是继续靠清单。
+  const _g = await requireUser(request);
+  if (!_g.ok) return NextResponse.json({ message: _g.message }, { status: _g.status });
   try {
-    const userId = resolveUserId(request);
+    const userId = _g.userId;
     const body = (await request.json().catch(() => ({}))) as Partial<CreateGlobalAssetInput>;
 
     if (!body.type || !VALID_TYPES.includes(body.type as GlobalAssetType)) {

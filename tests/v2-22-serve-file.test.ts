@@ -18,6 +18,13 @@ vi.mock('@/lib/auth-guard', () => ({
 // 不 mock asset-storage — 直接走真路径
 const { GET } = await import('@/app/api/serve-file/route');
 const { requireUser } = await import('@/lib/auth-guard');
+const { serveFilePathUrl } = await import('@/lib/serve-file-sign');
+
+// v12.236:?path= 现在要求 HMAC 签名(能力 URL)。这些「白名单/存在性」用例本身不测签名,
+// 用 signed() 生成合法签名 query,让关注点仍是白名单;签名的正/负路径另有独立用例守(见文件末尾)。
+function signed(absPath: string): string {
+  return serveFilePathUrl(absPath).replace('/api/serve-file?', '');
+}
 
 function mkReq(qs: string): any {
   const url = new URL(`http://localhost:3000/api/serve-file?${qs}`);
@@ -34,7 +41,7 @@ describe('v2.22 fix #3 · serve-file path allowlist', () => {
     const testFile = path.join(composedDir, 'test-v2-22-allowlist.mp4');
     fs.writeFileSync(testFile, 'fake mp4');
     try {
-      const req = mkReq(`path=${encodeURIComponent(testFile)}`);
+      const req = mkReq(signed(testFile));
       const res = await GET(req);
       expect(res.status).toBe(200);
     } finally {
@@ -48,7 +55,7 @@ describe('v2.22 fix #3 · serve-file path allowlist', () => {
     const testFile = path.join(dir, 'test-v2-22-allowlist.mp4');
     fs.writeFileSync(testFile, 'fake mp4');
     try {
-      const req = mkReq(`path=${encodeURIComponent(testFile)}`);
+      const req = mkReq(signed(testFile));
       const res = await GET(req);
       expect(res.status).toBe(200);
     } finally {
@@ -60,7 +67,7 @@ describe('v2.22 fix #3 · serve-file path allowlist', () => {
     const tmp = path.join(os.tmpdir(), 'test-v2-22-tmp.mp4');
     fs.writeFileSync(tmp, 'fake');
     try {
-      const req = mkReq(`path=${encodeURIComponent(tmp)}`);
+      const req = mkReq(signed(tmp));
       const res = await GET(req);
       expect(res.status).toBe(200);
     } finally {
@@ -69,21 +76,21 @@ describe('v2.22 fix #3 · serve-file path allowlist', () => {
   });
 
   it('拒绝 /etc/passwd (path traversal block)', async () => {
-    const req = mkReq(`path=${encodeURIComponent('/etc/passwd')}`);
+    const req = mkReq(signed('/etc/passwd'));
     const res = await GET(req);
     expect(res.status).toBe(403);
   });
 
   it('拒绝 data/composed/../../etc/passwd (resolved path traversal)', async () => {
     const evil = path.join(process.cwd(), 'data', 'composed', '..', '..', '..', 'etc', 'passwd');
-    const req = mkReq(`path=${encodeURIComponent(evil)}`);
+    const req = mkReq(signed(evil));
     const res = await GET(req);
     expect(res.status).toBe(403);
   });
 
   it('合法目录但文件不存在 → 404', async () => {
     const missing = path.join(process.cwd(), 'data', 'composed', 'nope-' + Date.now() + '.mp4');
-    const req = mkReq(`path=${encodeURIComponent(missing)}`);
+    const req = mkReq(signed(missing));
     const res = await GET(req);
     expect(res.status).toBe(404);
   });
@@ -111,6 +118,20 @@ describe('v12.234 · serve-file 鉴权(?path= 不再裸奔)', () => {
 
   it('已登录但代理指向云元数据地址 → 403(旧正则放行的那个漏网之鱼)', async () => {
     const res = await GET(mkReq(`proxy=${encodeURIComponent('http://169.254.169.254/latest/meta-data/')}`));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('v12.236 · serve-file ?path= 签名门(跨用户 IDOR)', () => {
+  it('已登录但 URL 未签名(攻击者手拼路径)→ 403', async () => {
+    const target = require('path').join(process.cwd(), 'data', 'composed', 'someone-elses.mp4');
+    const res = await GET(mkReq(`path=${encodeURIComponent(target)}`)); // 故意不带 sig
+    expect(res.status).toBe(403);
+  });
+
+  it('已登录 + 伪造签名 → 403', async () => {
+    const target = require('path').join(process.cwd(), 'data', 'composed', 'x.mp4');
+    const res = await GET(mkReq(`path=${encodeURIComponent(target)}&sig=${'0'.repeat(32)}`));
     expect(res.status).toBe(403);
   });
 });

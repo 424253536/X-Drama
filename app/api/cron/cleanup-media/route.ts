@@ -52,8 +52,23 @@ async function handle(request: Request) {
       );
     }
     console.warn('[cron/cleanup-media] 未设 CRON_SECRET,非生产环境放行(生产会 503)');
-  } else if (url.searchParams.get('secret') !== secret) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  } else {
+    // v12.236(第三轮对抗复检):密钥原本**只能**从 `?secret=` 读 —— 完整 URL 会被
+    // Nginx/Vercel/CDN 的访问日志原样记下,等于把可触发**不可逆批量删除**的密钥明文写进日志;
+    // 而兄弟端点 run-scheduled-publishes 早就用 Authorization 头。现在优先收头;
+    // query 形式暂时保留(用户本机 launchd 定时任务在用),但每次命中都告警,提示改用头。
+    const auth = request.headers.get('authorization') || '';
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const queryed = url.searchParams.get('secret') || '';
+    if (bearer !== secret && queryed !== secret) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (!bearer && queryed === secret) {
+      console.warn(
+        '[cron/cleanup-media] ⚠️ 密钥走 ?secret= 查询参数,会明文进访问日志。' +
+        '请改用 `Authorization: Bearer $CRON_SECRET`(该形式已支持)。',
+      );
+    }
   }
   const dryRun = url.searchParams.get('dryRun') === '1';
   const root = process.cwd();

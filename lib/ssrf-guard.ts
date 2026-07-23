@@ -45,13 +45,67 @@ export function isBlockedIp(ip: string): boolean {
     if (v === '::1' || v === '::') return true;                 // 回环 / 未指定
     if (/^fe[89ab]/.test(v)) return true;                       // fe80::/10 链路本地
     if (/^f[cd]/.test(v)) return true;                          // fc00::/7 唯一本地
-    // IPv4 映射地址 ::ffff:127.0.0.1 —— 取出内嵌 v4 递归判定,否则等于开了后门
-    const m = v.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (m) return isBlockedIp(m[1]);
+
+    // v12.236(第三轮对抗复检 · CRITICAL,打在我自己 v12.234 刚写的代码上):
+    // 此处原本只用正则 /::ffff:(\d+\.\d+\.\d+\.\d+)$/ 匹配**点分十进制**写法的 IPv4 映射地址。
+    // 但 RFC 4291 允许同一地址用纯十六进制分组表示:`::ffff:7f00:1` === `::ffff:127.0.0.1`。
+    // 正则不匹配 → 直接放行,而 Linux 双栈套接字会把它连到真正的 127.0.0.1。
+    // 实测放行过:::ffff:7f00:1(127.0.0.1)、::ffff:a00:1(10.0.0.1)、
+    // ::ffff:c0a8:101(192.168.1.1)、**::ffff:a9fe:a9fe(169.254.169.254,云 IMDS)**。
+    // 而我 v12.234 写的测试只覆盖了点分那一种写法 —— 测试照着实现写,就只会确认实现的偏见。
+    // 现在:先把地址**展开成 8 组**再判定,不依赖任何书写形式。
+    const embedded = embeddedIpv4(v);
+    if (embedded) return isBlockedIp(embedded);
     return false;
   }
 
   return false; // 不是 IP 字面量 → 交给调用方走 DNS 那层
+}
+
+/** 把 IPv6 展开成 8 个 16 位分组(处理 `::` 压缩与内嵌点分 IPv4);非法返回 null。 */
+export function expandIpv6(ip: string): number[] | null {
+  let s = ip.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (!net.isIPv6(s)) return null;
+  s = s.replace(/%.*$/, ''); // 去掉 zone id(fe80::1%en0)
+
+  // 内嵌点分 IPv4(::ffff:127.0.0.1)先转成两组十六进制,后续统一按 8 组处理
+  const dotted = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const o = dotted[1].split('.').map(Number);
+    if (o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    const hi = ((o[0] << 8) | o[1]).toString(16);
+    const lo = ((o[2] << 8) | o[3]).toString(16);
+    s = s.slice(0, -dotted[1].length) + `${hi}:${lo}`;
+  }
+
+  const [head, tail] = s.split('::');
+  const h = head ? head.split(':').filter(Boolean) : [];
+  const t = tail !== undefined && tail ? tail.split(':').filter(Boolean) : [];
+  const groups = s.includes('::')
+    ? [...h, ...Array(8 - h.length - t.length).fill('0'), ...t]
+    : s.split(':');
+  if (groups.length !== 8) return null;
+
+  const nums = groups.map((g) => parseInt(g || '0', 16));
+  return nums.some((n) => !Number.isInteger(n) || n < 0 || n > 0xffff) ? null : nums;
+}
+
+/**
+ * 若该 IPv6 内嵌了 IPv4(不论用什么书写形式),返回点分十进制的 IPv4;否则返回 null。
+ * 覆盖:IPv4 映射 `::ffff:0:0/96`、已废弃的 IPv4 兼容 `::a.b.c.d`、NAT64 前缀 `64:ff9b::/96`。
+ */
+export function embeddedIpv4(ip: string): string | null {
+  const g = expandIpv6(ip);
+  if (!g) return null;
+  const toV4 = () => [(g[6] >> 8) & 255, g[6] & 255, (g[7] >> 8) & 255, g[7] & 255].join('.');
+
+  const zeroHead = g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0;
+  if (zeroHead && g[5] === 0xffff) return toV4();                      // ::ffff:x.x.x.x 映射
+  if (zeroHead && g[5] === 0 && (g[6] !== 0 || g[7] > 1)) return toV4(); // ::x.x.x.x 兼容(排除 ::1/::)
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
+    return toV4();                                                      // 64:ff9b::/96 NAT64
+  }
+  return null;
 }
 
 /**
