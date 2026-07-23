@@ -42,7 +42,7 @@
 
 ## ✨ Why Wind Comic?
 
-Most "AI video" tools give you a 5-second clip from a one-line prompt. **Wind Comic gives you a finished short-form drama** — script, character bible, multi-shot storyboards, voice-acted lines, BGM, lip-synced talking heads, and a final mp4 — from the same single line.
+Most "AI video" tools give you a 5-second clip from a one-line prompt. **Wind Comic gives you a finished short-form drama** — script, character bible, multi-shot storyboards, voice-acted lines, BGM, mouth-synced characters (indicative 2D lip bar out of the box; photorealistic face-level lip-sync via BYO wav2lip/SadTalker/MuseTalk or Kling), and a final mp4 — from the same single line.
 
 It works because it doesn't try to be one giant model. It's an **honest multi-agent pipeline** where each role (Writer, Director, Producer, Character Designer, Storyboard Artist, Cameo Locker, Lipsync, Editor) is a specialist that hands off with strict consistency contracts. Plus a **real-time multiplayer timeline** to edit with your team like Figma for film.
 
