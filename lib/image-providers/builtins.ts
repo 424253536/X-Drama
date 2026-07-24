@@ -12,6 +12,10 @@
 import { registerImageProvider } from './registry';
 import type { ImageGenerateInput } from './types';
 import '@/lib/mock-providers'; // v10.4.0: mock 三件套常驻注册(MOCK_ENGINES=1 才 available)
+// v12.238(issue #11):GPT Image / Nano Banana 走同一套 plugin registry —— 注册即入链,
+// 各自的 available() 按 env 门控(未配 key/未开开关就自动不参与,零副作用)。
+import '@/lib/image-providers/openai-gpt-image';
+import '@/lib/image-providers/gemini-image';
 
 // ─── Lazy service factory — 避免 server 启动就加载所有 service ────────────
 // 因为 service class 在 constructor 里读 API_CONFIG (.env), 这里用 lazy + 缓存
