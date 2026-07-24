@@ -105,6 +105,12 @@ export function embeddedIpv4(ip: string): string | null {
   if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
     return toV4();                                                      // 64:ff9b::/96 NAT64
   }
+  // v12.237(第四轮对抗复检 · HIGH):6to4 `2002::/16`(RFC 3056)把目的 IPv4 编在 g[1,2] ——
+  // v12.236 的 embeddedIpv4 只查 g[6,7],于是 2002:a9fe:a9fe::(→169.254.169.254 云 IMDS)被放行。
+  // 在配了 sit/6to4 隧道的 Linux 生产机上,连它就直达内网。补上这一分支。
+  if (g[0] === 0x2002) {
+    return [(g[1] >> 8) & 255, g[1] & 255, (g[2] >> 8) & 255, g[2] & 255].join('.');
+  }
   return null;
 }
 

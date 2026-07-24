@@ -20,7 +20,13 @@ export function serveFileToLocalPath(url: string): string | null {
     if (!url.startsWith('/api/serve-file')) return null;
     const q = new URLSearchParams(url.split('?')[1] || '');
     const p = q.get('path');
-    if (p) return decodeURIComponent(p);
+    if (p) {
+      // v12.237(第四轮对抗复检 · CRITICAL):?path= 此前直接 decode 返回本地路径,不验签 ——
+      // toEngineImage 会把它读成 base64 喂引擎 / video-anchor 会 ffmpeg 抽帧,等于绕过 v12.236 签名读任意文件。
+      // 现在强制验 HMAC 签名 + 白名单;?key= 是内容寻址(SHA-256 不可枚举/伪造),保持原样。
+      const { resolveVerifiedServeFilePath } = require('./serve-file-sign') as typeof import('./serve-file-sign');
+      return resolveVerifiedServeFilePath(url);
+    }
     const key = q.get('key');
     if (key) {
       const { resolveByKey } = require('./asset-storage') as typeof import('./asset-storage');

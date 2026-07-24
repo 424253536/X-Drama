@@ -111,10 +111,15 @@ export async function persistAsset(
         ? Buffer.from(m[2], 'base64')
         : Buffer.from(decodeURIComponent(m[2]), 'utf8');
     } else if (sourceUrl.startsWith('/api/serve-file')) {
-      // 本地 tmp 路径: 解析 ?path=... 并读取
-      const urlObj = new URL(sourceUrl, 'http://localhost');
-      const localPath = urlObj.searchParams.get('path');
-      if (!localPath || !fs.existsSync(localPath)) return null;
+      // v12.237(第四轮对抗复检 · CRITICAL):此处此前用 URLSearchParams 取 path **直接 readFileSync**,
+      // 不验签、无白名单 —— cameo/pull-sheet/video-anchor 把用户 body 的 ?path= 喂进来即可读任意文件。
+      // 现在强制走 resolveVerifiedServeFilePath:验 HMAC 签名 + 目录白名单,不过关就拒。
+      const { resolveVerifiedServeFilePath } = await import('./serve-file-sign');
+      const localPath = resolveVerifiedServeFilePath(sourceUrl);
+      if (!localPath) {
+        console.warn(`[asset-storage] serve-file ?path= 未签名/越界,拒读:${sourceUrl.slice(0, 90)}`);
+        return null;
+      }
       buffer = fs.readFileSync(localPath);
       ext = ext || path.extname(localPath);
     } else if (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://')) {
@@ -142,8 +147,14 @@ export async function persistAsset(
       contentType = contentType || resp.headers.get('content-type') || '';
       buffer = Buffer.from(await resp.arrayBuffer());
     } else {
-      // 绝对文件路径 fallback
-      if (!fs.existsSync(sourceUrl)) return null;
+      // 绝对文件路径 fallback —— v12.237(第四轮对抗复检):此前直接 readFileSync 任意路径,
+      // 无白名单。而 cameo 等入口的 imageUrl 无前缀校验,用户传裸 `/etc/passwd` 就走这里读任意文件
+      // (与 ?path= 侧门同源,只是少了 /api/serve-file 前缀)。现在裸路径也必须落在白名单目录内。
+      const { isServeFilePathAllowed } = await import('./serve-file-sign');
+      if (!isServeFilePathAllowed(sourceUrl) || !fs.existsSync(sourceUrl)) {
+        console.warn(`[asset-storage] 裸本地路径越界/不存在,拒读:${String(sourceUrl).slice(0, 90)}`);
+        return null;
+      }
       buffer = fs.readFileSync(sourceUrl);
       ext = ext || path.extname(sourceUrl);
     }

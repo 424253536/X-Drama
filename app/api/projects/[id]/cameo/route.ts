@@ -54,8 +54,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } else {
       // 路径 2: JSON body 带 imageUrl(可以是外链、data:、或 /api/serve-file)
       const body = await request.json().catch(() => null);
-      if (!body?.imageUrl) {
+      if (!body?.imageUrl || typeof body.imageUrl !== 'string') {
         return NextResponse.json({ error: 'imageUrl required' }, { status: 400 });
+      }
+      // v12.237(第四轮对抗复检):此前 imageUrl 无前缀校验,裸本地路径会走 persistAsset 的
+      // 绝对路径 fallback 读任意文件。只允许 http(s) / data: / 站内 serve-file(后者还会验签)。
+      if (!/^(https?:|data:|\/api\/serve-file)/.test(body.imageUrl)) {
+        return NextResponse.json({ error: 'imageUrl 协议非法(仅 http(s)/data:/serve-file)' }, { status: 400 });
       }
       persistInputUrl = body.imageUrl;
     }
