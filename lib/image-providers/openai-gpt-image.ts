@@ -1,5 +1,10 @@
 /**
- * GPT Image(OpenAI `gpt-image-1`)图像 provider —— issue #11 上半。
+ * GPT Image(OpenAI `gpt-image-1`)图像 provider。
+ *
+ * **来源:@flobo3 在 issue #11 提出并设计**
+ * (https://github.com/ChrisChen667788/wind-comic/issues/11)。
+ * 他不仅指出缺口,还给出了端点、模型名、env 变量命名(OPENAI_IMAGE_MODEL 等)和
+ * 「复用已配的 OPENAI_API_KEY 以降低接入门槛」的核心思路 —— 本文件基本按其方案落地。
  *
  * 为什么按 plugin registry 写、而不是像 issue 建议的那样改 `hybrid-orchestrator`:
  * 项目在 v3.2 就落了插件化地基(`lib/image-providers/registry.ts`),`withImagePlugin` 让
@@ -62,7 +67,13 @@ export function hasGptImage(env: NodeJS.ProcessEnv = process.env): boolean {
   // 显式开关优先:很多用户的 OPENAI_BASE_URL 指向只做文本的聚合网关,贸然把图像请求打过去
   // 会白白 404/400 拖慢整条链。所以默认关,设 OPENAI_IMAGE_ENABLED=1 才入链。
   if (env.OPENAI_IMAGE_ENABLED !== '1') return false;
-  return !!(env.OPENAI_API_KEY || env.CREATIVE_API_KEY);
+  // v12.239(第五轮复检 · 我自己 v12.238 写的凭据错投):此处原为
+  // `!!(env.OPENAI_API_KEY || env.CREATIVE_API_KEY)`,而 generate() 里的 base 只认
+  // OPENAI_IMAGE_BASE_URL/OPENAI_BASE_URL、**不认 CREATIVE_BASE_URL** ——
+  // 于是只配了 CREATIVE_API_KEY(DeepSeek 等第二 LLM 的 key)的用户,
+  // 会把那把密钥当 Bearer 发到 api.openai.com。**密钥必须和它配套的 host 一起用**,
+  // 不能只借 key 不借 base。现在只认 OPENAI_API_KEY。
+  return !!env.OPENAI_API_KEY;
 }
 
 registerImageProvider({
@@ -75,7 +86,7 @@ registerImageProvider({
   async generate(input: ImageGenerateInput) {
     const env = process.env;
     const base = (env.OPENAI_IMAGE_BASE_URL || env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    const key = env.OPENAI_API_KEY || env.CREATIVE_API_KEY || '';
+    const key = env.OPENAI_API_KEY || ''; // v12.239:不再回落 CREATIVE_API_KEY(见 hasGptImage 注释)
     const body = buildGptImageRequest(input, env);
 
     const controller = new AbortController();

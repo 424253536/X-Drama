@@ -47,8 +47,21 @@ export function rateLimit(
   return { allowed: true, remaining: Math.max(0, opts.limit - b.count), retryAfterSec: 0 };
 }
 
-/** 提取客户端 IP:取 `x-forwarded-for` 首段,降级 `x-real-ip`,再降级 `'unknown'`。 */
+/**
+ * 提取客户端 IP。
+ *
+ * v12.239(第五轮对抗复检):此前**无条件**取 `x-forwarded-for` 首段 —— 而那是攻击者
+ * 完全可控的请求头。后果有两面:①**绕过**:登录爆破每次换一个伪造 IP,
+ * `login:<ip>:<email>` 的 10 次/窗口 形同虚设;②**反向 DoS**:把受害者真实 IP 填进 XFF,
+ * 就能把别人的限流桶打满,让其无法登录。
+ *
+ * 现在:只有在运维**显式声明**「本服务部署在受信代理之后」时才采信这些头
+ * (`TRUST_PROXY_HEADERS=1`)。默认不信 —— 无代理直连时,伪造头不再能影响任何人的桶。
+ * 注:Node 层拿不到 socket 远端地址(Next 的 Request 不暴露),所以默认退化为
+ * 全体共用 'unknown' 桶。这对「单机直连」是**更严**而非更松:所有人共享配额、伪造无收益。
+ */
 export function clientIp(request: Request): string {
+  if (process.env.TRUST_PROXY_HEADERS !== '1') return 'direct';
   const xff = request.headers.get('x-forwarded-for');
   if (xff && xff.trim()) return xff.split(',')[0].trim();
   const xr = request.headers.get('x-real-ip');

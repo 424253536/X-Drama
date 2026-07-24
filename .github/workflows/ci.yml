@@ -1,5 +1,11 @@
 name: CI
 
+# v12.239(第五轮对抗复检):显式收敛 GITHUB_TOKEN 权限。
+# 此前无 permissions 块 = 继承仓库默认(常为 contents:write),任何一步的第三方
+# action 若被供应链攻击即可改代码/发 release。本 workflow 全部步骤只需读代码。
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

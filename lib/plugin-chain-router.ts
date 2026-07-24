@@ -17,6 +17,7 @@ import {
   getPluginChainMode,
   shouldSampleShadow,
   pluginChainStats,
+  type PluginChainMode,
 } from './plugin-chain-mode';
 import { recordPluginEvent, type PluginEventKind } from './plugin-chain-telemetry';
 
@@ -43,8 +44,9 @@ async function runWithPlugin<T>(
   tryPlugin: () => Promise<PluginAttempt<T>>,
   fallback: () => Promise<T>,
   onProvider?: (provider?: string) => void, // v12.29.0(P1):primary 命中时回传真出片 provider id
+  modeOverride?: PluginChainMode,           // v12.239:某一路自行判定要不要开(见 withImagePlugin)
 ): Promise<T> {
-  const mode = getPluginChainMode();
+  const mode = modeOverride || getPluginChainMode();
   if (mode === 'off') return fallback();
 
   if (mode === 'primary') {
@@ -102,11 +104,54 @@ async function tryImagePlugin(input: ImageGenerateInput): Promise<PluginAttempt<
   return { value: r.result.imageUrl, provider: r.result.provider };
 }
 
+/** registry 里的**内置** provider id —— 它们只是老引擎的 adapter,不算「用户新接的」。 */
+const BUILTIN_IMAGE_PROVIDER_IDS = new Set([
+  'mj', 'minimax-multi', 'minimax-single', 'kontext', 'mock-image',
+]);
+
+/**
+ * v12.239(issue #11 交付缺陷自查):判断是否存在**用户显式配置启用的自定义图像 provider**。
+ *
+ * 病根:v12.238 把 GPT Image / Nano Banana 注册进了 registry,并对外(issue #11)声称
+ * 「配好 key 就会先于内置链跑」—— **但那是错的**。`getPluginChainMode()` 默认返回 'off',
+ * 而 runWithPlugin 在 off 时直接 return fallback()、**根本不调 tryPlugin**,
+ * 于是注册进来的 provider 永远不会被调用:功能等于没接,对外声明也成了虚报。
+ * 我当时只验了 selectProviders 的排序(判定层),没验这条链会不会被调用(消费方)——
+ * 与本轮加固里反复出现的「改了判定层没跟到消费方」是同一个病。
+ *
+ * 修法沿用项目既有先例:`getPluginChainMode()` 里 `MOCK_ENGINES=1` 就是「这类 provider 必须经
+ * plugin chain 才走得到,故隐含 primary」。这里同理,但**只作用于图像这一路**(不动 video/tts),
+ * 且只在用户**主动配了新 key/开关**时才触发 —— 没配的用户行为零变化。
+ */
+async function hasEnabledCustomImageProvider(refCount: number): Promise<boolean> {
+  try {
+    const { selectProviders } = await import('./image-providers/registry');
+    return selectProviders({ refCount }).some((p) => !BUILTIN_IMAGE_PROVIDER_IDS.has(p.id));
+  } catch {
+    return false;
+  }
+}
+
 export async function withImagePlugin(
   input: ImageGenerateInput,
   fallback: () => Promise<string>,
 ): Promise<string> {
-  return runWithPlugin('image', () => tryImagePlugin(input), fallback);
+  let modeOverride: PluginChainMode | undefined;
+  // v12.239:必须区分「用户显式设了 off」与「没设、默认 off」——
+  // 前者是用户明确要关掉整条 plugin 链,隐含开启会夺走他的一票否决权(这条是被自己的测试抓到的)。
+  const rawMode = (process.env.PLUGIN_CHAIN_MODE || '').trim().toLowerCase();
+  const explicitlySet = rawMode === 'off' || rawMode === 'primary' || rawMode === 'shadow';
+  if (!explicitlySet && getPluginChainMode() === 'off') {
+    const refCount = [
+      ...(input.referenceImages || []),
+      ...(input.cref ? [input.cref] : []),
+      ...(input.sref ? [input.sref] : []),
+    ].filter(Boolean).length;
+    // 全局链关着,但用户显式启用了自定义 provider → 只把图像这一路提为 primary,
+    // 让它真的跑起来;失败仍自动 fallback 回内置链(runWithPlugin 的既有语义)。
+    if (await hasEnabledCustomImageProvider(refCount)) modeOverride = 'primary';
+  }
+  return runWithPlugin('image', () => tryImagePlugin(input), fallback, undefined, modeOverride);
 }
 
 // ─── Video ────────────────────────────────────────────────────────────────

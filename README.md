@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.238</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.239</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -17,7 +17,7 @@
   <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ChrisChen667788/wind-comic/ci.yml?branch=main&label=CI&logo=github" alt="CI" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/stargazers"><img src="https://img.shields.io/github/stars/ChrisChen667788/wind-comic?style=social" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/Tests-3289%2F3289-2ea44f"  alt="3289 tests passing" />
+  <img src="https://img.shields.io/badge/Tests-3313%2F3313-2ea44f"  alt="3313 tests passing" />
   <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
 </p>
@@ -227,7 +227,7 @@ After Writer finishes, we score each shot 0-10 on a Chinese-conflict-word dictio
 ### 9. **Bring Your Own LLM** (v3.1.3)
 Every text-LLM call (Director / Writer / Vision / Audit) goes through one OpenAI-compatible `chat/completions` endpoint. Want to swap to DeepSeek-r1 / GPT-4o / Claude (via OpenRouter) / Qwen-Max / local Ollama? **Edit 3 lines in `.env`. Zero code change.** See [`docs/llm-providers.md`](docs/llm-providers.md) for the full matrix.
 
-### 10. **3289 tests, TypeScript strict, no fake "coming soon"s**
+### 10. **3313 tests, TypeScript strict, no fake "coming soon"s**
 Every feature listed above is in `main`, type-checked, unit-tested, and visible at `/projects/[id]` if you `npm install && npm run dev` right now.
 
 ---
@@ -435,7 +435,7 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 
 We're open to PRs. Two things matter most:
 1. **Don't break the multi-agent contracts.** Each agent has explicit input/output shapes — see `types/agents.ts`.
-2. **Tests gate everything.** Vitest 3289/3289 must stay green. Add tests for new lib/service files.
+2. **Tests gate everything.** Vitest 3313/3313 must stay green. Add tests for new lib/service files.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repo's contribution guide.
 
@@ -479,6 +479,16 @@ Wind Comic stands on a lot of excellent open-source work:
 - **Open models & engines** — [XVERSE-Ent](https://github.com/xverse-ai/XVERSE-Ent), an open-source **MoE screenwriting model** (self-hostable via vLLM / SGLang / ModelScope) · [FLUX.1 Kontext](https://blackforestlabs.ai) for image consistency · a provider-pluggable LLM/video chain (DeepSeek · Claude · MiniMax · Veo · Kling · Midjourney) over OpenAI-compatible endpoints
 - **Methods & algorithms** — Robert McKee story structure + Save-the-Cat 3-act beat analysis · **CRDT** (conflict-free replicated data types) for collaborative editing · `cref` / `sref` + 8-dimension character **DNA** for cross-shot identity consistency
 - **Tooling** — [TypeScript](https://www.typescriptlang.org) (strict) · [Vitest](https://vitest.dev) · [Stripe](https://stripe.com) — and every creator whose real-world feedback shaped the pipeline.
+
+### Community contributors
+
+Features that exist because someone outside the team took the time to file a good report:
+
+- **[@flobo3](https://github.com/flobo3)** — [#11](https://github.com/ChrisChen667788/wind-comic/issues/11): proposed **GPT Image** (`gpt-image-1`) and **Nano Banana** (Gemini Image) as first-class image providers, including the endpoints, the env-var naming, the "reuse the already-configured `OPENAI_API_KEY` to lower the barrier" idea, and the observation that Nano Banana's native i2i fits the existing character-consistency contract. Shipped in v12.239–v12.239 essentially as designed.
+- **[@MikhailNikolaev44](https://github.com/MikhailNikolaev44)** — [#2](https://github.com/ChrisChen667788/wind-comic/issues/2): reported that selected characters were being ignored on shot regeneration, which uncovered **three** separate bugs in the reference-image path (v12.132–v12.134), plus the script-language selector request.
+- **[@JSap0914](https://github.com/JSap0914)** — [#1](https://github.com/ChrisChen667788/wind-comic/pull/1): fixed broken README links.
+
+Found something? Issues and PRs are genuinely read — several of the pipeline's sharpest fixes started as an outside bug report.
 
 ---
 

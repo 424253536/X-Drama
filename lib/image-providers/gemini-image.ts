@@ -1,5 +1,11 @@
 /**
- * Nano Banana(Google Gemini Image)图像 provider —— issue #11 下半。
+ * Nano Banana(Google Gemini Image)图像 provider。
+ *
+ * **来源:@flobo3 在 issue #11 提出并设计**
+ * (https://github.com/ChrisChen667788/wind-comic/issues/11)。
+ * 他点明了 Nano Banana 的两条可达路径(Google 原生 / OpenAI 兼容代理)、
+ * 「原生支持 i2i,可接进既有角色一致性契约」这一关键判断,以及 GEMINI_API_KEY /
+ * GEMINI_IMAGE_MODEL 的命名 —— 本文件按其方案落地。
  *
  * 「Nano Banana」是 Gemini 图像模型的社区叫法。它有两条可达路径,本 provider 都支持:
  *   A. **Google 原生**(用户自己的 `GEMINI_API_KEY`)——
@@ -40,7 +46,9 @@ export async function toInlineDataPart(
     // 外链参考图要真拉下来 —— 走 safeFetch:这是服务端按「可能由用户提供的 URL」主动出站,
     // 不过 SSRF 守卫就等于给自己开了一个新的出站口子(v12.235/236/237 的教训)。
     const { safeFetch } = await import('../ssrf-guard');
-    const r = await safeFetch(url, {});
+    // v12.239(第五轮复检):此前传空 init,safeFetch 不注入超时,而外层 120s 计时器只覆盖
+    // Gemini 那一次调用 —— 参考图 URL 指向慢速流(1KB/s 吐 12MB)时,3 个并发能把连接挂住数小时。
+    const r = await safeFetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!r.ok) return null;
     const ct = r.headers.get('content-type') || 'image/png';
     const buf = Buffer.from(await r.arrayBuffer());
@@ -77,6 +85,12 @@ export function extractGeminiImage(data: unknown): string {
 }
 
 export function hasGeminiImage(env: NodeJS.ProcessEnv = process.env): boolean {
+  // v12.239(第五轮复检):此前只看 `!!GEMINI_API_KEY` —— 与 gpt-image 的显式开关**不对称**。
+  // 后果:为文本 LLM 配了 GEMINI_API_KEY 的用户,图像流量会在他不知情的情况下整体改道 Gemini
+  // (priority 55 在链首)并产生费用。现在允许用 GEMINI_IMAGE_ENABLED=0 明确关掉;
+  // 默认仍随 key 启用(它是专用图像 key 的可能性高,且 issue #11 的用户就是冲这个来的),
+  // 但注册时会打印一行日志把「已接管图像链」这件事说清楚,不做静默改道。
+  if (env.GEMINI_IMAGE_ENABLED === '0') return false;
   return !!env.GEMINI_API_KEY;
 }
 

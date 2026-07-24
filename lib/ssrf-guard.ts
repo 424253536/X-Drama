@@ -103,7 +103,18 @@ export function embeddedIpv4(ip: string): string | null {
   if (zeroHead && g[5] === 0xffff) return toV4();                      // ::ffff:x.x.x.x 映射
   if (zeroHead && g[5] === 0 && (g[6] !== 0 || g[7] > 1)) return toV4(); // ::x.x.x.x 兼容(排除 ::1/::)
   if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
-    return toV4();                                                      // 64:ff9b::/96 NAT64
+    return toV4();                                                      // 64:ff9b::/96 NAT64(RFC 6052)
+  }
+  // v12.239(第五轮复检):RFC 8215 的 local-use NAT64 前缀 64:ff9b:1::/48 —— g[2]=1,
+  // 上面那条 `g[2]===0` 卡死,于是 64:ff9b:1::a9fe:a9fe(→云 IMDS)被放行。实测确认过。
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return toV4();
+  // ISATAP(RFC 5214):接口标识符后 64 位为 0000:5efe:<v4> 或 0200:5efe:<v4>。
+  // fe80:: 前缀的已被链路本地正则拦住,但**任意其他前缀**(如 2001:db8::5efe:...)此前完全放行。
+  if (g[5] === 0x5efe && (g[4] === 0x0000 || g[4] === 0x0200)) return toV4();
+  // Teredo(RFC 4380):2001:0::/32,客户端 IPv4 **按位取反**编码在末 32 位。
+  if (g[0] === 0x2001 && g[1] === 0x0000) {
+    const hi = (~g[6]) & 0xffff, lo = (~g[7]) & 0xffff;
+    return [(hi >> 8) & 255, hi & 255, (lo >> 8) & 255, lo & 255].join('.');
   }
   // v12.237(第四轮对抗复检 · HIGH):6to4 `2002::/16`(RFC 3056)把目的 IPv4 编在 g[1,2] ——
   // v12.236 的 embeddedIpv4 只查 g[6,7],于是 2002:a9fe:a9fe::(→169.254.169.254 云 IMDS)被放行。

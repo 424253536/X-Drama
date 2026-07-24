@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.238**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.239**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.238**:**vitest 3289 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.239**:**vitest 3313 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,19 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.239.0** | 2026-07-24 | `9f85c5f` | **🔴 第五轮对抗复检 —— 其中四条直接打在 v12.238 我自己刚写的代码上,外加一条我自查出的「功能根本没生效」**。
+
+**⓪ 自查(发版前):issue #11 交付的功能其实一次都没被调用过**。v12.238 把两个 provider 注册进 registry、验了 `selectProviders` 排序正确就宣布完成,还在公开 issue 上说「配好 key 就先于内置链跑」——**但 `getPluginChainMode()` 默认 'off',`runWithPlugin` 在 off 时直接 `return fallback()`、根本不调 tryPlugin**。我验的是判定层(排序),没验消费方(会不会被调用)——**同一个病的第五次**。修:`withImagePlugin` 在用户显式启用了自定义 provider 且未自行钉 `PLUGIN_CHAIN_MODE` 时,把**图像这一路**提为 primary(沿用项目既有的 `MOCK_ENGINES=1` 隐含 primary 先例,不动 video/tts);**显式 `PLUGIN_CHAIN_MODE=off` 仍然一票否决**(这条边界是被我自己新写的测试抓出来的 —— 第一版实现夺走了用户的关闭权)。新增测试锁的是 **generate() 真的被执行**,不是「被选中」。
+**① 凭据错投(我 v12.238 的)**:激活条件回落 `CREATIVE_API_KEY`(DeepSeek 等第二 LLM 的 key),而 base 只认 `OPENAI_BASE_URL` ——只配了前者的用户会把那把密钥当 Bearer 发到 api.openai.com。**密钥必须和它配套的 host 一起用**,现在只认 `OPENAI_API_KEY`。
+**② 新付费路径完全不记账(我 v12.238 的)**:两个 provider 都返 `data:` URI,而记账正则只匹配 `http(s):|/api/serve-file` → 这两条真花钱的路径对预算护栏与成本面板**完全隐形**。补 `data:` 前缀。
+**③ Gemini 无 opt-out(我 v12.238 的)**:与 gpt-image 的显式开关**不对称** —— 为文本 LLM 配了 `GEMINI_API_KEY` 的用户,图像流量会在不知情下整体改道。补 `GEMINI_IMAGE_ENABLED=0`。
+**④ 参考图外链无超时(我 v12.238 的)**:`safeFetch(url, {})` 传空 init,外层 120s 只覆盖 Gemini 那一次调用 —— 慢速流(1KB/s 吐 12MB)×3 并发能把连接挂住数小时。补 20s。
+**⑤ SSRF 又漏三类 IPv4-in-IPv6 隧道**(v12.236 补 ::ffff、v12.237 补 6to4,这轮才补全):NAT64 **local-use** `64:ff9b:1::/48`(RFC 8215,被 `g[2]===0` 卡死)、**Teredo** `2001:0::/32`(末 32 位按位取反)、**ISATAP** `::0:5efe:v4`/`::200:5efe:v4`(非 fe80 前缀此前完全放行)。**实测**:三类的 IMDS 构造全拦、三个公网地址无误杀。
+**⑥ WebSocket 服务零鉴权(HIGH,五轮都没扫到的面)**:`new WebSocketServer({ port })` **不指定 host 即监听 0.0.0.0**,且 onConnection 无任何身份校验 —— 公网部署后任何人知道 projectId 就能 `wscat` 连上,用 Yjs sync 拉走整份协作文档或任意覆写。双层收口:**默认只绑回环** + **HMAC 共享 token**(timingSafeEqual);绑非回环却没配 secret → **拒绝启动**。**实测**(真起 server):无 token 拒、伪造 token 拒、从外网卡连不上、合法 token 正常。
+**⑦ 限流可被 XFF 伪造绕过/反打**:`clientIp()` 无条件取 `x-forwarded-for` 首段 —— 换 IP 即绕过登录爆破限流,填受害者 IP 即可打满其桶让人无法登录。现在只在显式 `TRUST_PROXY_HEADERS=1` 时采信。
+**⑧ CI 权限收敛**:workflow 无 `permissions:` 块 = 继承仓库默认(常含 contents:write),补最小权限 `contents: read`。
+**社区贡献认可**:README 新增 **Community contributors** 区,把 @flobo3(#11)、@MikhailNikolaev44(#2)、@JSap0914(#1) 的具体贡献写清楚;两个 provider 文件头署名提议者;并在 issue #11 补了一条评论,如实告知「v12.238 那版其实没生效,请用 v12.239」。
+**验收**:tsc 0 + 全量 **3313/3313**(397 文件);新增 `v12-239-plugin-actually-runs`(6)与 `v12-239-recheck5`(17);**live 逐条打**:provider 真被调用/断开可关闭、ws 四种连接、IPv6 三类变体、凭据门控。**更新 1 处旧断言**(rate-limit 的 clientIp 三条锁的是被改掉的旧行为,已按新语义重写并补「默认不信伪造头」)。 |
 | **v12.238.0** | 2026-07-24 | `630828c` | **外部 issue #11 交付 + 8 个 dependabot PR 全部处理完**。
 
 **① issue #11(@flobo3):GPT Image 与 Nano Banana 接入图像 provider 链**。诉求合理且**部分未完成** —— `services/openai-image.service.ts` 早就存在但**只被 agent-orchestrator 引用、从未接进主管线**;Gemini 图像只能经 OpenRouter 半可用(`google/gemini-2.5-flash-image`)。

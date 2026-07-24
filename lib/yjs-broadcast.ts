@@ -26,6 +26,15 @@ import * as decoding from 'lib0/decoding';
 import type { CommentRow } from '@/lib/comments';
 
 const WS_URL = process.env.YJS_WS_URL || 'ws://localhost:1234';
+
+/** 与 ws-server 同源派生的共享 token;未配 secret 则不带(本地开发)。 */
+function wsTokenQuery(): string {
+  const secret = process.env.WS_SHARED_SECRET || process.env.JWT_SECRET || '';
+  if (!secret) return '';
+  const crypto = require('crypto') as typeof import('crypto');
+  const t = crypto.createHmac('sha256', secret).update('yjs-ws-shared-token').digest('hex').slice(0, 32);
+  return `?token=${t}`;
+}
 const BROADCAST_TIMEOUT_MS = 1500;
 
 const messageSync = 0;
@@ -57,7 +66,8 @@ async function broadcastMutation(
       resolve(ok);
     };
 
-    const url = `${WS_URL}/${encodeURIComponent(docName)}`;
+    // v12.239:ws-server 现在校验共享 token(见 scripts/ws-server.mjs 顶部注释),客户端同源派生。
+    const url = `${WS_URL}/${encodeURIComponent(docName)}${wsTokenQuery()}`;
     const ws = new WebSocket(url);
     const doc = new Y.Doc();
 

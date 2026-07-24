@@ -58,9 +58,24 @@ export type SSESend = (ev: SSEEvent) => void;
 /**
  * 用一个 handler 构造 SSE Response. handler 拿到 send (推帧) + 必须最终 resolve
  * (resolve 后流自动关闭). handler 抛错会被捕获并推一条 error 帧再关流.
+ *
+ * v12.239(第五轮对抗复检):新增第二参数把**客户端断开**告诉 handler。
+ * 病根:此前 handler 只拿到 send,拿不到取消信号,ReadableStream 也没注册 cancel ——
+ * 于是 `u2v/stream`(maxDuration=360)这类路由在用户关掉连接后,**照样把 Minimax/Kling
+ * 跑完并计费**。已登录用户反复「发起→立刻断开」即可批量堆积后台付费调用。
+ * 现在:客户端断开 / 上游 request.signal abort → 内部 AbortController 触发,
+ * handler 可据此提前收手(已改的路由见 u2v/stream)。
  */
-export function createSSEResponse(handler: (send: SSESend) => Promise<void>): Response {
+export function createSSEResponse(
+  handler: (send: SSESend, signal: AbortSignal) => Promise<void>,
+  opts?: { upstreamSignal?: AbortSignal },
+): Response {
   const encoder = new TextEncoder();
+  const ac = new AbortController();
+  if (opts?.upstreamSignal) {
+    if (opts.upstreamSignal.aborted) ac.abort();
+    else opts.upstreamSignal.addEventListener('abort', () => ac.abort(), { once: true });
+  }
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -69,7 +84,7 @@ export function createSSEResponse(handler: (send: SSESend) => Promise<void>): Re
         try { controller.enqueue(encoder.encode(formatSSE(ev))); } catch { /* 已关 */ }
       };
       try {
-        await handler(send);
+        await handler(send, ac.signal);
       } catch (e) {
         send({ event: 'error', data: { error: e instanceof Error ? e.message : String(e) } });
       } finally {
@@ -77,6 +92,8 @@ export function createSSEResponse(handler: (send: SSESend) => Promise<void>): Re
         try { controller.close(); } catch { /* ignore */ }
       }
     },
+    // 浏览器断开 / seek / 切页 → 立刻通知 handler 收手,别再烧下游额度
+    cancel() { ac.abort(); },
   });
   return new Response(stream, { headers: SSE_HEADERS });
 }

@@ -1059,7 +1059,10 @@ export class HybridOrchestrator {
       () => this.doLegacyGenerateImage(prompt, opts),
     );
     // v12.4.0:图像成本落库(每张真生成的图记一笔;mock 模式零成本不记)。fire-and-forget,记账失败不阻断。
-    if (url && /^(https?:|\/api\/serve-file)/.test(url) && process.env.MOCK_ENGINES !== '1') {
+    // v12.239(第五轮复检):正则原为 /^(https?:|\/api\/serve-file)/ —— 而 v12.238 新接的
+    // gemini-image / gpt-image 都返回 **data: URI**(b64_json / inlineData),一律不匹配 →
+    // 这两条付费路径**从不记账**,预算护栏与成本面板对它们完全失明。补上 data: 前缀。
+    if (url && /^(https?:|data:|\/api\/serve-file)/.test(url) && process.env.MOCK_ENGINES !== '1') {
       void recordCostLog({ userId: this.userId, projectId: this.projectId, engine: 'image', costCny: estimateImageCostCny(), metadata: { label: opts?.label } });
     }
     return url;

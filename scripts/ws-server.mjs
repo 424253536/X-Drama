@@ -22,6 +22,7 @@
  */
 
 import { WebSocketServer } from 'ws';
+import crypto from 'crypto';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
@@ -240,11 +241,30 @@ function handleMessage(ws, entry, message) {
   }
 }
 
+/** 从 JWT_SECRET(或专用 WS_SHARED_SECRET)派生一个稳定的共享 token;都没配则返回 ''。 */
+function wsSharedToken() {
+  const secret = process.env.WS_SHARED_SECRET || process.env.JWT_SECRET || '';
+  if (!secret) return '';
+  return crypto.createHmac('sha256', secret).update('yjs-ws-shared-token').digest('hex').slice(0, 32);
+}
+
 // ── 连接 lifecycle ────────────────────────────────────────────────────────────
 function onConnection(ws, req) {
   // URL 形如 /project-abc123 — 取 pathname 去 '/' 作 docName
   const url = req.url || '/';
   const docName = url.slice(1).split('?')[0] || 'default';
+
+  // v12.239:配了 secret 就强制校验 token(回环部署下没配 secret 时保持可用,便于本地开发)。
+  if (WS_TOKEN) {
+    const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+    const got = new URLSearchParams(qs).get('token') || '';
+    const a = Buffer.from(got), b = Buffer.from(WS_TOKEN);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      console.warn(`[ws] rejected: bad/missing token for doc=${docName}`);
+      ws.close();
+      return;
+    }
+  }
 
   if (!/^[\w-]+$/.test(docName) || docName.length > 100) {
     console.warn(`[ws] rejected invalid docName: ${docName}`);
@@ -290,10 +310,27 @@ function onConnection(ws, req) {
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.WS_PORT || '1234', 10);
-const wss = new WebSocketServer({ port: PORT });
+/**
+ * v12.239(第五轮对抗复检 · HIGH):此前 `new WebSocketServer({ port })` **不指定 host
+ * 即监听 0.0.0.0**,且 onConnection 无任何鉴权 —— 部署到公网后,任何人只要知道 projectId
+ * 就能 `wscat -c ws://host:1234/project-<id>`,用 Yjs sync 协议拉走整份协作文档、甚至任意覆写。
+ *
+ * 两层收口:
+ *   1. **默认只绑回环** —— 当前唯一的客户端是同机进程内的 lib/yjs-broadcast,回环足够。
+ *      要跨机必须显式设 WS_HOST,那是运维的明确决定(并且此时下面的 token 是强制的)。
+ *   2. **共享 token** —— 从 JWT_SECRET 派生,连接时用 ?token= 带上;非回环绑定时强制要求。
+ */
+const HOST = process.env.WS_HOST || '127.0.0.1';
+const IS_LOOPBACK = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
+const WS_TOKEN = wsSharedToken();
+if (!IS_LOOPBACK && !WS_TOKEN) {
+  console.error('[ws] 拒绝启动:绑定了非回环地址却没有 JWT_SECRET/WS_SHARED_SECRET,无法校验连接身份');
+  process.exit(1);
+}
+const wss = new WebSocketServer({ port: PORT, host: HOST });
 wss.on('connection', onConnection);
 wss.on('listening', () => {
-  console.log(`[ws] Yjs WebSocket server listening on :${PORT}`);
+  console.log(`[ws] Yjs WebSocket server listening on ${HOST}:${PORT}` + (WS_TOKEN ? ' (token required)' : ' (loopback, no token)'));
   console.log(`[ws] connect to ws://localhost:${PORT}/<docName>`);
 });
 

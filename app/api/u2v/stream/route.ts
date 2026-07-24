@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
   // 镜头语言增强 (与同步路由一致)
   const prompt = enhanceU2VMotionPrompt(verdict.sanitized, cameraPreset || undefined);
 
-  return createSSEResponse(async (send) => {
+  return createSSEResponse(async (send, signal) => {
+    // v12.239(第五轮对抗复检):客户端断开后此前仍会把 Minimax/Kling 跑完并计费 ——
+    // 已登录用户反复「发起→立刻断开」即可堆积付费调用。现在断开即停心跳并提前收手。
+    if (signal.aborted) return;
     send({ event: 'progress', data: { phase: 'submit', pct: 4, msg: '提交任务…' } });
 
     // 服务端时间估算定时器 (minimax/vidu 无原生进度; Kling 会用真实回调覆盖)
@@ -51,6 +54,7 @@ export async function POST(request: NextRequest) {
     const t0 = Date.now();
     let lastRealPct = 0;
     const timer = setInterval(() => {
+      if (signal.aborted) { clearInterval(timer); return; } // 断开即停,别再空推帧
       const sec = (Date.now() - t0) / 1000;
       const est = 95 * (1 - Math.exp(-sec / (0.4 * expected)));
       const pct = Math.max(lastRealPct, Math.min(95, est));
@@ -65,10 +69,14 @@ export async function POST(request: NextRequest) {
         send({ event: 'progress', data: { phase: 'rendering', pct: Math.round(lastRealPct), real: true } });
       });
       clearInterval(timer);
+      if (signal.aborted) {
+        console.warn('[u2v/stream] 客户端已断开,结果不再回传(费用已发生,记账照常)');
+        return;
+      }
       send({ event: 'done', data: { pct: 100, videoUrl, model } });
     } catch (e) {
       clearInterval(timer);
       send({ event: 'error', data: { error: e instanceof Error ? e.message : '生成失败' } });
     }
-  });
+  }, { upstreamSignal: request.signal });
 }

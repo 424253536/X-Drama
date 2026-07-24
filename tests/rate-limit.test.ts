@@ -40,15 +40,36 @@ describe('rateLimit', () => {
 });
 
 describe('clientIp', () => {
-  it('取 x-forwarded-for 首段', () => {
+  // v12.239(第五轮对抗复检):这些用例原本锁的是「无条件采信 x-forwarded-for」——
+  // 而那个头是攻击者完全可控的:①换 IP 就绕过登录爆破限流;②填受害者 IP 就能打满别人的桶。
+  // 现在只有显式声明部署在受信代理之后(TRUST_PROXY_HEADERS=1)才采信,故断言随之更新,
+  // 并补一条锁住「默认不信」这个新的安全默认。
+  const SAVED = process.env.TRUST_PROXY_HEADERS;
+  afterEach(() => {
+    if (SAVED === undefined) delete process.env.TRUST_PROXY_HEADERS;
+    else process.env.TRUST_PROXY_HEADERS = SAVED;
+  });
+
+  it('默认不信任代理头 —— 伪造 XFF 拿不到独立桶(防绕过 + 防打满他人桶)', () => {
+    delete process.env.TRUST_PROXY_HEADERS;
+    const forged = new Request('http://x', { headers: { 'x-forwarded-for': '1.2.3.4' } });
+    const other = new Request('http://x', { headers: { 'x-forwarded-for': '9.9.9.9' } });
+    expect(clientIp(forged)).toBe('direct');
+    expect(clientIp(other)).toBe('direct'); // 伪造不同 IP 也落同一个桶 → 换 IP 绕过失效
+  });
+
+  it('显式声明受信代理后,取 x-forwarded-for 首段', () => {
+    process.env.TRUST_PROXY_HEADERS = '1';
     const req = new Request('http://x', { headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' } });
     expect(clientIp(req)).toBe('1.2.3.4');
   });
-  it('降级 x-real-ip', () => {
+  it('受信代理下降级 x-real-ip', () => {
+    process.env.TRUST_PROXY_HEADERS = '1';
     const req = new Request('http://x', { headers: { 'x-real-ip': '9.9.9.9' } });
     expect(clientIp(req)).toBe('9.9.9.9');
   });
-  it('都没有 → unknown', () => {
+  it('受信代理但两个头都没有 → unknown', () => {
+    process.env.TRUST_PROXY_HEADERS = '1';
     expect(clientIp(new Request('http://x'))).toBe('unknown');
   });
 });
