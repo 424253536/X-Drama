@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.239**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.240**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.239**:**vitest 3313 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.240**:**vitest 3332 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,24 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.240.0** | 2026-07-24 | `88907c0` | **🛡️ 把「新代码必须验消费方」做成入库门禁 —— 不再靠一轮轮人肉复检兜**。
+
+**动机**:v12.218→239 里「改了守卫/判定层却没跟到消费方」这个病**犯了五次**(字体解析→烧录路径、SSRF 守卫→重定向、serve-file 签名→persistAsset 读盘、provider 注册→从未被调用、IPv6 判定→只认一种写法),每次都靠人肉对抗复检才发现(五轮 ~340 万 token)。复检只能发现**已经发生的**;门禁负责让**下一次**当场被拦。
+
+**做了什么**:
+· `lib/consumer-gate/contracts.ts` —— 契约表,**每条都必须对应一次真实事故**(没事故不进表,否则噪音淹没信号)。当前 7 条:出站必走 safeFetch、serve-file URL 必签名、?path= 必验签、CJK 字体必解析、出站必带超时、哨兵不得放行写路径、危险 env 开关必须在生产失效。
+· `lib/consumer-gate/scan.ts` —— 扫描器,**先剥注释再匹配**。这是硬要求不是优化:v12.234/239 各踩过一次 ——我在注释里解释病根时引用了违规写法本身,源码锁扫全文就把自己的解释判成违规。**把问题讲清楚不该让门禁报警**。
+· `lib/consumer-gate/baseline.ts` + `baseline.json` —— **基线机制,只拦新增**。首次扫描 42 处命中,要求「全修完才上线」这东西就永远上不了线,一次性全塞白名单则白名单立刻腐化。故存量入债(41 条)、新增阻断。**指纹刻意不含行号** —— 否则上面插一行注释就让老债变「新违规」,CI 无故变红;**假红对门禁的杀伤力不亚于假绿**。
+· `scripts/consumer-gate.mjs` + `npm run gate:consumer` + CI 步骤(Security + License job)。
+
+**门禁第一次跑就抓到一个五轮复检都没抓到的真 SSRF**:`app/api/tools/url-to-brief` —— 用户贴商品链接生成 brief,url **直接来自 body**,此前只校验「像不像 http(s)」就裸 fetch 且显式 `redirect:'follow'`,内网地址/云元数据/302 跳转全部畅通。已改走 safeFetch。这条足以说明门禁不是形式主义。
+
+**设计上的自我约束**(都是踩出来的):①白名单必须写 why —— 无理由的白名单会在几次「先加上让 CI 过」之后彻底失效,测试会检查理由长度(**它当场抓到我自己写的一条 6 字敷衍理由**);②`RUNTIME_ONLY_GAPS` **如实登记静态查不到的三类盲区**(判定只认一种书写形式、注册了但没被调用、新付费路径未接记账),门禁通过时主动打印它们 ——不假装覆盖全部,避免「门禁绿了 = 这类问题不存在」的错觉(那正是 v12.238 的假绿)。
+
+**第一版设计缺陷(基线跑出来才暴露的,已修)**:①`outbound-fetch` 第一版一跑 **60 处**,绝大多数是 `fetch(\`${base}/chat\`)` 打固定端点 —— 那种噪音必然导致白名单腐化,收窄为只拦「URL 来自变量」;②契约表**扫到了自己**(描述文字里引用违规写法);③env 门控正则只认 `===` 漏了 `!==`,把正确写法误判成违规。
+
+**实证门禁真能拦**:临时造一个 `fetch(userUrl)` 新违规 → `exit 1` 并报出规则/唯一入口/病史/整改路径;移除后恢复绿。
+**验收**:tsc 0 + 全量 **3332/3332**(398 文件);新增 `v12-240-consumer-gate.test.ts` 19 用例(锁剥注释、指纹稳定性、基线分区、契约质量、CI 接入)。 |
 | **v12.239.0** | 2026-07-24 | `9f85c5f` | **🔴 第五轮对抗复检 —— 其中四条直接打在 v12.238 我自己刚写的代码上,外加一条我自查出的「功能根本没生效」**。
 
 **⓪ 自查(发版前):issue #11 交付的功能其实一次都没被调用过**。v12.238 把两个 provider 注册进 registry、验了 `selectProviders` 排序正确就宣布完成,还在公开 issue 上说「配好 key 就先于内置链跑」——**但 `getPluginChainMode()` 默认 'off',`runWithPlugin` 在 off 时直接 `return fallback()`、根本不调 tryPlugin**。我验的是判定层(排序),没验消费方(会不会被调用)——**同一个病的第五次**。修:`withImagePlugin` 在用户显式启用了自定义 provider 且未自行钉 `PLUGIN_CHAIN_MODE` 时,把**图像这一路**提为 primary(沿用项目既有的 `MOCK_ENGINES=1` 隐含 primary 先例,不动 video/tts);**显式 `PLUGIN_CHAIN_MODE=off` 仍然一票否决**(这条边界是被我自己新写的测试抓出来的 —— 第一版实现夺走了用户的关闭权)。新增测试锁的是 **generate() 真的被执行**,不是「被选中」。

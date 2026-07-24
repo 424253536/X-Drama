@@ -71,6 +71,12 @@ jobs:
       - name: License check (copyleft gate)
         run: node scripts/license-check.mjs
 
+      # v12.240:消费方门禁 —— 拦「改了守卫/判定层却没跟到消费方」这类绕过。
+      # 这个病在 v12.218→239 犯了五次,每次都靠人肉对抗复检才发现;门禁负责让下一次当场被拦。
+      # 只阻断**新增**违规(存量记在 lib/consumer-gate/baseline.json 里当技术债)。
+      - name: Consumer gate (唯一入口不得被绕过)
+        run: npx tsx scripts/consumer-gate.mjs
+
   e2e:
     name: E2E smoke (Playwright)
     runs-on: ubuntu-latest
