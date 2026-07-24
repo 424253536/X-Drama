@@ -482,6 +482,16 @@ Wind Comic stands on a lot of excellent open-source work:
 - **Methods & algorithms** — Robert McKee story structure + Save-the-Cat 3-act beat analysis · **CRDT** (conflict-free replicated data types) for collaborative editing · `cref` / `sref` + 8-dimension character **DNA** for cross-shot identity consistency
 - **Tooling** — [TypeScript](https://www.typescriptlang.org) (strict) · [Vitest](https://vitest.dev) · [Stripe](https://stripe.com) — and every creator whose real-world feedback shaped the pipeline.
 
+### Community contributors
+
+Features that exist because someone outside the team took the time to file a good report:
+
+- **[@flobo3](https://github.com/flobo3)** — [#11](https://github.com/ChrisChen667788/wind-comic/issues/11): proposed **GPT Image** (`gpt-image-1`) and **Nano Banana** (Gemini Image) as first-class image providers, including the endpoints, the env-var naming, the "reuse the already-configured `OPENAI_API_KEY` to lower the barrier" idea, and the observation that Nano Banana's native i2i fits the existing character-consistency contract. Shipped in v12.239–v12.239 essentially as designed.
+- **[@MikhailNikolaev44](https://github.com/MikhailNikolaev44)** — [#2](https://github.com/ChrisChen667788/wind-comic/issues/2): reported that selected characters were being ignored on shot regeneration, which uncovered **three** separate bugs in the reference-image path (v12.132–v12.134), plus the script-language selector request.
+- **[@JSap0914](https://github.com/JSap0914)** — [#1](https://github.com/ChrisChen667788/wind-comic/pull/1): fixed broken README links.
+
+Found something? Issues and PRs are genuinely read — several of the pipeline's sharpest fixes started as an outside bug report.
+
 ---
 
 ## ⭐ Star History
