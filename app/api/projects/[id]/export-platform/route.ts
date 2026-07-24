@@ -10,6 +10,7 @@
  * Auth: 登录用户.
  */
 import { NextResponse } from 'next/server';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import fs from 'fs';
 import { getUserFromRequest } from '../../../auth/lib';
@@ -30,7 +31,8 @@ function toLocalPath(u: string | null | undefined): string | null {
   if (typeof u !== 'string' || !u) return null;
   if (u.startsWith('/api/serve-file')) {
     try {
-      const p = new URL(u, 'http://localhost').searchParams.get('path');
+      // v12.241:走验签+白名单
+      const p = resolveVerifiedServeFilePath(u);
       if (p && fs.existsSync(p)) return p;
     } catch { /* ignore */ }
     return null;

@@ -15,6 +15,7 @@
  */
 
 import path from 'path';
+import { resolveVerifiedServeFilePath } from './serve-file-sign';
 import fs from 'fs';
 import os from 'os';
 import https from 'https';
@@ -53,9 +54,11 @@ export async function concatActBgms(
       await downloadFile(seg.url, localPath);
     } else if (seg.url.startsWith('/api/serve-file')) {
       // 内部 serve-file 路径 — 提取 path query
-      const u = new URL(seg.url, 'http://localhost');
-      const internalPath = decodeURIComponent(u.searchParams.get('path') || '');
-      if (!fs.existsSync(internalPath)) {
+      // v12.241(清门禁存量债):改走验签+白名单解析,与 v12.237 修 persistAsset 同款。
+      // 内部流转的 serve-file URL 自 v12.236 起均由 serveFilePathUrl 签发,验签能过;
+      // 若哪天有外部输入流到这里,无签名会被直接挡下而不是照单读盘。
+      const internalPath = resolveVerifiedServeFilePath(seg.url) || '';
+      if (!internalPath || !fs.existsSync(internalPath)) {
         throw new Error(`Act ${seg.act} BGM not found at ${internalPath}`);
       }
       fs.copyFileSync(internalPath, localPath);

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { serveFilePathUrl } from '@/lib/serve-file-sign';
 import { API_CONFIG } from '@/lib/config';
 import { withVerticalHints } from '@/lib/vertical-composition';
@@ -4700,8 +4701,9 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
         // v10.6.2: BGM 卡点对齐率 — 真 BGM 落盘后 ffmpeg 析拍,回填钩子审计并重推 SSE。
         // 仅本地文件可析(serve-file 路径);远端 URL / 析不出拍 → 保持「不可测」诚实呈现。
         try {
+          // v12.241:走验签+白名单(BGM 是本管线自己生成并签发的)
           const bgmLocalPath = musicUrl.startsWith('/api/serve-file')
-            ? decodeURIComponent(new URL(musicUrl, 'http://local').searchParams.get('path') || '')
+            ? (resolveVerifiedServeFilePath(musicUrl) || '')
             : '';
           let pacingReport = (script as any).pacingReport;
           if (!pacingReport?.hooks) {

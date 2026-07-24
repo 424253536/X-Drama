@@ -20,6 +20,8 @@
  */
 
 import OpenAI from 'openai';
+import { safeFetch } from './ssrf-guard';
+import { resolveVerifiedServeFilePath } from './serve-file-sign';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import fs from 'fs';
@@ -226,7 +228,8 @@ async function materializeVideo(videoUrl: string, tmpIn: string): Promise<boolea
     if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 120_000);
-      const resp = await fetch(videoUrl, { signal: controller.signal });
+      // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
+      const resp = await safeFetch(videoUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!resp.ok) return false;
       const buf = Buffer.from(await resp.arrayBuffer());
@@ -236,7 +239,8 @@ async function materializeVideo(videoUrl: string, tmpIn: string): Promise<boolea
     if (videoUrl.startsWith('/api/serve-file')) {
       const u = new URL(videoUrl, 'http://localhost');
       const key = u.searchParams.get('key');
-      const p = u.searchParams.get('path');
+      // v12.241:?path= 走验签+白名单(?key= 内容寻址保持原样)
+      const p = resolveVerifiedServeFilePath(videoUrl);
       if (key) {
         const r = resolveByKey(key);
         if (!r) return false;

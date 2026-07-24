@@ -145,3 +145,45 @@ describe('v12.240 门禁已接入 CI 与 npm script', () => {
     expect(fs.existsSync(path.join(ROOT, BASELINE_PATH))).toBe(true);
   });
 });
+
+describe('v12.241 存量债已清零', () => {
+  it('baseline 为空 —— 门禁进入零容忍状态,任何绕过都会当场变红', () => {
+    const base = loadBaseline(ROOT);
+    const n = Object.keys(base.entries).length;
+    expect(n, `基线还剩 ${n} 条债:${Object.values(base.entries).slice(0, 5).join(' | ')}`).toBe(0);
+  });
+
+  it('serve-file ?path= 的解析方全部走验签(v12.237 CRITICAL 的同源点已清完)', () => {
+    // v12.237 只修了 persistAsset / serveFileToLocalPath 两条;
+    // v12.241 把其余 11 处(bgm/cameo-vision/character-traits/editor-score/last-frame/
+    // bg-removal/create-pipeline/hybrid-orchestrator/export/export-platform/publish-preflight)一并改造。
+    const files = [
+      'lib/bgm-multi-act.ts', 'lib/cameo-vision.ts', 'lib/character-traits.ts',
+      'lib/editor-score.ts', 'lib/last-frame-extractor.ts', 'lib/image-tools/bg-removal.ts',
+      'lib/create-pipeline.ts', 'services/hybrid-orchestrator.ts',
+      'app/api/projects/[id]/export/route.ts',
+      'app/api/projects/[id]/export-platform/route.ts',
+      'app/api/projects/[id]/publish-preflight/route.ts',
+    ];
+    for (const rel of files) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+      expect(src.includes('resolveVerifiedServeFilePath'), `${rel} 未走验签解析`).toBe(true);
+    }
+  });
+
+  it('拉取外部媒体的出站已走 safeFetch', () => {
+    const files = [
+      'lib/lipsync-providers/local-2d.ts', 'lib/publish-adapters/douyin.ts',
+      'lib/publish-adapters/youtube.ts', 'lib/editor-score.ts', 'lib/last-frame-extractor.ts',
+    ];
+    for (const rel of files) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+      expect(src.includes('safeFetch('), `${rel} 未走 safeFetch`).toBe(true);
+    }
+  });
+
+  it('sentinel 契约只作用于写 handler(只读 GET 用哨兵查空是安全默认)', () => {
+    const c = CONTRACTS.find((x) => x.id === 'sentinel-must-not-pass-writes');
+    expect(c?.handlerScope).toEqual(['POST', 'PUT', 'PATCH', 'DELETE']);
+  });
+});

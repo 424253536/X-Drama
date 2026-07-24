@@ -7,6 +7,7 @@
  * 官方 API:open.douyin.com /api/douyin/v1/video/upload_video/ + /create_video/。
  */
 import type { PublishAdapter, UploadOptions, UploadResult } from './types';
+import { safeFetch } from '../ssrf-guard';
 import type { PublishPackage } from '../publish-package';
 
 const UPLOAD_URL = 'https://open.douyin.com/api/douyin/v1/video/upload_video/';
@@ -20,7 +21,8 @@ export interface DouyinDeps {
 
 async function defaultReadVideo(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (/^https?:\/\//.test(url)) {
-    const res = await fetch(url);
+    // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
+  const res = await safeFetch(url, { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`读取成片失败 HTTP ${res.status}`);
     return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') || 'video/mp4' };
   }

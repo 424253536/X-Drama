@@ -12,6 +12,7 @@
  * 本文件纯逻辑(命令拼装 / 后端探测)可单测;真正跑子进程 / HTTP 在 removeBackground。
  */
 import { execFileSync } from 'child_process';
+import { resolveVerifiedServeFilePath } from '../serve-file-sign';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -97,8 +98,9 @@ export async function removeBackground(
     localInput = path.join(outDir, 'src.png');
     fs.writeFileSync(localInput, Buffer.from(m[1], 'base64'));
   } else if (inputPathOrUrl.startsWith('/api/serve-file')) {
-    const lp = new URL(inputPathOrUrl, 'http://localhost').searchParams.get('path');
-    if (!lp || !fs.existsSync(lp)) throw new Error('removeBackground: serve-file 本地路径不存在');
+    // v12.241:走验签+白名单,未签名的 serve-file URL 不再被当成可信本地路径
+    const lp = resolveVerifiedServeFilePath(inputPathOrUrl);
+    if (!lp || !fs.existsSync(lp)) throw new Error('removeBackground: serve-file 本地路径不存在或未签名');
     localInput = lp;
   } else if (!fs.existsSync(inputPathOrUrl)) {
     throw new Error(`removeBackground: 源不存在 ${inputPathOrUrl.slice(0, 80)}`);

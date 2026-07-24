@@ -17,6 +17,7 @@
  */
 
 import OpenAI from 'openai';
+import { resolveVerifiedServeFilePath } from './serve-file-sign';
 import { API_CONFIG } from './config';
 import { robustJsonParse } from './polish-json';
 
@@ -417,7 +418,8 @@ async function resolveVisionInput(imageUrl: string): Promise<string | null> {
       const { resolveByKey } = await import('./asset-storage');
       const u = new URL(imageUrl, 'http://localhost');
       const key = u.searchParams.get('key');
-      const p = u.searchParams.get('path');
+      // v12.241:?path= 走验签+白名单(?key= 内容寻址保持原样)
+      const p = resolveVerifiedServeFilePath(imageUrl);
       let absPath: string | null = null;
       let ext = '';
       if (key) {

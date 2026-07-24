@@ -10,6 +10,7 @@
  * v10.4.2 幂等续跑消费;create 页 switch 无 default,未知事件天然忽略)。
  */
 import { HybridOrchestrator } from '@/services/hybrid-orchestrator';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { db, now } from '@/lib/db';
 import { updateAssetBySelector, listAssetsByType, upsertAsset } from '@/lib/repos/asset-repo';
 import { getProject, insertProjectFull, updateProjectById, upsertLockedCharacters } from '@/lib/repos/project-repo';
@@ -787,7 +788,8 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         const reportData: any = { ...(editResult as any).qualityReport };
         try {
           if (editResult.finalVideoUrl?.startsWith('/api/serve-file')) {
-            const lp = decodeURIComponent(new URL(editResult.finalVideoUrl, 'http://localhost').searchParams.get('path') || '');
+            // v12.241:走验签+白名单(本进程刚生成的成片 URL 已带签名,验签可过)
+            const lp = resolveVerifiedServeFilePath(editResult.finalVideoUrl) || '';
             if (lp) {
               const { probeVideoIntegrity } = await import('@/services/video-composer');
               const probe = await probeVideoIntegrity(lp);

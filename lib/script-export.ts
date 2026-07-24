@@ -97,7 +97,11 @@ export function buildScriptBookHtml(sheet: PullSheet, meta?: ScriptMeta): string
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>${esc(meta?.title || sheet.title)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #1a1a1a; padding: 28px 34px; font-size: 12px; line-height: 1.55; }
+  /* v12.241(清门禁存量债):本 HTML 由 puppeteer 渲成 PDF,而 **PDF 会把用到的字形嵌进文件**
+     —— 那就等于随文档分发字体,与成片烧字幕是同一类 EULA 问题。所以把开源可商用字体
+     (思源黑体 / Noto,均 SIL OFL)放在前面,系统专有字体只作末位回退。
+     对照:lib/polish-docx.ts 导出的是 Word HTML,字体名由 Word 在本机查找、不嵌入,故不受此限。 */
+  body { font-family: "Source Han Sans SC", "Noto Sans CJK SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: #1a1a1a; padding: 28px 34px; font-size: 12px; line-height: 1.55; }
   h1 { font-size: 22px; margin-bottom: 6px; }
   .meta { color: #666; margin-bottom: 4px; }
   .block { margin: 10px 0; padding: 10px 12px; background: #f6f6f4; border-radius: 6px; }

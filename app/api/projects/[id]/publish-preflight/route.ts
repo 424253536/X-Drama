@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { getUserFromRequest } from '@/app/api/auth/lib';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { preflightAll } from '@/lib/publish-preflight';
@@ -21,8 +22,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!url) return NextResponse.json({ message: '该项目还没有成片' }, { status: 404 });
 
   // 只支持本地 serve-file(成片一定是本地合成产物)
+  // v12.241:走验签+白名单
   const localPath = url.startsWith('/api/serve-file')
-    ? decodeURIComponent(new URL(url, 'http://localhost').searchParams.get('path') || '')
+    ? (resolveVerifiedServeFilePath(url) || '')
     : '';
   if (!localPath) return NextResponse.json({ message: '成片不是本地产物,无法预检' }, { status: 422 });
 

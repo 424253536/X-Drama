@@ -29,6 +29,7 @@
  */
 
 import OpenAI from 'openai';
+import { resolveVerifiedServeFilePath } from './serve-file-sign';
 import fs from 'fs';
 import path from 'path';
 import { API_CONFIG } from './config';
@@ -123,7 +124,8 @@ export async function toVisionImageInput(imageUrl: string): Promise<string | nul
   if (imageUrl.startsWith('/api/serve-file')) {
     const u = new URL(imageUrl, 'http://localhost');
     const key = u.searchParams.get('key');
-    const p = u.searchParams.get('path');
+    // v12.241:?path= 走验签+白名单(?key= 是内容寻址、不可伪造,保持原样)
+    const p = resolveVerifiedServeFilePath(imageUrl);
     let absPath: string | null = null;
     let ext = '';
     if (key) {

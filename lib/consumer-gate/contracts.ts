@@ -41,6 +41,13 @@ export interface GateContract {
   forbid: RegExp;
   /** 扫描范围:相对仓库根的目录前缀。 */
   scope: string[];
+  /**
+   * 只在这些 HTTP handler 的函数体内匹配(留空 = 整个文件)。
+   * v12.241 清债时发现的精度问题:sentinel 契约叫「不得放行**写**操作」,
+   * 但实现是整文件扫,于是 metrics / prompt-ide 这两个**只读 GET**里的哨兵也被判违规。
+   * 契约名与实现不符时,该修的是实现,不是往白名单里塞。
+   */
+  handlerScope?: string[];
   /** 允许的例外 —— 每条都必须写清 why。 */
   allow: Array<{ file: string; why: string }>;
 }
@@ -94,6 +101,27 @@ export const CONTRACTS: GateContract[] = [
       { file: 'lib/ssrf-guard.ts', why: 'safeFetch 的实现本体,它必须调裸 fetch' },
       { file: 'lib/image-providers/openrouter-image.ts', why: 'v12.96 既有档,固定打 openrouter.ai 常量域名,不接受用户 URL' },
       { file: 'lib/llm-client.ts', why: 'LLM 网关地址来自 env 配置而非请求输入,且不跟随到用户可控目标' },
+      // ── v12.241 清存量债时逐个核实后登记的例外 ──
+      // 各引擎 service 的 fetchWithTimeout(url, init) 包装:url 由本 service 用配置好的 base 拼出,
+      // 不接受请求体输入;真正的外部 URL 消费方(拉媒体的那些)已在本轮改走 safeFetch。
+      { file: 'services/fal-flux.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/grok-imagine.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/kling.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/lipsync-providers.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/ltx.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/midjourney.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/minimax.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/seedance.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'services/veo.service.ts', why: 'fetchWithTimeout 包装,url 由 service 内部按配置 base 构造' },
+      { file: 'lib/broll.ts', why: 'u 是上一行拼好的 api.pexels.com 固定端点常量,启发式把它当变量了(保守误报)' },
+      { file: 'lib/storage.ts', why: 'S3 端点由 cfg.endpoint/bucket 构造;自托管 MinIO 常在内网,过 SSRF 守卫反而会拒真实部署' },
+      { file: 'lib/email-sender.ts', why: 'RESEND_API 是模块内常量,SendGrid 也是写死的域名' },
+      { file: 'lib/sse-client.ts', why: '浏览器端 SSE 订阅工具,不是服务端出站' },
+      { file: 'lib/lipsync-providers/builtins.ts', why: 'url 来自 LIPSYNC_API_URL 配置;自托管 wav2lip 常在内网,守卫会误拒' },
+      { file: 'lib/image-providers/example-replicate.ts', why: '示例文件;pollUrl 来自 replicate 上游响应的自家轮询地址' },
+      { file: 'services/comfyui.service.ts', why: 'ComfyUI 多为自托管(localhost/内网),需显式配 COMFYUI_URL 才启用,过守卫会拒掉真实部署' },
+      { file: 'app/api/health/providers/route.ts', why: 'timedFetch 探测的是代码里写死的各家健康检查端点' },
+      { file: 'app/api/projects/[id]/anytext-cover/route.ts', why: 'apiUrl 来自 ANYTEXT_API_URL 配置,自托管服务常在内网' },
     ],
   },
   {
@@ -139,6 +167,8 @@ export const CONTRACTS: GateContract[] = [
     allow: [
       { file: 'lib/text-control.ts', why: '字体候选表本体:系统字体作为最后兜底登记在此,并标注 EULA 限制' },
       { file: 'lib/cover-title-burn.ts', why: '封面候选表本体:开源优先、系统字体列在末位兜底' },
+      { file: 'lib/polish-docx.ts', why: '导出的是 Word HTML(.doc),font-family 只是让 Word 在本机查找字体,不嵌入字形,故不涉 EULA 分发' },
+      { file: 'lib/script-export.ts', why: 'v12.241 已把思源/Noto 提到 font-family 首位,系统字体只作末位回退(与 cover-title-burn 同款);正则查的是「出现」而非「排序」,故登记为例外' },
     ],
   },
   {
@@ -162,6 +192,8 @@ export const CONTRACTS: GateContract[] = [
     entry: 'requireUser / requireProjectAccess / guardPaidEndpoint',
     forbid: /=\s*['"]__no_auth__['"]/,
     scope: ['app/api/'],
+    handlerScope: ['POST', 'PUT', 'PATCH', 'DELETE'], // 只读 GET 用哨兵查空是安全默认,不算违规
+
     allow: [
       { file: 'lib/repos/pipeline-job-repo.ts', why: '仓储层用哨兵做「查不到就返空集」的安全默认,不是放行' },
     ],

@@ -16,6 +16,8 @@
  */
 
 import ffmpeg from 'fluent-ffmpeg';
+import { safeFetch } from './ssrf-guard';
+import { resolveVerifiedServeFilePath } from './serve-file-sign';
 import ffmpegPath from 'ffmpeg-static';
 import fs from 'fs';
 import path from 'path';
@@ -78,7 +80,8 @@ async function extractFrameAtRatio(videoUrl: string, position: 'end' | 'middle')
     if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 60_000);
-      const resp = await fetch(videoUrl, { signal: controller.signal });
+      // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
+      const resp = await safeFetch(videoUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!resp.ok) {
         console.warn(`[LastFrame] fetch failed ${resp.status}: ${videoUrl.slice(0, 80)}`);
@@ -90,7 +93,8 @@ async function extractFrameAtRatio(videoUrl: string, position: 'end' | 'middle')
       // 本地 serve-file 转成绝对路径
       const u = new URL(videoUrl, 'http://localhost');
       const key = u.searchParams.get('key');
-      const p = u.searchParams.get('path');
+      // v12.241:?path= 走验签+白名单(?key= 内容寻址保持原样)
+      const p = resolveVerifiedServeFilePath(videoUrl);
       if (key) {
         // 持久化仓库 -> 直接读(通过 resolveByKey 会更准,这里走 import 避免循环)
         const { resolveByKey } = await import('./asset-storage');

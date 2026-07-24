@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { db } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
@@ -72,9 +73,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // 对于本地 serve-file URL：直接读文件并以 attachment 返回
     if (finalUrl.startsWith('/api/serve-file')) {
       try {
-        const u = new URL(finalUrl, 'http://localhost');
-        const localPath = decodeURIComponent(u.searchParams.get('path') || '');
-        if (!fs.existsSync(localPath)) return NextResponse.json({ error: 'file missing' }, { status: 404 });
+        // v12.241:走验签+白名单 —— 这是**导出接口**,拿到路径后直接喂 ffmpeg 并回传文件,
+        // 与 v12.237 的 persistAsset 同类风险面,不能只靠「URL 以 /api/serve-file 开头」就信。
+        const localPath = resolveVerifiedServeFilePath(finalUrl) || '';
+        if (!localPath || !fs.existsSync(localPath)) return NextResponse.json({ error: 'file missing' }, { status: 404 });
 
         // v2.16 P0.2: 转码分支 — 跑 ffmpeg scale 后送转码出来的文件
         let pathToServe = localPath;

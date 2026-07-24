@@ -76,6 +76,25 @@ function isAllowed(c: GateContract, rel: string): boolean {
   return c.allow.some((a) => a.file === rel);
 }
 
+/** 生成「这一行是否落在指定 handler 体内」的判定函数;未指定 handlerScope 则全放行。 */
+function handlerLineFilter(code: string, methods?: string[]): (line: number) => boolean {
+  if (!methods || !methods.length) return () => true;
+  const lines = code.split('\n');
+  const ALL = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+  const marks: Array<{ line: number; method: string }> = [];
+  lines.forEach((l, i) => {
+    const m = l.match(/export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*\(/);
+    if (m && ALL.includes(m[1])) marks.push({ line: i + 1, method: m[1] });
+  });
+  if (!marks.length) return () => false; // 文件里没有 handler → 该契约不适用
+  const ranges: Array<[number, number]> = [];
+  marks.forEach((mk, idx) => {
+    if (!methods.includes(mk.method)) return;
+    ranges.push([mk.line, idx + 1 < marks.length ? marks[idx + 1].line - 1 : lines.length]);
+  });
+  return (line: number) => ranges.some(([a, b]) => line >= a && line <= b);
+}
+
 /** 跑一条契约。 */
 function scanContract(root: string, c: GateContract): Violation[] {
   if (!c.scope.length) return [];
@@ -90,7 +109,11 @@ function scanContract(root: string, c: GateContract): Violation[] {
       if (rel.startsWith('lib/consumer-gate/')) continue;
       const code = stripComments(fs.readFileSync(abs, 'utf-8'));
       const lines = code.split('\n');
+      // handlerScope:只在指定 HTTP 方法的 handler 体内匹配。用行号区间近似切片 ——
+      // 从 `export async function POST(` 起,到下一个 export handler 或文件末为止。
+      const inScope = handlerLineFilter(code, c.handlerScope);
       for (let i = 0; i < lines.length; i++) {
+        if (!inScope(i + 1)) continue;
         const re = new RegExp(c.forbid.source, c.forbid.flags.replace('g', ''));
         if (re.test(lines[i])) {
           out.push({

@@ -12,6 +12,7 @@
  * 依赖:ffmpeg-static(随包,生产无需 PATH 有 ffmpeg)。env `LIPSYNC_LOCAL_DISABLE=1` 可关。
  */
 import fs from 'fs';
+import { safeFetch } from '../ssrf-guard';
 import os from 'os';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -76,7 +77,8 @@ async function fetchToFile(url: string, stem: string): Promise<{ ext: string; fi
       return { ext, file };
     }
     if (/^https?:\/\//.test(url)) {
-      const res = await fetch(url);
+      // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
+      const res = await safeFetch(url, { signal: AbortSignal.timeout(60_000) });
       if (!res.ok) return null;
       const ext = extFromCt(res.headers.get('content-type') || '') || path.extname(new URL(url).pathname) || '.bin';
       const file = stem + ext;

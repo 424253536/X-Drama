@@ -11,6 +11,7 @@
  *   · 网络与读视频通过 deps 注入 → 单测全 mock,绝不真打 Google。
  */
 import type { PublishAdapter, UploadOptions, UploadResult } from './types';
+import { safeFetch } from '../ssrf-guard';
 import type { PublishPackage } from '../publish-package';
 
 const RESUMABLE_INIT = 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status';
@@ -27,7 +28,8 @@ export interface YouTubeDeps {
 /** 默认读视频:远端 URL 用 fetch;本地文件路径用 fs。 */
 async function defaultReadVideo(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (/^https?:\/\//.test(url)) {
-    const res = await fetch(url);
+    // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
+  const res = await safeFetch(url, { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`读取成片失败 HTTP ${res.status}`);
     const ab = await res.arrayBuffer();
     return { bytes: new Uint8Array(ab), contentType: res.headers.get('content-type') || 'video/mp4' };
