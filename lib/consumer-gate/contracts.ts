@@ -83,19 +83,24 @@ export const CONTRACTS: GateContract[] = [
       '攻击者用自己控制的公网地址 302 到 169.254.169.254,整道 SSRF 防线被完整绕过。',
     entry: 'safeFetch(url, init) from lib/ssrf-guard',
     /**
-     * 只拦「**URL 来自变量**」的 fetch,放行「打固定端点」的 fetch。
+     * **拦所有裸 fetch,靠文件级白名单 + 必填理由放行。**
      *
-     * 第一版写的是 `/(?<![\w.])fetch\s*\(/` —— 结果一跑 **60 处命中**,里面绝大多数是
-     * `fetch(\`${base}/chat/completions\`)` 这类打配置好的第三方端点,URL 根本不来自请求。
-     * 那种门禁的下场是可预见的:几十条噪音 → 大家习惯性往白名单里塞 → 门禁彻底失效。
-     * (这正是本文件设计原则里担心的「白名单腐化」,我自己第一版就掉进去了。)
+     * 这条正则改过两版,两版都错,记下来:
      *
-     * 真正的风险面是「拿一个**变量**当 URL 去 fetch」——那个变量可能一路追溯到请求体。
-     * 所以判据改为:`fetch(` 后**直接跟标识符**(而非反引号/引号字面量)。
-     *   · `fetch(url, {...})` / `fetch(sourceUrl)` / `fetch(proxyUrl)` → 拦
-     *   · `fetch(\`${API_BASE}/x\`)` / `fetch('https://api.x/y')`     → 放行
+     * · **第一版**「拦所有 fetch」→ 一跑 60 处,绝大多数是打固定端点,噪音必然逼人狂加白名单。
+     * · **第二版**「只拦 `fetch(` 后跟裸标识符」→ 噪音降到 24 处,但**自查发现 8 种写法漏 7 种**:
+     *   `fetch(obj.url)`、`fetch(arr[0])`、**`fetch(body.imageUrl)`(直接来自请求体!)**、
+     *   `` fetch(`${userUrl}`) ``、`const f = fetch; f(url)`、`globalThis.fetch(url)`、跨行调用。
+     *   一个漏掉「直接 fetch 请求体字段」的 SSRF 门禁,等于没有。
+     *
+     * 错在哪:我想用正则区分「URL 来自配置」和「URL 来自数据流」—— 这**静态根本做不到**,
+     * `fetch(`${A}/x`)` 里的 A 是常量还是用户输入,正则看不出来。硬猜的结果就是漏 7/8。
+     *
+     * 所以第三版**不猜了**:拦所有裸 fetch,例外走文件级白名单**并强制写明 URL 来源**。
+     * 代价是白名单变长(一次性),换来的是:**新写一个 fetch 就必须回答「这个 URL 从哪来」** ——
+     * 而这恰恰是这套门禁存在的全部意义。
      */
-    forbid: /(?<![\w.])fetch\s*\(\s*[A-Za-z_$][\w$]*\s*[,)]/,
+    forbid: /(?<![\w.$])fetch\s*\(|globalThis\s*\.\s*fetch|=\s*fetch\s*[;,)\n]/,
     scope: ['lib/', 'services/', 'app/api/'],
     allow: [
       { file: 'lib/ssrf-guard.ts', why: 'safeFetch 的实现本体,它必须调裸 fetch' },
@@ -122,6 +127,23 @@ export const CONTRACTS: GateContract[] = [
       { file: 'services/comfyui.service.ts', why: 'ComfyUI 多为自托管(localhost/内网),需显式配 COMFYUI_URL 才启用,过守卫会拒掉真实部署' },
       { file: 'app/api/health/providers/route.ts', why: 'timedFetch 探测的是代码里写死的各家健康检查端点' },
       { file: 'app/api/projects/[id]/anytext-cover/route.ts', why: 'apiUrl 来自 ANYTEXT_API_URL 配置,自托管服务常在内网' },
+      // ── v12.242:契约改为「拦所有裸 fetch」后,逐个核实并按类登记 ──
+      // 统一判据:URL 由**配置好的 base + 代码里写死的路径**拼成,不含请求体字段。
+      // 真正吃外部 URL 的消费方(voice-clone 的音样、url-to-brief 的商品页、拉媒体那几处)
+      // 已全部改走 safeFetch —— 它们不在这张表里。
+      { file: 'services/*.service.ts', why: '各引擎 service:URL = 本 service 的配置 baseURL + 写死的 API 路径' },
+      { file: 'lib/image-providers/*', why: '图像 provider:URL = 配置 base + 该家写死的端点路径' },
+      { file: 'lib/tts-providers/*', why: 'TTS provider:URL = 配置 base + 写死的端点路径' },
+      { file: 'lib/video-providers/*', why: '视频 provider:URL = 配置 base + 写死的端点路径' },
+      { file: 'lib/api-client.ts', why: 'URL = API_BASE 常量 + 调用方给的**内部**路径,不接受外部 URL' },
+      { file: 'lib/character-traits.ts', why: 'URL = API_CONFIG.openai.baseURL + /chat/completions(写死)' },
+      { file: 'lib/model-scan.ts', why: 'URL = 待探测网关的 spec.baseUrl(来自配置清单)+ 写死的 /models、/chat/completions' },
+      { file: 'lib/image-tools/bg-removal.ts', why: 'backend.url 来自 BG_REMOVAL_URL 配置;rembg 服务多为自托管内网,过守卫会拒真实部署' },
+      { file: 'services/hybrid-orchestrator.ts', why: 'URL = 配置的 apiBase/base + 写死的 /v1/images/generations' },
+      { file: 'app/api/polish-script/route.ts', why: 'URL = 配置的 a.baseURL + 写死的 /chat/completions' },
+      { file: 'app/api/test-llm/route.ts', why: 'URL = API_CONFIG.openai.baseURL + 写死路径(连通性自检端点)' },
+      { file: 'app/api/projects/[id]/ad-workshop/route.ts', why: '`${origin}${path}` 打**本站自己**的内部 API,origin 由服务端算出、path 写死' },
+      { file: 'app/api/projects/[id]/heal-shots/route.ts', why: '`${origin}/api/projects/{id}/recompose` 打本站自己的内部 API' },
     ],
   },
   {

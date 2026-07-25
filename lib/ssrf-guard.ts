@@ -54,6 +54,14 @@ export function isBlockedIp(ip: string): boolean {
     // ::ffff:c0a8:101(192.168.1.1)、**::ffff:a9fe:a9fe(169.254.169.254,云 IMDS)**。
     // 而我 v12.234 写的测试只覆盖了点分那一种写法 —— 测试照着实现写,就只会确认实现的偏见。
     // 现在:先把地址**展开成 8 组**再判定,不依赖任何书写形式。
+    // v12.242:Teredo(2001:0::/32)**整段直接拒**,不绕道「取反后判内网」。
+    // 原实现让 embeddedIpv4 取反出客户端 IPv4 再递归判定,后果是:任何第一段 < 32 的
+    // **公网** IPv4(如 8.8.8.8)取反后都 ≥ 224,被 `a>=224` 判成「组播/保留」——
+    // 结论(拦)碰巧对,理由(组播)却是错的,排障时会把人带偏。
+    // 正确的说法是:Teredo 是隧道机制,作为服务端出站目标没有正当业务场景,一律不放行。
+    const g = expandIpv6(v);
+    if (g && g[0] === 0x2001 && g[1] === 0x0000) return true;
+
     const embedded = embeddedIpv4(v);
     if (embedded) return isBlockedIp(embedded);
     return false;
@@ -111,11 +119,8 @@ export function embeddedIpv4(ip: string): string | null {
   // ISATAP(RFC 5214):接口标识符后 64 位为 0000:5efe:<v4> 或 0200:5efe:<v4>。
   // fe80:: 前缀的已被链路本地正则拦住,但**任意其他前缀**(如 2001:db8::5efe:...)此前完全放行。
   if (g[5] === 0x5efe && (g[4] === 0x0000 || g[4] === 0x0200)) return toV4();
-  // Teredo(RFC 4380):2001:0::/32,客户端 IPv4 **按位取反**编码在末 32 位。
-  if (g[0] === 0x2001 && g[1] === 0x0000) {
-    const hi = (~g[6]) & 0xffff, lo = (~g[7]) & 0xffff;
-    return [(hi >> 8) & 255, hi & 255, (lo >> 8) & 255, lo & 255].join('.');
-  }
+  // 注:Teredo(2001:0::/32)不在这里处理 —— isBlockedIp 在调本函数之前就把整个 2001:0::/32
+  // 段直接拒了(见 v12.242 注释),不需要再从取反位里抠客户端 IPv4。
   // v12.237(第四轮对抗复检 · HIGH):6to4 `2002::/16`(RFC 3056)把目的 IPv4 编在 g[1,2] ——
   // v12.236 的 embeddedIpv4 只查 g[6,7],于是 2002:a9fe:a9fe::(→169.254.169.254 云 IMDS)被放行。
   // 在配了 sit/6to4 隧道的 Linux 生产机上,连它就直达内网。补上这一分支。
@@ -209,7 +214,12 @@ export async function assertOutboundUrlSafe(rawUrl: string): Promise<SsrfVerdict
 
   // 任一解析地址落在内网就整体拒 —— 多 A 记录里混一个 127.0.0.1 是经典绕过手法
   const bad = addrs.find((a) => isBlockedIp(a));
-  if (bad) return { ok: false, reason: `域名 ${u.hostname} 解析到内网地址 ${bad}` };
+  if (bad) {
+    // v12.242:把**全部**解析结果一并报出 —— 实测在 DNS 被污染的网络里,
+    // 合法域名可能被解析到奇怪地址(本机上 www.google.com 就解析出 2001::1),
+    // 只说「解析到内网地址」会让人以为是守卫抽风,列出全部结果才能一眼看出是 DNS 的问题。
+    return { ok: false, reason: `域名 ${u.hostname} 的解析结果含不可出站地址 ${bad}(全部:${addrs.join(', ')})` };
+  }
 
   return { ok: true };
 }

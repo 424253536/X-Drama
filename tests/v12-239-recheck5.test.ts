@@ -20,10 +20,11 @@ describe('v12.239 SSRF · 补齐三类 IPv4-in-IPv6 隧道变体', () => {
     expect(isBlockedIp('64:ff9b:1::a9fe:a9fe')).toBe(true);
   });
 
-  it('Teredo 2001:0::/32(RFC 4380,末 32 位按位取反)', () => {
-    // 2001:0:4136:e37e:8000:63bf:5601:5601 → ~0x5601,~0x5601 = 169.254.169.254
-    expect(embeddedIpv4('2001:0:4136:e37e:8000:63bf:5601:5601')).toBe('169.254.169.254');
+  it('Teredo 2001:0::/32 整段被拦(v12.242 起改为直接拒,不再取反抠 IPv4)', () => {
+    // v12.239 曾让 embeddedIpv4 取反出客户端 IPv4 再判定;v12.242 发现那会把公网 IPv4 取反后
+    // 误判成「组播」(理由错、结论碰巧对),改为整个 2001:0::/32 直接拒。isBlockedIp 结果不变。
     expect(isBlockedIp('2001:0:4136:e37e:8000:63bf:5601:5601')).toBe(true);
+    expect(isBlockedIp('2001::1')).toBe(true);
   });
 
   it('ISATAP ::0:5efe:v4 / ::200:5efe:v4(RFC 5214)—— 非 fe80 前缀此前完全放行', () => {

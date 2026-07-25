@@ -7,6 +7,9 @@
  * 诚实:本环境无音样,未做端到端真验证;请求体/响应解析为纯函数有单测(lib/voice-clone)。
  */
 import { buildVoiceCloneBody, parseVoiceCloneResponse, parseFileUploadResponse, isValidVoiceId } from '@/lib/voice-clone';
+import fs from 'fs';
+import { safeFetch } from '@/lib/ssrf-guard';
+import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 
 function key(): string { return process.env.MINIMAX_API_KEY || ''; }
 function base(): string { return (process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com').replace(/\/+$/, ''); }
@@ -24,9 +27,20 @@ export async function cloneVoice(opts: CloneVoiceOptions): Promise<{ voiceId: st
   const groupQ = process.env.MINIMAX_GROUP_ID ? `?GroupId=${encodeURIComponent(process.env.MINIMAX_GROUP_ID)}` : '';
 
   // 1. 下载音样
-  const dl = await fetch(opts.sampleUrl);
-  if (!dl.ok) throw new Error(`下载音样失败 ${dl.status}`);
-  const buf = Buffer.from(await dl.arrayBuffer());
+  // v12.242(消费方门禁抓到的第二个真 SSRF):sampleUrl **直接来自用户 body**
+  // (route 注释写明「保留旧 JSON { sampleUrl } 路径(外链音样)」),此前裸 fetch ——
+  // 内网地址、云元数据、302 跳转全通。
+  // 分两条路:站内 serve-file URL 直接走验签解析读本地文件(顺带避免 dev 下 localhost
+  // 被 SSRF 守卫误拒);真外链走 safeFetch(字面量+DNS 双层 + 逐跳重验)。
+  let buf: Uint8Array<ArrayBuffer>; // 显式带 ArrayBuffer 参数:BlobPart 不接受 ArrayBufferLike
+  const localSample = resolveVerifiedServeFilePath(opts.sampleUrl.replace(/^https?:\/\/[^/]+/, ''));
+  if (localSample) {
+    buf = new Uint8Array(fs.readFileSync(localSample)); // 统一成 Uint8Array,兼容 Blob 构造
+  } else {
+    const dl = await safeFetch(opts.sampleUrl, { signal: AbortSignal.timeout(60_000) });
+    if (!dl.ok) throw new Error(`下载音样失败 ${dl.status}`);
+    buf = new Uint8Array(await dl.arrayBuffer());
+  }
 
   // 2. 上传到 MiniMax(multipart, purpose=voice_clone)
   const form = new FormData();

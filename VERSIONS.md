@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.241**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.242**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.241**:**vitest 3336 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.242**:**vitest 3354 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,15 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.242.0** | 2026-07-24 | `bd6e261` | **🔩 门禁自我加固 + 它抓到的第二个真 SSRF + Teredo 判定纠偏**。给门禁找盲区的过程中,发现的第一个大洞是**门禁自己的正则**。
+
+**① `outbound-fetch` 正则漏 7/8 种写法(门禁自身缺陷)**:v12.241 那版「只拦 `fetch(` 后跟裸标识符」,自查用 8 种写法测,**漏了 7 种** —— `fetch(obj.url)`、`fetch(arr[0])`、**`fetch(body.imageUrl)`(直接来自请求体!)**、`` fetch(`${userUrl}`) ``、`const f = fetch; f(url)`、`globalThis.fetch(url)`、跨行调用。一个漏掉「直接 fetch 请求体字段」的 SSRF 门禁**等于没有**。根因:我想用正则区分「URL 来自配置」和「来自数据流」——这**静态根本做不到**。改为**拦所有裸 fetch**,靠文件级白名单 + 必填理由放行,代价是白名单变长(一次性),换来「新写一个 fetch 就必须回答 URL 从哪来」。白名单支持前缀/glob,同类(9 个引擎 service)用一条 glob 覆盖。
+**② 改完门禁立刻抓到第二个真 SSRF**:`services/voice-clone.service.ts` 的 `cloneVoice` 下载音样 ——`sampleUrl` **直接来自用户 body**(route 注释写明「外链音样」),此前裸 fetch。改为站内 URL 走验签解析、真外链走 `safeFetch`。**实证**:IMDS / 6to4-IMDS 拦、正常公网域名放行。
+**③ Teredo 判定纠偏**:v12.239 让 `embeddedIpv4` 对 Teredo(2001:0::/32)取反抠出客户端 IPv4 再递归判定 ——后果是任何第一段 < 32 的**公网** IPv4 取反后 ≥ 224,被 `a>=224` 判成「组播」。**结论(拦)碰巧对,理由(组播)是错的**,排障会被带偏。改为整个 `2001:0::/32` **直接拒**(Teredo 作为服务端出站目标无正当场景),删掉那段已成死代码的取反分支。DNS 层拒绝信息也改为**列出全部解析结果** —— 实测本机 DNS 被污染时 `www.google.com` 解析出 `2001::1`,只说「解析到内网」会让人以为守卫抽风,列出全部才看得出是 DNS 的问题。
+
+**关于盲区分析 workflow**:三路 agent 连续两次撞上会话/周额度(均未跑成),所以契约表仍只覆盖我亲历的事故类型。但本轮证明:**我自己拿具体写法去攻击门禁,比等 workflow 更快见效** —— 正则漏 7/8 这个洞就是这么挖出来的。
+
+**验收**:tsc 0 + 全量 **3354/3354**(399 文件);新增 `v12-242-gate-hardening.test.ts` 18 例(锁 7 种写法拦截、状态机 5 个边界、glob 白名单、Teredo 整段拒、voice-clone 过守卫);**更新 1 处旧断言**(v12-239 的 Teredo 从「取反等于 169.254.169.254」改为「整段被拦」)。 |
 | **v12.241.0** | 2026-07-24 | `de484fc` | **🧹 消费方门禁存量债清零(40 → 0),门禁进入零容忍**。v12.240 上线时把 40 处存量记为基线债;本版全部还清。
 
 **① `?path=` 解析方 11 处全部改走验签(与 v12.237 那个 CRITICAL 同源)**。v12.237 只修了 `persistAsset` / `serveFileToLocalPath` 两条,而全仓还有 11 处在自己 `searchParams.get('path')` 取路径后直接读盘(bgm-multi-act / cameo-vision / character-traits / editor-score / last-frame-extractor / bg-removal / create-pipeline / hybrid-orchestrator / export / export-platform / publish-preflight),其中 **8 处真读盘**(copyFileSync/existsSync/ffmpeg)。统一改走 `resolveVerifiedServeFilePath`(HMAC 验签 + 目录白名单)—— 内部流转的 URL 自 v12.236 起均由 `serveFilePathUrl` 签发,验签可过;外部输入若流到这里,无签名会被直接挡下而不是照单读盘。**`app/api/projects/[id]/export` 尤其要紧**:它拿到路径直接喂 ffmpeg 并回传文件。

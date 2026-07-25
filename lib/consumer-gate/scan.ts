@@ -72,8 +72,21 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
+/**
+ * 白名单匹配:精确路径 / 目录前缀(以 `/` 结尾)/ 简单 glob(`*` 匹配单层内任意字符)。
+ * v12.242:拦所有 fetch 后白名单条目变多,同类(如 9 个 service 的 fetchWithTimeout 包装)
+ * 用一条 glob 覆盖,避免清单臃肿到没人看。
+ */
 function isAllowed(c: GateContract, rel: string): boolean {
-  return c.allow.some((a) => a.file === rel);
+  return c.allow.some((a) => {
+    if (a.file === rel) return true;
+    if (a.file.endsWith('/')) return rel.startsWith(a.file);
+    if (a.file.includes('*')) {
+      const re = new RegExp('^' + a.file.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*') + '$');
+      return re.test(rel);
+    }
+    return false;
+  });
 }
 
 /** 生成「这一行是否落在指定 handler 体内」的判定函数;未指定 handlerScope 则全放行。 */
