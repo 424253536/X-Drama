@@ -65,15 +65,15 @@ GitHub: https://github.com/ChrisChen667788/wind-comic
 
 今年初, 短剧 / 漫剧赛道大爆发. 抖音/快手日均上线 300+ 部, 单集 30 秒, 90% 是 AI 半成品 + 人工补救. 现存工具的问题非常痛:
 
-> 阵容核验 2026-06-22:盲投竞技场(Artificial Analysis / llm-stats)文生视频榜首 Kling v3(2031),LTX-2 Fast 次席(开源最强),Seedance 2.0 第三;图生视频榜首易主为 xAI Grok Imagine 1.5。
-- **Kling v3(快手)** 现居文生视频榜首、原生故事板多镜 + 跨镜音画同步;**Seedance 2.0(字节)** 音画联合生成、API 已商用(百炼/fal,配 FAL_KEY 可 BYO)— 但都不烧中文字幕、不开源、单段/单流程为主.
-- **Grok Imagine 1.5(xAI)** 图生视频盲测登顶(原生音频 + 极速 + 低价,API 已开放可 BYO);**Veo 3.1** 仍是画质/物理一致性王者(4K + 原生对白音轨)— 同样不烧中文字幕、不能自托管、没多人协作时间线.
-- **Runway Gen-4.5** 工业级控制面最强(运动笔刷 + GWM-1 世界模型);中文适配弱 + 闭源 + 无字幕烧入.(HappyHorse-1.0 阿里 4 月匿名登顶后退榜、Sora 2 已停服 App 2026-04-26 / API 2026-09-24,均移出对比)
+> 阵容核验 2026-07-24:盲投竞技场(Artificial Analysis)**谷歌 Gemini Omni Flash 登顶双榜** —— 带音频文生视频 Elo 1245、图生视频 1200(统一 text/image/audio/video 多模态 + 对话式视频编辑);Seedance 2.0 720p 双榜次席、Kling 3.0 性价比冠军(~$0.50/clip 短剧首选)、Veo 3.1 画质/物理/4K 企业安全牌、HappyHorse-1.1 前列。**⭐ 我方 BYO 已可接住这波**:v12.238 起填 GEMINI_API_KEY 即启用 Gemini 图像(Nano Banana),竞品登顶反成本管线可调度引擎。
+- **Gemini Omni Flash(谷歌)** 双榜登顶:统一多模态一次出音画、对话式迭代改片;**Seedance 2.0(字节)** 音画联合、API 已商用(百炼/fal,配 FAL_KEY 可 BYO);**Kling 3.0(快手)** 性价比冠军、原生故事板多镜 + 跨镜音画同步.
+- **Veo 3.1** 仍是画质/物理一致性 + 4K + 原生对白音轨的企业安全牌;**Runway Gen-4.5** 工业级控制面(运动笔刷 + GWM-1 世界模型)—— 但它们**都不烧中文字幕、不开源、不能自托管、没多人协作时间线**,单段/单流程为主.
+- (Sora 2 已停服:App 2026-04-26 / API 2026-09-24,移出对比;HappyHorse-1.0 阿里 4 月匿名登顶后退居前列.)**结论不变:生成层是红海,Wind Comic 护城河在「制作/平台层」—— 节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO 当下最强引擎.**
 - 共同缺口 (= Wind Comic 的护城河): 真·中文字幕烧入 · 竖屏短剧套路 · 自托管 · 自带 LLM · 开源 · 实时协作 · 节奏审计 · 智能剪辑.
 
 我想要的: **开源 + 多 Agent 协同 + 中文优先 + 自带 LLM + 实时多人协作**. 都没有. 自己造一个.
 
-8 个月, v2.0 → v12.244, 3369 个单测, MIT 开源. 这就是 **Wind Comic**.
+8 个月, v2.0 → v12.245, 3369 个单测, MIT 开源. 这就是 **Wind Comic**.
 
 ## 核心架构
 
@@ -152,7 +152,7 @@ Reasoning 模型 (DeepSeek-r1, MiniMax-M2, o1/o3 系列) 也无缝支持 — `ca
 ## 数据
 
 - 8 个月 21 个 sprint
-- v2.0 → v12.244
+- v2.0 → v12.245
 - **3369 个单测全过**
 - **TypeScript 严格模式, 0 错误**
 - **MIT 开源**
@@ -180,7 +180,7 @@ Reasoning 模型 (DeepSeek-r1, MiniMax-M2, o1/o3 系列) 也无缝支持 — `ca
 
 ## 🔥 Twitter / 即刻 短贴
 
-> 🌬️ Wind Comic v12.244 来了
+> 🌬️ Wind Comic v12.245 来了
 >
 > · 一句 idea → 整部短剧
 > · 8 agent 流水线
@@ -202,7 +202,7 @@ Reasoning 模型 (DeepSeek-r1, MiniMax-M2, o1/o3 系列) 也无缝支持 — `ca
 > 一句 idea, 8 个 agent, 一部完整短剧. 锁脸 / 锁画风 / 中文字幕真烧入 / 实时多人协作 / 接你自己的 LLM. MIT 开源.
 >
 > GitHub: github.com/ChrisChen667788/wind-comic
-> v12.244 · 3369 单测全过 · 0 API key 强制依赖.
+> v12.245 · 3369 单测全过 · 0 API key 强制依赖.
 
 详细全文 → 看 [`docs/modelscope-profile.md`](modelscope-profile.md).
 

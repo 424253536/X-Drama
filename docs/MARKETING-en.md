@@ -14,7 +14,7 @@
 
 ## 🔥 Twitter / X — 280 chars
 
-> 🌬️ Wind Comic v12.244 is live.
+> 🌬️ Wind Comic v12.245 is live.
 >
 > ▸ 1 sentence → full short drama
 > ▸ 8-agent pipeline (Sora is 1)
@@ -68,7 +68,7 @@
 >
 > 5. **Provider-agnostic LLM.** Every LLM call routes through one OpenAI-compatible `chat/completions` endpoint via subprocess (to dodge Next.js Turbopack's fetch quirks). Swap providers by editing 3 env vars. Tested on OpenAI, Anthropic-via-OpenRouter, DeepSeek-r1, Qwen, MiniMax, GLM, Kimi, local Ollama. See `docs/llm-providers.md`.
 >
-> 8 months, v2.0 → v12.244, 3369 vitest tests, TypeScript strict, MIT. Honestly happy for criticism — `docs/COMPETITIVE-GAP-2026-05.md` is our own self-audit of where we still lose vs Sora/Kling/Higgsfield.
+> 8 months, v2.0 → v12.245, 3369 vitest tests, TypeScript strict, MIT. Honestly happy for criticism — `docs/COMPETITIVE-GAP-2026-05.md` is our own self-audit of where we still lose vs Sora/Kling/Higgsfield.
 >
 > github.com/ChrisChen667788/wind-comic
 
@@ -99,7 +99,7 @@ The LLM is provider-agnostic — `docs/llm-providers.md` documents how to swap t
 
 Tech: Next.js 16 + TypeScript strict + SQLite + Web Audio API + Yjs. 3369 vitest tests passing. MIT.
 
-Honest competitor comparison: README's vs-competitors table is kept current (verified 2026-06-22: on the blind Artificial Analysis / llm-stats arena, Kling v3 leads text-to-video at 2031, with LTX-2 Fast #2 and Seedance 2.0 #3; xAI's Grok Imagine 1.5 has taken #1 on image-to-video over Veo 3.1 / Kling / Seedance; Veo 3.1 remains the quality & physics king with 4K + native dialogue audio; Runway Gen-4.5 keeps the strongest control surface; HappyHorse-1.0 (Alibaba Taotian) faded after its April anonymous #1, and Sora 2 is shutting down — app offline 2026-04-26, API ending 2026-09-24 — both removed). `docs/COMPETITIVE-GAP-2026-05.md` is a dated self-audit.
+Honest competitor comparison: README's vs-competitors table is kept current (verified 2026-07-24: on the blind Artificial Analysis arena, **Google's Gemini Omni Flash now tops both boards** — text-to-video-with-audio at Elo 1245 and image-to-video at 1200 — on a unified text/image/audio/video architecture with conversational video editing; Dreamina Seedance 2.0 720p is #2 on both; Kling 3.0 is the value champion (~$0.50/clip, best for short-form drama); Veo 3.1 stays the quality/physics/4K enterprise pick; Sora 2 is shutting down — app offline 2026-04-26, API ending 2026-09-24 — removed. **We ride the wave via BYO**: since v12.238, `GEMINI_API_KEY` enables the Gemini image provider (Nano Banana) in-pipeline — a leaderboard-topping rival becomes an engine *we* orchestrate). `docs/COMPETITIVE-GAP-2026-05.md` is a dated self-audit.
 
 GitHub: https://github.com/ChrisChen667788/wind-comic
 

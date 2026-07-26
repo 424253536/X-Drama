@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/ChrisChen667788/wind-comic/main/assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.244</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.245</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -486,7 +486,7 @@ Wind Comic stands on a lot of excellent open-source work:
 
 Features that exist because someone outside the team took the time to file a good report:
 
-- **[@flobo3](https://github.com/flobo3)** — [#11](https://github.com/ChrisChen667788/wind-comic/issues/11): proposed **GPT Image** (`gpt-image-1`) and **Nano Banana** (Gemini Image) as first-class image providers, including the endpoints, the env-var naming, the "reuse the already-configured `OPENAI_API_KEY` to lower the barrier" idea, and the observation that Nano Banana's native i2i fits the existing character-consistency contract. Shipped in v12.244–v12.244 essentially as designed.
+- **[@flobo3](https://github.com/flobo3)** — [#11](https://github.com/ChrisChen667788/wind-comic/issues/11): proposed **GPT Image** (`gpt-image-1`) and **Nano Banana** (Gemini Image) as first-class image providers, including the endpoints, the env-var naming, the "reuse the already-configured `OPENAI_API_KEY` to lower the barrier" idea, and the observation that Nano Banana's native i2i fits the existing character-consistency contract. Shipped in v12.245–v12.245 essentially as designed.
 - **[@MikhailNikolaev44](https://github.com/MikhailNikolaev44)** — [#2](https://github.com/ChrisChen667788/wind-comic/issues/2): reported that selected characters were being ignored on shot regeneration, which uncovered **three** separate bugs in the reference-image path (v12.132–v12.134), plus the script-language selector request.
 - **[@JSap0914](https://github.com/JSap0914)** — [#1](https://github.com/ChrisChen667788/wind-comic/pull/1): fixed broken README links.
 
