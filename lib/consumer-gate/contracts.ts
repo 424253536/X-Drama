@@ -65,7 +65,8 @@ export const RUNTIME_ONLY_GAPS: Array<{ gap: string; incident: string; guardedBy
   {
     gap: '组件注册了但从未被执行(链路开关默认关)',
     incident: 'v12.238 两个 image provider 注册进 registry 且排序正确,但 plugin chain 默认 off → generate() 一次没跑',
-    guardedBy: 'tests/v12-239-plugin-actually-runs.test.ts —— 断言的是 generate() **被调用**,不是「被选中」',
+    guardedBy: 'tests/v12-243-provider-reachability.test.ts(**遍历真实注册表**,新 provider 自动纳入)' +
+      ' + tests/v12-239-plugin-actually-runs.test.ts(用探针验 withXxxPlugin 的调用机制)',
   },
   {
     gap: '新付费路径未接入成本记账(记账条件与新返回形态不匹配)',
