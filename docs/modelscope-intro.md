@@ -236,33 +236,33 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 
 ## 🥊 vs. competitors
 
-> 阵容核验 2026-07-13(Artificial Analysis 盲投竞技场):格局较 07-12 稳定(1 日无实质变动) —— **带音频文生视频榜:Dreamina Seedance 2.0 720p 仍榜首(Elo 1226)**、Wan2.7-260612 次席(1160)、HappyHorse-1.1 第三(1152)、Kling 3.0 1080p Pro(1112);**无音频榜 HappyHorse-1.0 登顶(1287)**、HappyHorse-1.1(1277)、Seedance 2.0(1272)、Kling 3.0 Pro(1245);**图生视频 Seedance 2.0 榜首(Elo 1345)**。**Seedance 2.5** 已进入主流对比梯队(我方 v12.177 预备态待网关额度激活)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 性价比冠军(多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。
-> **本轮 v12.195–213 全部落在护城河「制作/平台层」**(生成层红海不硬拼):可灵首尾帧锁定+口型同步修复(image_tail/lip-sync,均为探测修正的 live-caught bug)、**情感 TTS 真接通**(中文情绪→MiniMax 枚举,speech-2.8-hd)、角色档案多主体人脸库(对标即梦)、出海多语版一键译制 + **5 语全量 UI(zh/en/ja/ko/ru)**(对标阅文 ToonScroll)、AI 作曲免版权 BGM、多引擎色调统一+晕影+锐化、EBU R128 双遍响度、Kling 4K/enable_audio 门控、决策日志/成本下钻/一键自愈/URL→创意 等断层入口补齐。
+> 阵容核验 2026-07-24(Artificial Analysis 盲投竞技场):**格局易主 —— 谷歌 Gemini Omni Flash 登顶双榜**。它把 text/image/audio/video 统一进一个多模态架构(此前 Gemini 各模态分开再交给专用模型),并支持**对话式视频编辑**(自然语言迭代改片、保留不动的部分)。**带音频文生视频榜:Gemini Omni Flash 榜首(Elo 1245)** → Dreamina Seedance 2.0 720p(1227)→ Wan2.7-260612(1164)→ HappyHorse-1.1(1152)→ HappyHorse-1.0(1131);**图生视频带音频:Gemini Omni Flash(1200)** → Seedance 2.0 720p(1198)→ Grok Imagine 1.5(1118)→ HappyHorse-1.1(1110)→ Wan2.7(1099)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨的企业安全牌(4K);**Kling 3.0** 性价比冠军(~$0.50/clip,短剧首选,多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。**⭐ 我方 BYO 架构已可直接接住这波**:v12.238 起 `GEMINI_API_KEY` 一填即启用 Gemini 图像(Nano Banana)provider —— 竞品登顶反而成了本管线可调度的引擎,「引擎越强我们越强」。
+> **v12.214→244 双线推进**。**产品层**:GPT Image / Nano Banana(Gemini)接入插件式图像 provider 链(issue #11,社区 @flobo3 提议,`OPENAI_IMAGE_ENABLED` / `GEMINI_API_KEY` 门控、原生 i2i 接角色一致性契约);**多集连续生成补上「剧情记忆」**(第 N 集 Writer 注入前几集前情提要 + 承接纪律,对标红果/阅文的 60~100 集连续,此前各集独立成篇)。**平台/工程层**:六轮独立对抗复检把安全洞从 CRITICAL 到 LOW 全清(SSRF 逐跳重验重定向 + IPv6 全隧道变体 / serve-file 签名能力 URL / WebSocket 鉴权 / 预算护栏),并把反复踩的「改了守卫却没跟到消费方」这个病**固化成 CI 入库门禁**(`npm run gate:consumer`,零容忍,上线即抓到 2 个人肉复检漏掉的真 SSRF)。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
-| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
+| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Gemini Omni Flash | HappyHorse-1.1 | **Wind Comic** |
 |---|---|---|---|---|---|---|---|
-| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native | ⚠️ | ⚠️ (one clip) | ⚠️ (one clip) | **✅ 8-agent script→edit pipeline** |
-| Character consistency across shots | ✅ | ✅ | ✅ | ✅ reference | ✅ | ✅ reference-to-video | **✅ cref + sref + 8-dim DNA + vision retry** |
-| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | **✅ Style Bible Frame** |
-| Native dialogue + SFX audio | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 单次生成即带音频 | **✅ per-character TTS + lip-sync** |
+| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native | ⚠️ | ⚠️(单段生成,多镜叙事非强项) | ⚠️ (one clip) | **✅ 8-agent script→edit pipeline** |
+| Character consistency across shots | ✅ | ✅ | ✅ | ✅ reference | ✅ 多模态统一 | ✅ reference-to-video | **✅ cref + sref + 8-dim DNA + vision retry** |
+| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | **✅ Style Bible Frame** |
+| Native dialogue + SFX audio | ✅ | ✅ | ✅ | ⚠️ | ✅ 4 模态原生一体 | ✅ 单次生成即带音频 | **✅ per-character TTS + lip-sync** |
 | Real CJK subtitles (burned-in) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang burn** |
 | Vertical drama tropes | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 templates + 9:16 default** |
 | Real-time multiplayer timeline | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map locks + cursors** |
 | Self-hostable | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
-| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12+ providers via .env** |
+| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌ | ❌(它自己就是模型) | ❌ | **✅ 12+ providers via .env** |
 | Open source | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | **✅ MIT** |
-| Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ⚠️ | ✅ video-edit 端点 | **✅ + reference image upload** |
+| Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ✅ 对话式迭代编辑(招牌能力) | ✅ video-edit 端点 | **✅ + reference image upload** |
 | Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
-| Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
-| First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ (v1.5 only) | ⚠️ | ❌ | ❌ | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
-| Multi-character face cast library (post-build editable) | ❌ | ✅ 主体库 | ✅ 角色管理 | ⚠️ | ❌ | ❌ | **✅ 3-slot cast + cross-shot subject_reference injection** |
+| Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ⚠️(对话式改片,非结构化卡点/情绪剪辑) | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
+| First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ (v1.5 only) | ⚠️ | ❌ | ⚠️ | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
+| Multi-character face cast library (post-build editable) | ❌ | ✅ 主体库 | ✅ 角色管理 | ⚠️ | ⚠️ | ❌ | **✅ 3-slot cast + cross-shot subject_reference injection** |
 | One-click localization (script + re-voice) | ❌ | ⚠️ dub only | ❌ | ❌ | ❌ | ❌ | **✅ 8-lang translate → apply → re-TTS, honest degradation** |
 | Royalty-free AI BGM per story | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MiniMax music-2.6, style-prompt → project BGM** |
 | Per-shot auditable decision log (engine/cost/consistency) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ decision log + cost drill-down + quality score** |
 | Emotion-aware TTS (mapped to native enum) | ⚠️ | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ | **✅ CN emotion → MiniMax speech-2.8-hd enum, live A/B verified** |
-| Lip-sync wired into pipeline (auto per dialogue shot) | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ❌ | **⚠️ Kling lip-sync — zh/en only (needs public video URL + audio ≥2s); ja/ko/ru degrade to none; honest skip on non-face** |
-| Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌ | **✅ 5-language core UI, ~400 keys (component-level string cleanup ongoing)** |
+| Lip-sync wired into pipeline (auto per dialogue shot) | ✅ | ✅ | ⚠️ | ⚠️ | ✅ 原生 | ❌ | **⚠️ Kling lip-sync — zh/en only (needs public video URL + audio ≥2s); ja/ko/ru degrade to none; honest skip on non-face** |
+| Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌(是模型不是 app) | ❌ | **✅ 5-language core UI, ~400 keys (component-level string cleanup ongoing)** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
 
