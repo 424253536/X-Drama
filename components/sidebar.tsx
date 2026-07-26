@@ -7,7 +7,7 @@ import { useAuth } from '@/components/auth-provider';
 import {
   SquaresFour, Kanban, Sparkle, BookOpen, User,
   SignOut, CaretLeft, CaretRight, Package, PenNib, MagicWand, FilmReel, CreditCard, Scroll, Palette, UsersThree, Pulse, Lightning, ChartLineUp, Stack, Queue, FilmSlate,
-  Storefront, FlowArrow, Brain, UserCircle,
+  Storefront, FlowArrow, Brain, UserCircle, MusicNotes, GridFour, ChatText,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 
@@ -25,6 +25,10 @@ const navItems = [
   { href: '/dashboard/polish', label: '剧本润色', icon: MagicWand },
   // v2.12 Sprint C.1: 单图变视频(I2V)独立工具
   { href: '/dashboard/u2v', label: '单图变视频', icon: FilmReel },
+  // v12.250: 三个新创作模式的前端入口(骨架)—— MV 卡点规划 / 漫转视频分格 / 对话式编辑
+  { href: '/dashboard/mv', label: 'MV 卡点', icon: MusicNotes },
+  { href: '/dashboard/comic', label: '漫转视频', icon: GridFour },
+  { href: '/dashboard/edit-chat', label: '对话式编辑', icon: ChatText },
   // v8.3 P5: 角色库并入「素材库」(角色子类), 不再独立模块; 素材库统一管理角色/场景/视频/音乐/字幕/模板
   { href: '/dashboard/assets', label: '素材库', icon: Package },
   { href: '/dashboard/characters', label: '角色库', icon: UserCircle },
