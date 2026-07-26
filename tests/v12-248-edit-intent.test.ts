@@ -76,6 +76,42 @@ describe('v12.248 parseEditIntent 复合指令', () => {
   });
 });
 
+describe('v12.248 对抗复检修复(recheck)', () => {
+  // #1 low:小红书英文名 RED 太短,\b 只锚右侧 → 撞 alfred/hatred。收紧后裸 red 不再误判平台。
+  it('「alfred」等含 red 的词不误判成小红书平台', () => {
+    const r = parseEditIntent('alfred 同款风格卡点字幕');
+    expect(r.intents).not.toContainEqual({ op: 'setPlatform', value: 'xiaohongshu' });
+    expect(r.intents).toContainEqual({ op: 'setCaptionStyle', value: 'karaoke' });
+  });
+  it('rednote / 小红书 仍能正常识别', () => {
+    expect(parseEditIntent('导出到 rednote').intents).toContainEqual({ op: 'setPlatform', value: 'xiaohongshu' });
+    expect(parseEditIntent('发小红书').intents).toContainEqual({ op: 'setPlatform', value: 'xiaohongshu' });
+  });
+
+  // #2 high:否定的破坏性指令绝不能被反向执行。
+  it('「不要删掉第3镜」不发出删除意图(否定守卫)', () => {
+    const r = parseEditIntent('不要删掉第3镜');
+    expect(r.intents.some((i) => i.op === 'dropShot')).toBe(false);
+    expect(hasDestructiveIntent(r.intents)).toBe(false);
+  });
+  it('「别删第2镜」「不要重新配音」同样被否定', () => {
+    expect(parseEditIntent('别删第2镜').intents.some((i) => i.op === 'dropShot')).toBe(false);
+    expect(parseEditIntent('不要重新配音').intents.some((i) => i.op === 'regenVoiceover')).toBe(false);
+  });
+  it('否定词在动词之后不误伤:「第2镜调暗别太暗」仍重生第2镜', () => {
+    const r = parseEditIntent('第2镜调暗别太暗');
+    expect(r.intents).toContainEqual(expect.objectContaining({ op: 'regenShot', shotNumber: 2 }));
+  });
+
+  // #3 high:混合指令里每镜用自己分句的动词,不被全局 wantsDrop 串。
+  it('「删掉第1镜,第2镜调暗一点」→ 第1镜删、第2镜重生(不误删第2镜)', () => {
+    const r = parseEditIntent('删掉第1镜,第2镜调暗一点');
+    expect(r.intents).toContainEqual({ op: 'dropShot', shotNumber: 1 });
+    expect(r.intents).toContainEqual(expect.objectContaining({ op: 'regenShot', shotNumber: 2 }));
+    expect(r.intents).not.toContainEqual({ op: 'dropShot', shotNumber: 2 });
+  });
+});
+
 describe('v12.248 describeIntents / hasDestructiveIntent', () => {
   it('翻成人话', () => {
     const desc = describeIntents([

@@ -52,6 +52,29 @@ export function extractShotNumbers(text: string): number[] {
 const FAST_WORDS = ['快节奏', '快一点', '快点', '燃', '爽', '热血', '紧凑', '动感', '高能', '爆款', '鬼畜', 'fast', 'faster', 'snappy'];
 const SLOW_WORDS = ['慢一点', '慢点', '放慢', '舒缓', '抒情', '文艺', '治愈', '唯美', '沉静', '留白', '悠长', 'slow', 'slower'];
 
+// 破坏性/镜级操作的动词表(删镜、重生镜、重配音)。这些操作花钱或不可逆,判定必须严谨:
+// ① 动词与镜号要限定在**同一分句**(否则「删掉第1镜,第2镜调暗」会把全局 wantsDrop 套到第2镜);
+// ② 要认**否定**(「不要删第3镜」绝不能发出删除意图 —— 宁可漏,不可反向删)。
+const DROP_RE = /删掉|删除|去掉|删了|拿掉|移除|remove|delete|drop/;
+const REGEN_RE = /重画|重生|重新生成|改一下|改得|调暗|调亮|更暗|更亮|重拍|redo|regen|regenerate/;
+const REVOICE_RE = /重新配音|重配音|换配音|再配一次|重录|revoice|re-?voice/;
+// 否定词(出现在动词**之前**才算否定该动词,避免「改暗一点别太暗」里的「别」误伤)。
+const NEG_RE = /不要|不用|不想|不准|不删|不去|别|勿|请勿|甭|无需|don'?t|do ?not|no need/i;
+
+/** 按标点把一句话切成分句(动词/否定的作用域边界)。不切「和/与」—— 那是同动词的多镜号连接。 */
+function splitClauses(text: string): string[] {
+  return (text || '').split(/[,,、;;。!!??\n\r]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** 分句里 `verbRe` 是否被否定:否定词出现在动词**之前**(索引更早)才算。 */
+function isNegatedBefore(clause: string, verbRe: RegExp): boolean {
+  const neg = clause.match(NEG_RE);
+  if (!neg) return false;
+  const verb = clause.match(verbRe);
+  if (!verb) return false;
+  return (neg.index ?? 0) <= (verb.index ?? Number.MAX_SAFE_INTEGER);
+}
+
 /** 主解析:自然语言 → 编辑意图列表(可多条)。纯函数,不执行。 */
 export function parseEditIntent(text: string): EditIntentResult {
   const t = (text || '').toLowerCase();
@@ -69,9 +92,10 @@ export function parseEditIntent(text: string): EditIntentResult {
   else if (/社交|social/.test(t)) push({ op: 'setCaptionStyle', value: 'social' });
   else if (/简洁字幕|干净字幕|clean|素字幕/.test(t)) push({ op: 'setCaptionStyle', value: 'clean' });
 
-  // 平台安全区
+  // 平台安全区。小红书英文名「RED」太短、易撞词(alf-red / hat-red / 甚至颜色 red)——
+  // 只认 rednote / 小红书 / xiaohongshu / xhs 这些不会误伤的写法,不收裸 red。
   if (/抖音|douyin|tiktok/.test(t)) push({ op: 'setPlatform', value: 'douyin' });
-  else if (/小红书|xiaohongshu|xhs|red\b/.test(t)) push({ op: 'setPlatform', value: 'xiaohongshu' });
+  else if (/小红书|xiaohongshu|rednote|xhs/.test(t)) push({ op: 'setPlatform', value: 'xiaohongshu' });
 
   // 画幅
   if (/竖屏|竖版|9:16|9：16|vertical|portrait/.test(t)) push({ op: 'setAspect', value: '9:16' });
@@ -81,16 +105,32 @@ export function parseEditIntent(text: string): EditIntentResult {
   if (FAST_WORDS.some((w) => t.includes(w))) push({ op: 'setPace', value: 'fast' });
   else if (SLOW_WORDS.some((w) => t.includes(w))) push({ op: 'setPace', value: 'slow' });
 
-  // 重配音
-  if (/重新配音|重配音|换配音|再配一次|重录|revoice|re-?voice/.test(t)) push({ op: 'regenVoiceover' });
+  // ——— 破坏性操作:逐分句处理,动词/否定/镜号都限定在同一分句内 ———
+  const clauses = splitClauses(raw);
 
-  // 删镜 / 重生镜(带镜号)
-  const shots = extractShotNumbers(raw);
-  const wantsDrop = /删掉|删除|去掉|删了|拿掉|移除|remove|delete|drop/.test(t);
-  const wantsRegen = /重画|重生|重新生成|改一下|改得|调暗|调亮|更暗|更亮|重拍|redo|regen|regenerate/.test(t);
-  for (const n of shots) {
-    if (wantsDrop) push({ op: 'dropShot', shotNumber: n });
-    else if (wantsRegen) push({ op: 'regenShot', shotNumber: n, note: raw.trim().slice(0, 200) });
+  // 重配音(全局动作,无镜号):任一分句命中且未被否定才发。
+  if (clauses.some((c) => REVOICE_RE.test(c.toLowerCase()) && !isNegatedBefore(c.toLowerCase(), REVOICE_RE))) {
+    push({ op: 'regenVoiceover' });
+  }
+
+  // 删镜 / 重生镜(带镜号):每个分句用**自己**的动词判定,互不串扰;否定则整条跳过。
+  for (const clause of clauses) {
+    const ct = clause.toLowerCase();
+    const segShots = extractShotNumbers(clause);
+    if (!segShots.length) continue;
+
+    const wantsDrop = DROP_RE.test(ct);
+    const wantsRegen = REGEN_RE.test(ct);
+    if (!wantsDrop && !wantsRegen) continue;
+
+    // 否定该分句里的破坏性动词 → 绝不发出意图(避免「不要删第3镜」被反向执行)。
+    if (wantsDrop && isNegatedBefore(ct, DROP_RE)) continue;
+    if (!wantsDrop && wantsRegen && isNegatedBefore(ct, REGEN_RE)) continue;
+
+    for (const n of segShots) {
+      if (wantsDrop) push({ op: 'dropShot', shotNumber: n });
+      else push({ op: 'regenShot', shotNumber: n, note: clause.trim().slice(0, 200) });
+    }
   }
 
   return { intents, unmatched: intents.length === 0 };
