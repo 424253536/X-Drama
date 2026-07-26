@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '../../../auth/lib';
 import { listSeriesEpisodesFull, setEpisodeStatus } from '@/lib/repos/series-repo';
 import { selectGeneratableEpisodes } from '@/lib/series';
+import { buildSeriesRecap, buildRecapDirective } from '@/lib/series-recap';
 import { runPool } from '@/lib/season-orchestrator';
 
 export const runtime = 'nodejs';
@@ -48,8 +49,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
 
   // 每集 → CreatePipelineInput(premise 作创意 + 继承锚点一致性资产)
-  const inputFor = (ep: typeof targets[number]) => ({
-    idea: (ep.description || ep.title || '').slice(0, 2000),
+  const inputFor = (ep: typeof targets[number]) => {
+    // v12.244:多集连续 —— 给本集 Writer 注入前几集前情提要(取自全部集 all 的前序 description,
+    // 无先后依赖),让剧本真正承接而非各集独立成篇。第 1 集无前情 → directive 为空 → 零影响。
+    const recap = buildSeriesRecap(all, ep.episode_number);
+    const directive = buildRecapDirective(recap);
+    const ownIdea = (ep.description || ep.title || '').slice(0, 2000);
+    return {
+    idea: directive ? `${directive}${ownIdea}` : ownIdea,
+    seriesRecap: recap || undefined, // 也单独透传,供管线/展示需要时用
     projectId: ep.id,
     aspect: ep.aspect || '16:9',
     style: ep.style_id || undefined,
@@ -57,7 +65,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     lockedCharacters: parseArr(ep.locked_characters),
     enableGates: false,
     language, // v12.165:整季统一制作语言
-  });
+    };
+  };
 
   // 先标 active —— 前端轮询立即看到「生成中」,并防重复触发
   for (const ep of targets) await setEpisodeStatus(ep.id, 'active');

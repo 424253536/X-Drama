@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.243**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.244**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.243**:**vitest 3359 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.244**:**vitest 3369 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,15 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.244.0** | 2026-07-24 | `54cd917` | **🎬 回归产品线:多集连续生成 —— 补上「剧情记忆」**。连续 26 版(v12.218-243)全是安全加固/门禁,本版转回产品功能,按竞品升级方案挑了矩阵里我方长期标 ❌ 的**「多集连续生成」**。
+
+**差距实质**:series 虽能批量出片,但 `series generate` 给每集喂的 idea **只有该集自己的 description** ——第 5 集的 Writer 根本不知道第 1~4 集演了什么,结果各集独立成篇:伏笔不回收、角色状态不延续、甚至剧情矛盾或重复。红果/OiiOii 能做 60~100 集连续,差的正是这层「剧情记忆」。
+
+**做法**:新增 `lib/series-recap.ts`(纯函数)——为第 N 集构造「前情提要」(前序各集 description,按集号升序、单集截断 220 字、总量 1600 字上限时**保留最近的集**近因优先),包成带**承接纪律**的指令块(延续人物关系/不重复已发生/可回收伏笔/与前情事实一致),内联进该集 idea 前。`series generate` 从**全部集 all**(非 targets,故 force 重生单集时前情仍完整)逐集注入;`CreatePipelineInput` 加 `seriesRecap` 字段留存。
+
+**为什么用大纲描述而非已生成剧本**:批量生成并发/乱序,第 5 集入队时第 4 集可能没跑完 —— 而各集 description 在建系列时由 `series-ai` 拆成连贯大纲、早已定稿,**无先后依赖**,可靠即时。**第 1 集无前情 → 指令块为空 → 零影响**。
+
+**验收**:tsc 0 + 全量 **3369/3369**(401 文件)+ 门禁零违规;新增 `v12-244-series-recap.test.ts` 10 例(首集零影响/前序升序/乱序修正/title 兜底/null 容错/近因保留/单集截断/接线核对);**端到端实测**:第 1 集 idea 干净,第 3 集带完整前情 + 承接纪律。 |
 | **v12.243.0** | 2026-07-24 | `bcf1109` | **🦷 把 `RUNTIME_ONLY_GAPS` 从「登记盲区」升级为「有牙齿的遍历式守卫」**。门禁的契约表里登记了三类静态查不到、只能靠运行时测试守的病 —— 但那只是**文档式登记**,其中「组件注册了但从未被执行」(v12.238 两个 image provider 注册了却因 plugin chain 默认 off 一次没跑)此前只有一个**用探针验机制**的测试。探针测「机制对不对」,测不到「**每个真实 provider** 都被机制覆盖」——有人加第三个 provider 但 `available()` 写反、或 priority 排到内置之后导致永远选不到,探针测试照样绿。
 
 **新增 `tests/v12-243-provider-reachability.test.ts`**:**反射式遍历三个真实注册表**(image/video/tts 的 `list*Providers()`),逐个断言「当 provider available() 为真时,`selectProviders` 真能把它选出来」。加新 provider **自动纳入**,不依赖谁记得补用例 —— 直击整段加固史的核心教训「靠人记得总会失效」。image 那条再往前推一步:注册一个 available 的自定义 provider,验证 `withImagePlugin` **真的调用**它的 generate(v12.238 的病正卡在 selectProviders 之后、真正调用之前)。

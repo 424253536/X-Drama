@@ -51,6 +51,8 @@ export interface CreatePipelineInput {
   editStyle?: string;
   /** v12.134 issue #2:显式选剧本语言(code/别名,如 'ru'/'en'/'俄语');'auto'/空 → 自动检测。 */
   language?: string;
+  /** v12.244:多集连续 —— 前情提要(前几集梗概),已内联进 idea,这里单独留存供展示/日志。 */
+  seriesRecap?: string;
   /** v12.143(对标阅文分镜面板):全片草图锁 —— 每镜先出构图草图再锁构图渲染(每镜多一次出图)。 */
   sketchLock?: boolean;
 }
