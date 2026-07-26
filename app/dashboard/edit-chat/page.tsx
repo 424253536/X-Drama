@@ -1,26 +1,31 @@
 'use client';
 
 /**
- * /dashboard/edit-chat · 对话式编辑台(v12.250 前端入口 → v12.248 /api/edit-intent/parse)
+ * /dashboard/edit-chat · 对话式编辑台(v12.251:解析 → 真执行闭环)
  *
- * 对话式编辑的前端入口:对成片用自然语言说「删掉第3镜,改成竖屏卡点字幕,节奏快一点」→
- * 后端解析成一组**编辑意图** → 本页渲染成「我将:①… ②…」确认卡。
+ * 对成片用自然语言说「删掉第3镜,改成竖屏卡点字幕」→ 解析成编辑意图 → 「我将:①②③」确认卡 →
+ * 选一个项目 + 确认 → 组合级编辑经 `POST /api/projects/[id]/recompose` **真正重合成成片**。
  *
- * 安全契约(与后端一致):解析**不执行**。破坏性意图(删镜/重生/重配音)标红并要求二次确认。
- * 「确认执行」当前禁用 —— 执行需接线到既有 recompose / regenerate-shot 端点,是下一步(页内如实标注)。
+ * 安全契约:解析只读;破坏性操作(删镜/重配音/重生镜)走**两步确认**(先亮红,再点才执行)。
+ * recompose 端点自身还有属主守卫 + 白名单校验(防御纵深)。重生镜/节奏调整不在 recompose 内,
+ * 页内如实指路(去项目页重生 / 整片重跑),不假装已执行。
  */
 
-import { useState } from 'react';
-import { ChatText, PaperPlaneRight, Warning as AlertTriangle, CircleNotch as Loader2, CheckCircle, ShieldWarning } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+import { ChatText, PaperPlaneRight, Warning as AlertTriangle, CircleNotch as Loader2, CheckCircle, ShieldWarning, FilmSlate, Download } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
+import { api } from '@/lib/api-client';
+import type { EditOp } from '@/lib/edit-intent';
+import { planExecution, type ExecutionPlan } from '@/lib/edit-intent-execute';
 
 interface ParseResult {
-  intents: unknown[];
+  intents: EditOp[];
   describe: string[];
   destructive: boolean;
   unmatched: boolean;
   hint?: string;
 }
+interface ProjectLite { id: string; title: string; status?: string; }
 
 const EXAMPLES = [
   '删掉第3镜,改成竖屏卡点字幕',
@@ -36,6 +41,35 @@ export default function EditChatPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const { showToast } = useToast();
 
+  // v12.251 执行态
+  const [projects, setProjects] = useState<ProjectLite[]>([]);
+  const [projectId, setProjectId] = useState('');
+  const [executing, setExecuting] = useState(false);
+  const [armed, setArmed] = useState(false);           // 破坏性两步确认:先亮红再执行
+  // v12.251 复检修:arm 后短暂禁用按钮(冷却),让**双击**的第二击落空 —— 否则一次双击会
+  // 「arm→立刻执行」一气呵成绕过两步确认(React 在两个 click 宏任务间已提交 armed=true)。
+  const [cooldown, setCooldown] = useState(false);
+  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [resultVideoUrl, setResultVideoUrl] = useState('');
+  const [execError, setExecError] = useState('');
+
+  useEffect(() => {
+    api.projects()
+      .then((rows: any) => setProjects((Array.isArray(rows) ? rows : []).map((r: any) => ({ id: r.id, title: r.title, status: r.status }))))
+      .catch(() => { /* 列表拉取失败不致命,用户仍可解析预览 */ });
+  }, []);
+  useEffect(() => () => { if (cooldownRef.current) clearTimeout(cooldownRef.current); }, []);
+
+  const plan: ExecutionPlan | null = result && !result.unmatched ? planExecution(result.intents) : null;
+
+  // 解除武装:清 armed + 冷却 + 计时器。切项目 / 重解析都要归零,防「上一条破坏性指令的 armed」被下一条复用。
+  const disarm = () => {
+    setArmed(false);
+    setCooldown(false);
+    if (cooldownRef.current) { clearTimeout(cooldownRef.current); cooldownRef.current = null; }
+  };
+  const resetExec = () => { disarm(); setResultVideoUrl(''); setExecError(''); };
+
   const parse = async (override?: string) => {
     const q = (override ?? text).trim();
     if (!q) { showToast({ title: '先说一句要改什么', type: 'error' }); return; }
@@ -43,6 +77,7 @@ export default function EditChatPage() {
     setParsing(true);
     setErrorMsg('');
     setResult(null);
+    resetExec();
     try {
       const res = await fetch('/api/edit-intent/parse', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -73,6 +108,45 @@ export default function EditChatPage() {
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setParsing(false);
+    }
+  };
+
+  /** 执行组合级编辑(recompose)。破坏性操作需先 armed(第一次点只亮红,第二次才真跑)。 */
+  const execute = async () => {
+    if (!plan || !plan.recompose) return;
+    if (!projectId) { showToast({ title: '先选一个要修改的项目', type: 'error' }); return; }
+    if (cooldown) return; // 冷却期(刚 arm)内的点击一律忽略 —— 挡双击直冲执行。
+    // 两步确认:破坏性但未 armed → 只亮红 + 进冷却,不执行。第二次(冷却结束后)刻意点击才真跑。
+    if (plan.destructive && !armed) {
+      setArmed(true);
+      setCooldown(true);
+      if (cooldownRef.current) clearTimeout(cooldownRef.current);
+      cooldownRef.current = setTimeout(() => setCooldown(false), 600);
+      return;
+    }
+
+    setExecuting(true);
+    setExecError('');
+    setResultVideoUrl('');
+    try {
+      const res = await fetch(`/api/projects/${projectId}/recompose`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(plan.recompose),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.ok) {
+        const msg = body?.message || `重合成失败 (HTTP ${res.status})`;
+        setExecError(msg); showToast({ title: msg, type: 'error' });
+        return;
+      }
+      setResultVideoUrl(body.finalVideoUrl || '');
+      setArmed(false);
+      showToast({ title: '已重合成成片', type: 'success' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '网络错误,重合成失败';
+      setExecError(msg); showToast({ title: msg, type: 'error' });
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -152,23 +226,81 @@ export default function EditChatPage() {
                 <div className="flex items-start gap-2 rounded-lg bg-rose-500/10 border border-rose-500/25 px-3 py-2 mb-4">
                   <ShieldWarning className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" weight="duotone" />
                   <span className="text-[12px] text-rose-200/90">
-                    含删镜 / 重生 / 重配音等**花钱或不可逆**操作 —— 执行前需你二次确认。
+                    含删镜 / 重生 / 重配音等**花钱或不可逆**操作 —— 需点两次确认才执行。
                   </span>
                 </div>
               )}
 
-              {/* 执行按钮:后端骨架阶段禁用。保住「解析不执行」契约,不误导用户以为已生效。 */}
-              <button
-                disabled
-                title="执行链路(映射到既有 recompose / regenerate-shot)接线中,当前仅解析预览"
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-[var(--soft)] font-medium cursor-not-allowed inline-flex items-center justify-center gap-2"
-              >
-                确认执行(接线中)
-              </button>
-              <p className="text-[11px] text-[var(--soft)] mt-3 opacity-70 leading-relaxed">
-                ✦ 下一步:把这些意图接到既有 recompose / regenerate-shot 端点执行;破坏性操作走二次确认弹窗。
-                本页是解析骨架,执行接线跟进。
-              </p>
+              {/* 另走流程/暂不执行的部分:如实指路,不假装已执行 */}
+              {plan && (plan.regenShots.length > 0 || plan.paceHint) && (
+                <div className="rounded-lg bg-amber-500/8 border border-amber-500/20 px-3 py-2 mb-4 text-[11px] text-amber-200/85 leading-relaxed space-y-1">
+                  {plan.regenShots.length > 0 && (
+                    <div>· 第 {plan.regenShots.map(r => r.shotNumber).join('、')} 镜需**重生画面**(慢、要预算)——请到项目页对应镜头点「重生」,本页不代跑。</div>
+                  )}
+                  {plan.paceHint && (
+                    <div>· 「节奏{plan.paceHint === 'fast' ? '快' : '慢'}一点」需整片重跑(recompose 不改节奏),本页暂不执行。</div>
+                  )}
+                </div>
+              )}
+
+              {/* 项目选择 + 执行(仅组合级 recompose 可在本页直接跑) */}
+              {plan?.recompose ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] text-[var(--soft)] uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                      <FilmSlate className="w-3.5 h-3.5" /> 对哪个项目的成片执行
+                    </label>
+                    <select
+                      value={projectId}
+                      onChange={e => { setProjectId(e.target.value); disarm(); }}
+                      className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-sm"
+                    >
+                      <option value="">— 选择项目 —</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.title}{p.status ? ` · ${p.status}` : ''}</option>
+                      ))}
+                    </select>
+                    {projects.length === 0 && <div className="text-[10px] text-[var(--soft)] mt-1 opacity-60">还没有项目 —— 先去创作工坊出一片。</div>}
+                  </div>
+
+                  <button
+                    onClick={execute}
+                    disabled={executing || !projectId || cooldown}
+                    className={`w-full px-4 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      armed ? 'bg-rose-500 hover:bg-rose-500/90 text-white' : 'bg-[#E8C547] hover:bg-[#E8C547]/90 text-black'
+                    }`}
+                  >
+                    {executing
+                      ? (<><Loader2 className="w-4 h-4 animate-spin" /> 重合成中…</>)
+                      : cooldown
+                        ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> 确认删改?稍候…</>)
+                        : armed
+                          ? (<><ShieldWarning className="w-4 h-4" weight="bold" /> 确认执行(含不可逆操作)</>)
+                          : (<><CheckCircle className="w-4 h-4" weight="bold" /> {plan.destructive ? '执行(将二次确认)' : '确认执行'}</>)}
+                  </button>
+                  {armed && !executing && (
+                    <div className="text-[11px] text-rose-300/80 text-center">
+                      {cooldown ? '请稍候,确认按钮即将就绪…' : '这条含不可逆操作,再刻意点一次确认;或'}
+                      {!cooldown && <button onClick={disarm} className="underline ml-1 hover:text-rose-200">取消</button>}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--soft)] mt-1 opacity-70">本条指令没有可在此直接执行的组合级编辑(见上方指路)。</p>
+              )}
+
+              {/* 执行结果 */}
+              {execError && <div className="mt-3 text-[12px] text-rose-300">✕ {execError}</div>}
+              {resultVideoUrl && (
+                <div className="mt-4">
+                  <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><CheckCircle className="w-4 h-4" weight="duotone" /> 重合成完成</div>
+                  <video src={resultVideoUrl} controls className="w-full rounded-xl bg-black/40 max-h-[420px]" />
+                  <a href={resultVideoUrl} target="_blank" rel="noopener"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
+                    <Download className="w-3.5 h-3.5" /> 打开 / 下载成片
+                  </a>
+                </div>
+              )}
             </div>
           )
         ) : (

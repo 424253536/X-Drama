@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.250**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.251**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.250**:**vitest 3432 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.251**:**vitest 3443 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,15 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.251.0** | 2026-07-26 | `e7b7e83` | **🔗 对话式编辑执行闭环(说一句 → 真改片,三模式执行链之一)**。此前 edit-chat 只解析、「确认执行」禁用;本版接通:解析 → 选项目 → 确认 → **组合级编辑经既有 `POST /api/projects/[id]/recompose` 真重合成成片**并内嵌播放/下载。
+
+**纯映射层** `lib/edit-intent-execute.ts`(`planExecution`,7 例单测):意图 → 执行计划。组合级(画幅/字幕/平台/删镜/重配音)合并成**一次 recompose**;重生镜(regenShot)单列(慢、要预算,另走既有逐镜重生);节奏(setPace)recompose 不支持,仅提示。recompose 端点自带属主守卫 + aspect/captionStyle/platform 白名单校验 → 本映射是防御纵深一环。
+
+**安全 · 破坏性两步确认**:删镜/重配音/重生镜 → 第一次点只「亮红 + 进冷却」,第二次刻意点击才真跑;切项目 / 重解析都 `disarm` 归零(防上一条 armed 被下一条复用)。重生镜/节奏**如实指路**(去项目页重生 / 整片重跑),不假装已执行。
+
+**对抗复检**(3 lens:破坏性门/映射诚实/运行健壮 + 逐条验证)查出并修 **1 high**:执行按钮 arm 后未禁用 → **双击**会「arm→立刻执行」一气呵成绕过两步确认(React 在两个 click 宏任务间已提交 `armed=true`)。修法:arm 后 600ms 冷却禁用按钮 + `execute` 内冷却期忽略点击,双击第二击落空,确认必须刻意。
+
+**验收**:tsc 0 + `next build` 通过 + 全量 **3443/3443**(409 文件)+ 门禁零违规;新增 `v12-251-edit-intent-execute`(7 映射 + 4 接线/防双击锁)。 |
 | **v12.250.0** | 2026-07-26 | `3bdef08` | **🎬 C 三新模式接上前端入口(MV / 漫转 / 对话式编辑)**。此前 v12.246–248 是三个后端骨架端点,本版给它们各接一个工具页 + 侧边栏入口,复刻既有 u2v 工具页的设计语言(暗色 + 金 #E8C547 + glass 卡),用户真正点得到。
 
 **三入口**:① `/dashboard/mv`「MV 卡点」——填音乐时长/BPM/每镜拍数 → 调 `/api/mv/plan` → 卡点色带(按段落配色)+ 明细表(起止/时长/对齐拍)。② `/dashboard/comic`「漫转视频」——传漫画(先经 `/api/upload/character-face` 落地,继承 SSRF/验签/白名单)→ 调 `/api/comic/panels` → 分格框百分比定位叠在原图上 + 明细表。③ `/dashboard/edit-chat`「对话式编辑」——自然语言 → 调 `/api/edit-intent/parse` → 「我将:①②③」确认卡,破坏性意图标红。**安全契约**:edit-chat「确认执行」按钮**禁用**(骨架阶段),保住「解析不执行」,不误导已生效。
