@@ -6,16 +6,18 @@
  * 漫转视频模式的前端入口:传一张漫画 → 后端用投影法自动**分格**(检出每格边界框)→
  * 本页把格子框叠在原图上可视化。
  *
- * 诚实边界:本页只做**分格**(切出每格)。每格裁图 → u2v 加动效 → 卡点拼接成动态漫剧
- * 复用既有 generateVideo / video-composer,是下一步(页内如实标注)。
+ * 诚实边界:分格 → **裁图**(v12.252,sharp 真裁出每格)→ 每格图交给单图变视频(u2v)加动效 →
+ * 卡点拼接成动态漫剧。本页做到「分格 + 裁图 + 一键交接 u2v」;拼接复用既有 video-composer,是下一步。
  * 投影法对条漫/规则网格准;不规则跨栏布局切不准(需 CV,暂不支持),后端 hint 会提示。
  */
 
 import { useRef, useState } from 'react';
-import { Upload, Link as LinkIcon, GridFour, Warning as AlertTriangle, CircleNotch as Loader2, Rows } from '@phosphor-icons/react';
+import { Upload, Link as LinkIcon, GridFour, Warning as AlertTriangle, CircleNotch as Loader2, Rows, Scissors, FilmReel, Download } from '@phosphor-icons/react';
+import Link from 'next/link';
 import { useToast } from '@/components/ui/toast-provider';
 
 interface Panel { x: number; y: number; w: number; h: number; row: number; col: number; }
+interface CroppedPanel extends Panel { url: string; }
 
 // 分格框轮换配色(相邻格不同色,肉眼好数)。
 const BOX_COLORS = ['#E8C547', '#4A7EBB', '#3F8F7A', '#C4576D', '#9B6DC4', '#D4883B'];
@@ -32,6 +34,10 @@ export default function ComicPanelsPage() {
   const [summary, setSummary] = useState('');
   const [hint, setHint] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  // v12.252 裁图态
+  const [cropping, setCropping] = useState(false);
+  const [cropped, setCropped] = useState<CroppedPanel[] | null>(null);
+  const [cropError, setCropError] = useState('');
   const { showToast } = useToast();
 
   const uploadFile = async (file: File) => {
@@ -73,12 +79,12 @@ export default function ComicPanelsPage() {
     }
   };
 
-  const resetResult = () => { setPanels(null); setSummary(''); setHint(''); setErrorMsg(''); setNatural(null); };
+  const resetResult = () => { setPanels(null); setSummary(''); setHint(''); setErrorMsg(''); setNatural(null); setCropped(null); setCropError(''); };
 
   const detect = async () => {
     if (!imageUrl) { showToast({ title: '先上传一张漫画图', type: 'error' }); return; }
     setDetecting(true);
-    setPanels(null); setErrorMsg(''); setHint('');
+    setPanels(null); setErrorMsg(''); setHint(''); setCropped(null); setCropError('');
     try {
       const res = await fetch('/api/comic/panels', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -99,6 +105,39 @@ export default function ComicPanelsPage() {
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setDetecting(false);
+    }
+  };
+
+  /** 裁图:把检出的每格从原图真正裁出来,得到可喂给单图变视频的素材图。 */
+  const crop = async () => {
+    if (!imageUrl) return;
+    setCropping(true);
+    setCropped(null); setCropError('');
+    try {
+      const res = await fetch('/api/comic/crop', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.ok) {
+        const msg = body?.message || `裁图失败 (HTTP ${res.status})`;
+        setCropError(msg); showToast({ title: msg, type: 'error' });
+        return;
+      }
+      const list: CroppedPanel[] = Array.isArray(body.panels) ? body.panels : [];
+      setCropped(list);
+      if (list.length === 0) {
+        // 0 格不是「成功裁出 0 格」—— 把后端 hint 显出来,给 warning 而非 success,别误导。
+        const msg = body.hint || '未裁出格子(不规则布局投影法切不准)';
+        setCropError(msg); showToast({ title: '未裁出格子', type: 'warning' });
+      } else {
+        showToast({ title: `已裁出 ${body.count} 格`, type: 'success' });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '网络错误,裁图失败';
+      setCropError(msg); showToast({ title: msg, type: 'error' });
+    } finally {
+      setCropping(false);
     }
   };
 
@@ -226,8 +265,47 @@ export default function ComicPanelsPage() {
                 <div className="text-[13px] text-[var(--soft)] py-4">没检出格子。</div>
               )}
               {hint && <p className="text-[11px] text-amber-300/80 mt-3 leading-relaxed">⚠ {hint}</p>}
+
+              {/* v12.252 裁图:把每格裁成真图,再一键交给单图变视频加动效 */}
+              {panels.length > 0 && (
+                <button
+                  onClick={crop}
+                  disabled={cropping}
+                  className="mt-4 w-full px-4 py-2 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
+                >
+                  {cropping ? (<><Loader2 className="w-4 h-4 animate-spin" /> 裁图中…</>) : (<><Scissors className="w-4 h-4" weight="bold" /> 裁切分格图</>)}
+                </button>
+              )}
+              {cropError && <div className="mt-2 text-[12px] text-rose-300">✕ {cropError}</div>}
+
+              {cropped && cropped.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[12px] text-white font-medium mb-2">分格图({cropped.length})—— 每格可下载,或直接送去加动效:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {cropped.map((c, i) => (
+                      <div key={i} className="rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                        <img loading="lazy" decoding="async" src={c.url} alt={`分格 ${i + 1}`} className="w-full h-auto object-contain bg-black/30" />
+                        <div className="flex items-center justify-between px-2 py-1.5 gap-1">
+                          <span className="text-[10px] text-[var(--soft)]">第 {i + 1} 格</span>
+                          <div className="flex items-center gap-1.5">
+                            <a href={c.url} target="_blank" rel="noopener" title="下载此格" className="text-[var(--soft)] hover:text-white"><Download className="w-3.5 h-3.5" /></a>
+                            <Link
+                              href={`/dashboard/u2v?image=${encodeURIComponent(c.url)}`}
+                              title="用此格做单图变视频"
+                              className="inline-flex items-center gap-1 text-[10px] text-[#E8C547] hover:text-[#E8C547]/80"
+                            >
+                              <FilmReel className="w-3.5 h-3.5" /> 动效
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <p className="text-[11px] text-[var(--soft)] mt-3 opacity-70 leading-relaxed">
-                ✦ 下一步:每格裁图 → 单图变视频加动效 → 卡点拼接成动态漫剧(复用既有链路)。
+                ✦ 流程:分格 → 裁图(本页)→ 每格「单图变视频」加动效 → 卡点拼接成动态漫剧(拼接复用既有 video-composer,跟进中)。
               </p>
             </div>
           ) : (

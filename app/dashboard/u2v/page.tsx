@@ -60,6 +60,18 @@ export default function U2VPage() {
   // 清理计时器
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
+  // v12.252:支持 ?image=<url> 预填(漫转分格台「→ 单图变视频」交接用)。
+  // 用 window.location 读,避免 useSearchParams 触发的 Suspense 边界要求;仅接受同站 serve-file / data / http(s)。
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('image');
+      if (q && /^(\/api\/serve-file|data:|https?:)/.test(q)) {
+        setImageUrl(q);
+        setImagePreview(q);
+      }
+    } catch { /* noop */ }
+  }, []);
+
   /** 启动时间估算进度: 渐近逼近 95%, 不会卡死在固定值. 真结果到达后由调用方拉到 100. */
   const startProgressTimer = (durationSel: number) => {
     const expected = EXPECTED_SEC[durationSel] || 120;

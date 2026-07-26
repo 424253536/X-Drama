@@ -21,6 +21,54 @@ import { getStorageDriver, LOCAL_STORAGE_ROOT } from './storage';
 // v10.4.4: 目录常量统一收口到 lib/storage(写侧 adapter 与读侧 resolveByKey 同源)
 const STORAGE_ROOT = LOCAL_STORAGE_ROOT;
 
+/**
+ * v12.253(对抗复检):出站抓取的**单文件字节上限**。此前 http(s) 分支直接
+ * `Buffer.from(await resp.arrayBuffer())`,无任何大小限制 —— 登录用户传一个超大图/视频 URL
+ * 就能把整份 payload 灌进 Node 堆,几个并发即 OOM。默认 64MB(足够高清漫画/短视频封面),
+ * 可用 ASSET_MAX_REMOTE_BYTES 覆盖。
+ */
+export const MAX_REMOTE_BYTES = (() => {
+  const n = Number(process.env.ASSET_MAX_REMOTE_BYTES);
+  return Number.isFinite(n) && n > 0 ? n : 64 * 1024 * 1024;
+})();
+
+/**
+ * 流式读取 Response body,累计字节超过 maxBytes 即中止并返回 null(只会驻留约 maxBytes+一个 chunk,
+ * 不会全量入堆)。用于给「按内容 hash 落地」的出站抓取限流。会先看 Content-Length(诚实大文件早拒),
+ * 再流式兜底(挡撒谎/chunked)。
+ */
+export async function readBodyCapped(resp: Response, maxBytes: number): Promise<Buffer | null> {
+  const declared = Number(resp.headers.get('content-length') || '');
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+
+  const body = resp.body as ReadableStream<Uint8Array> | null;
+  if (!body) {
+    // 无可读流(少见):退回 arrayBuffer,但读后校验大小(此路径仍可能瞬时入堆,故仅兜底)
+    const buf = Buffer.from(await resp.arrayBuffer());
+    return buf.length > maxBytes ? null : buf;
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          try { await reader.cancel(); } catch { /* noop */ }
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    try { reader.releaseLock(); } catch { /* noop */ }
+  }
+  return Buffer.concat(chunks);
+}
+
 // 确保目录存在(只在首次调用时创建)
 let storageEnsured = false;
 function ensureStorage() {
@@ -145,7 +193,13 @@ export async function persistAsset(
         return null;
       }
       contentType = contentType || resp.headers.get('content-type') || '';
-      buffer = Buffer.from(await resp.arrayBuffer());
+      // v12.253:限流读取,超 MAX_REMOTE_BYTES 即中止(防超大远端文件 OOM)。
+      const capped = await readBodyCapped(resp, MAX_REMOTE_BYTES);
+      if (!capped) {
+        console.warn(`[asset-storage] 远端文件超过 ${MAX_REMOTE_BYTES}B 上限或过大,拒:${sourceUrl.slice(0, 80)}`);
+        return null;
+      }
+      buffer = capped;
     } else {
       // 绝对文件路径 fallback —— v12.237(第四轮对抗复检):此前直接 readFileSync 任意路径,
       // 无白名单。而 cameo 等入口的 imageUrl 无前缀校验,用户传裸 `/etc/passwd` 就走这里读任意文件
