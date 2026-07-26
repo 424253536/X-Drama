@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.246**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.247**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.246**:**vitest 3387 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.247**:**vitest 3403 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,15 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.247.0** | 2026-07-24 | `62c108a` | **🖼️ 新创作模式 · 漫转视频(C 项之二,后端骨架)**。继 MV(v12.246)之后按「1、2、3 依次做」推进第二个:漫画图 → 每格加动效 → 动态漫剧。
+
+**独特第一步 = 漫画自动分格**(和 MV 的卡点算法对等的核心)。用**投影法**、零 ML:漫画格子间有留白 gutter,把图投影成「每行/每列暗像素密度」(白底黑线,暗=内容),密度近 0 的连续行/列就是 gutter,gutter 之间即格子。纯像素级、确定性、可测。
+
+**分层**:`lib/comic-panels.ts`(纯函数)——密度数组 → 格子边界框:一维 `findContentBands`(gutter 检测,含 minGutter 过滤格内小空白、minBand 过滤噪点条)+ 二维 `splitIntoPanels`(先切行带、**每行带内重算列密度**再切格 —— 整页列投影会把上下格叠一起切不准)。`lib/comic-panels-extract.ts`(sharp 薄层)—— 灰度+限尺寸提密度,结果换算回原图坐标。`POST /api/comic/panels`(登录守卫;imageUrl 走 `persistAsset` 落地 → **SSRF/验签/白名单防护全继承**,不重造)。
+
+**诚实边界**:投影法对**条漫(竖向单列多格)**和**规则网格(四格/六格)**很准 —— 正是漫转最常见两类输入;**不规则跨栏布局**(斜切格/大格叠小格)切不准,需 CV 版面分析(重),本版不做、端点 hint 里如实提示。每格裁图 → u2v 加动效 → 拼接是下一步,复用既有 generateVideo/video-composer;前端入口跟进。
+
+**验收**:tsc 0 + 全量 **3403/3403**(406 文件)+ 门禁零违规;新增 `v12-247-comic-panels`(11 例算法)、`v12-247-comic-extract`(2 例:sharp 合成「上下两格」图端到端切出 2 格)、`v12-247-comic-panels-route`(3 例端点:鉴权/校验/裸路径拒)。 |
 | **v12.246.0** | 2026-07-24 | `4fd7b52` | **🎵 新创作模式 · MV 音乐视频(C 项之一,后端骨架)**。核实 A/B/C 后:A 竞品刷新已交付、B 时间线编辑器早已完整存在(cinema-timeline 1183 行,矩阵是旧快照)、C 里剧集/快剪/IP衍生也都已做 —— C 真正缺的是 **MV** 与**漫转视频**两个新模式。本版起按用户「1、2、3 依次做」推进,先落 **MV**。
 
 **为什么 MV 值得独立成模式**:现有全部模式(剧集/短视频/广告/长篇)都是**剧本驱动**(故事→拆镜→配时长);MV 是唯一**音乐驱动**的 —— 切点必须**卡在拍上**,段落(主歌/副歌)的节奏差异直接决定剪辑密度。这条主轴与剧本驱动正交。
