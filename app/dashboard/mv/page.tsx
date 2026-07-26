@@ -10,8 +10,8 @@
  * generateImage / u2v / video-composer,是下一步(页内如实标注)。
  */
 
-import { useState } from 'react';
-import { MusicNotes, Sparkle as Sparkles, Waveform, Warning as AlertTriangle, CircleNotch as Loader2 } from '@phosphor-icons/react';
+import { useRef, useState } from 'react';
+import { MusicNotes, Sparkle as Sparkles, Waveform, Warning as AlertTriangle, CircleNotch as Loader2, Upload, Images, FilmSlate, Download, X } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
 
 interface MvShot {
@@ -44,12 +44,24 @@ export default function MvPlanPage() {
   const [shots, setShots] = useState<MvShot[] | null>(null);
   const [summary, setSummary] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  // v12.253 出片态
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [musicUrl, setMusicUrl] = useState('');
+  const [composing, setComposing] = useState(false);
+  const [mvUrl, setMvUrl] = useState('');
+  const [composeError, setComposeError] = useState('');
+  // 出片用**生成时间轴那一刻的参数快照**,而非当前 live 输入 —— 否则用户改了 BPM 没重新规划,
+  // 合成出来的镜头数会和上面显示的时间轴对不上,却仍报「合成完成」(复检 medium)。
+  const [plannedParams, setPlannedParams] = useState<{ durationSec: number; bpm: number; beatsPerShot: number } | null>(null);
+  const imgRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
 
   const plan = async () => {
     setPlanning(true);
     setErrorMsg('');
     setShots(null);
+    setMvUrl(''); setComposeError('');
     try {
       const res = await fetch('/api/mv/plan', {
         method: 'POST',
@@ -64,12 +76,65 @@ export default function MvPlanPage() {
       }
       setShots(body.shots || []);
       setSummary(body.summary || '');
+      setPlannedParams({ durationSec, bpm, beatsPerShot }); // 快照:出片按这组参数,和显示的时间轴一致
       showToast({ title: `已规划 ${body.shotCount} 个卡点镜头`, type: 'success' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : '网络错误,规划失败';
       setErrorMsg(msg); showToast({ title: msg, type: 'error' });
     } finally {
       setPlanning(false);
+    }
+  };
+
+  const uploadImages = async (files: FileList) => {
+    setUploading(true);
+    try {
+      const added: string[] = [];
+      for (const file of Array.from(files).slice(0, 40)) {
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 10 * 1024 * 1024) { showToast({ title: `${file.name} 超过 10MB,跳过`, type: 'warning' }); continue; }
+        const form = new FormData();
+        form.append('file', file);
+        try {
+          const res = await fetch('/api/upload/character-face', { method: 'POST', body: form });
+          const body = await res.json().catch(() => ({}));
+          if (res.ok && body.url) added.push(body.url);
+          else showToast({ title: body.error || `${file.name} 上传失败`, type: 'error' });
+        } catch { showToast({ title: `${file.name} 上传失败,请检查网络`, type: 'error' }); }
+      }
+      if (added.length) setImages((prev) => [...prev, ...added].slice(0, 40));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const compose = async () => {
+    if (!shots || shots.length === 0 || !plannedParams) { showToast({ title: '先生成卡点时间轴', type: 'error' }); return; }
+    if (images.length === 0) { showToast({ title: '先上传至少一张画面', type: 'error' }); return; }
+    setComposing(true);
+    setMvUrl(''); setComposeError('');
+    try {
+      // 用快照参数,保证合成的镜头数 == 上面显示的时间轴(而非可能被改动的 live 输入)。
+      const res = await fetch('/api/mv/compose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          musicDurationSec: plannedParams.durationSec, bpm: plannedParams.bpm, beatsPerShot: plannedParams.beatsPerShot,
+          imageUrls: images, musicUrl: musicUrl.trim() || undefined, aspect: '9:16',
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.ok) {
+        const msg = body?.message || `合成失败 (HTTP ${res.status})`;
+        setComposeError(msg); showToast({ title: msg, type: 'error' });
+        return;
+      }
+      setMvUrl(body.finalVideoUrl || '');
+      showToast({ title: 'MV 已合成', type: 'success' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '网络错误,合成失败';
+      setComposeError(msg); showToast({ title: msg, type: 'error' });
+    } finally {
+      setComposing(false);
     }
   };
 
@@ -204,10 +269,68 @@ export default function MvPlanPage() {
               </table>
             </div>
 
-            <p className="text-[11px] text-[var(--soft)] mt-4 opacity-70 leading-relaxed">
-              ✦ 下一步:为每镜配画面(既有 generateImage / 单图变视频)→ 按此时间轴卡点拼接(既有 video-composer)。
-              本页是规划骨架,出片链路接线跟进。
-            </p>
+            {/* v12.253 出片:传画面 → 按卡点时间轴静帧动画 + 卡点硬切拼接 + 配乐 */}
+            <div className="mt-5 pt-4 border-t border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <FilmSlate className="w-4 h-4 text-[#E8C547]" weight="duotone" />
+                <span className="text-sm text-white font-medium">出片 · 给每镜配画面</span>
+              </div>
+              <p className="text-[11px] text-[var(--soft)] mb-3 opacity-70">
+                传几张画面(不够会循环用),每镜按卡点时长做 ken-burns 动效,再按此时间轴**硬切拼接**成竖屏 MV。可选配乐。
+              </p>
+
+              {/* 画面上传 */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {images.map((u, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                    <img loading="lazy" decoding="async" src={u} alt={`画面 ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                      title="移除" className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition"
+                    ><X className="w-2.5 h-2.5" /></button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => imgRef.current?.click()}
+                  disabled={uploading}
+                  className="w-16 h-16 rounded-lg border border-dashed border-white/20 grid place-items-center text-[var(--soft)] hover:bg-white/5 disabled:opacity-40"
+                  title="上传画面"
+                >
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                </button>
+                <input ref={imgRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={e => { if (e.target.files?.length) uploadImages(e.target.files); if (imgRef.current) imgRef.current.value = ''; }} />
+              </div>
+
+              {/* 配乐(可选) */}
+              <input
+                type="url" value={musicUrl} onChange={e => setMusicUrl(e.target.value)}
+                placeholder="配乐 URL(可选,http(s) 或站内 serve-file)"
+                className="w-full px-3 py-2 mb-3 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-xs"
+              />
+
+              <button
+                onClick={compose}
+                disabled={composing || images.length === 0}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
+              >
+                {composing ? (<><Loader2 className="w-4 h-4 animate-spin" /> 合成中…(每镜一次渲染,稍候)</>) : (<><Images className="w-4 h-4" weight="bold" /> 生成 MV({images.length} 张画面 × {shots.length} 镜)</>)}
+              </button>
+
+              {composeError && <div className="mt-2 text-[12px] text-rose-300">✕ {composeError}</div>}
+              {mvUrl && (
+                <div className="mt-4">
+                  <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> MV 合成完成</div>
+                  <video src={mvUrl} controls className="w-full rounded-xl bg-black/40 max-h-[460px]" />
+                  <a href={mvUrl} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
+                    <Download className="w-3.5 h-3.5" /> 打开 / 下载 MV
+                  </a>
+                </div>
+              )}
+              <p className="text-[11px] text-[var(--soft)] mt-3 opacity-60 leading-relaxed">
+                ✦ 画面也可来自「单图变视频」的成片或任意图库;想每镜用真视频片段而非静帧动效,是后续增强。
+              </p>
+            </div>
           </div>
         ) : (
           <div className="text-center text-[var(--soft)] text-sm opacity-60 py-10">
