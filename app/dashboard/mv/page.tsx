@@ -47,9 +47,13 @@ export default function MvPlanPage() {
   // v12.253 出片态
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  // v12.254 真视频片段:填了就用真片段(每段按拍裁切),留空则用上面的静帧动效
+  const [videoClips, setVideoClips] = useState<string[]>([]);
+  const [clipDraft, setClipDraft] = useState('');
   const [musicUrl, setMusicUrl] = useState('');
   const [composing, setComposing] = useState(false);
   const [mvUrl, setMvUrl] = useState('');
+  const [mvDuration, setMvDuration] = useState(0); // 成片实际时长,用于和规划时长比对(真片段短于卡点时会缩短)
   const [composeError, setComposeError] = useState('');
   // 出片用**生成时间轴那一刻的参数快照**,而非当前 live 输入 —— 否则用户改了 BPM 没重新规划,
   // 合成出来的镜头数会和上面显示的时间轴对不上,却仍报「合成完成」(复检 medium)。
@@ -61,7 +65,7 @@ export default function MvPlanPage() {
     setPlanning(true);
     setErrorMsg('');
     setShots(null);
-    setMvUrl(''); setComposeError('');
+    setMvUrl(''); setMvDuration(0); setComposeError('');
     try {
       const res = await fetch('/api/mv/plan', {
         method: 'POST',
@@ -108,18 +112,30 @@ export default function MvPlanPage() {
     }
   };
 
+  const addClip = () => {
+    const u = clipDraft.trim();
+    if (!u) return;
+    if (!/^(https?:\/\/|\/api\/serve-file)/.test(u)) { showToast({ title: '片段 URL 需为 http(s) 或站内 serve-file', type: 'error' }); return; }
+    setVideoClips((prev) => (prev.includes(u) ? prev : [...prev, u]).slice(0, 40));
+    setClipDraft('');
+  };
+
+  const useRealClips = videoClips.length > 0;
+
   const compose = async () => {
     if (!shots || shots.length === 0 || !plannedParams) { showToast({ title: '先生成卡点时间轴', type: 'error' }); return; }
-    if (images.length === 0) { showToast({ title: '先上传至少一张画面', type: 'error' }); return; }
+    if (!useRealClips && images.length === 0) { showToast({ title: '先上传画面,或添加真视频片段', type: 'error' }); return; }
     setComposing(true);
-    setMvUrl(''); setComposeError('');
+    setMvUrl(''); setMvDuration(0); setComposeError('');
     try {
       // 用快照参数,保证合成的镜头数 == 上面显示的时间轴(而非可能被改动的 live 输入)。
+      // 填了真片段就走真片段(每段按拍裁切),否则用静帧动效。
       const res = await fetch('/api/mv/compose', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           musicDurationSec: plannedParams.durationSec, bpm: plannedParams.bpm, beatsPerShot: plannedParams.beatsPerShot,
-          imageUrls: images, musicUrl: musicUrl.trim() || undefined, aspect: '9:16',
+          ...(useRealClips ? { videoClips } : { imageUrls: images }),
+          musicUrl: musicUrl.trim() || undefined, aspect: '9:16',
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -129,6 +145,7 @@ export default function MvPlanPage() {
         return;
       }
       setMvUrl(body.finalVideoUrl || '');
+      setMvDuration(Number(body.duration) || 0);
       showToast({ title: 'MV 已合成', type: 'success' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : '网络错误,合成失败';
@@ -276,10 +293,38 @@ export default function MvPlanPage() {
                 <span className="text-sm text-white font-medium">出片 · 给每镜配画面</span>
               </div>
               <p className="text-[11px] text-[var(--soft)] mb-3 opacity-70">
-                传几张画面(不够会循环用),每镜按卡点时长做 ken-burns 动效,再按此时间轴**硬切拼接**成竖屏 MV。可选配乐。
+                两种画面来源(填了**真片段**就优先用真片段):<br />
+                · <b className="text-white/80">真视频片段</b> —— 贴几段视频 URL(可来自「单图变视频」的成片,或你自己的片段),每段按卡点时长硬切成按拍剪辑的真片段 MV。<br />
+                · <b className="text-white/80">静帧动效</b> —— 传几张图,每镜做 ken-burns 动画再硬切。<br />
+                不够都会循环用。可选配乐。
               </p>
 
-              {/* 画面上传 */}
+              {/* v12.254 真视频片段(优先) */}
+              <div className="mb-4">
+                <div className="text-[11px] text-[var(--soft)] uppercase tracking-wider mb-1.5">真视频片段(优先 · 每段按拍裁切)</div>
+                {videoClips.length > 0 && (
+                  <ul className="space-y-1 mb-2">
+                    {videoClips.map((u, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[11px] bg-black/25 rounded px-2 py-1">
+                        <span className="w-4 h-4 rounded bg-[#E8C547]/15 text-[#E8C547] grid place-items-center font-mono shrink-0">{i + 1}</span>
+                        <span className="flex-1 truncate text-[var(--muted)]" title={u}>{u}</span>
+                        <button onClick={() => setVideoClips((prev) => prev.filter((_, j) => j !== i))} title="移除" className="text-[var(--soft)] hover:text-rose-300"><X className="w-3 h-3" /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex gap-1.5">
+                  <input
+                    type="url" value={clipDraft} onChange={e => setClipDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addClip(); }}
+                    placeholder="视频片段 URL(http(s) 或站内 serve-file)"
+                    className="flex-1 px-2 py-1.5 bg-black/30 border border-white/10 rounded text-xs focus:outline-none focus:border-[#E8C547]/50"
+                  />
+                  <button onClick={addClip} disabled={!clipDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">加片段</button>
+                </div>
+              </div>
+
+              {/* 画面上传(真片段留空时用) */}
               <div className="flex flex-wrap gap-2 mb-3">
                 {images.map((u, i) => (
                   <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
@@ -311,16 +356,26 @@ export default function MvPlanPage() {
 
               <button
                 onClick={compose}
-                disabled={composing || images.length === 0}
+                disabled={composing || (!useRealClips && images.length === 0)}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
               >
-                {composing ? (<><Loader2 className="w-4 h-4 animate-spin" /> 合成中…(每镜一次渲染,稍候)</>) : (<><Images className="w-4 h-4" weight="bold" /> 生成 MV({images.length} 张画面 × {shots.length} 镜)</>)}
+                {composing
+                  ? (<><Loader2 className="w-4 h-4 animate-spin" /> 合成中…(每镜一次渲染,稍候)</>)
+                  : useRealClips
+                    ? (<><FilmSlate className="w-4 h-4" weight="bold" /> 生成 MV({videoClips.length} 段真片段 × {shots.length} 镜)</>)
+                    : (<><Images className="w-4 h-4" weight="bold" /> 生成 MV({images.length} 张画面 × {shots.length} 镜)</>)}
               </button>
 
               {composeError && <div className="mt-2 text-[12px] text-rose-300">✕ {composeError}</div>}
               {mvUrl && (
                 <div className="mt-4">
                   <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> MV 合成完成</div>
+                  {/* 诚实提示:真片段短于其镜卡点时长时,composeVideo 只能用完整段,成片会短于规划时间轴。 */}
+                  {mvDuration > 0 && total > 0 && mvDuration < total * 0.9 && (
+                    <div className="text-[11px] text-amber-300/85 mb-2 leading-relaxed">
+                      ⚠ 成片 {mvDuration.toFixed(1)}s,短于规划的 {total.toFixed(1)}s —— 有片段短于其镜卡点时长,已按片段实际长度用(想严格贴拍,请让每段片段 ≥ 对应镜的卡点时长)。
+                    </div>
+                  )}
                   <video src={mvUrl} controls className="w-full rounded-xl bg-black/40 max-h-[460px]" />
                   <a href={mvUrl} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
                     <Download className="w-3.5 h-3.5" /> 打开 / 下载 MV
@@ -328,7 +383,7 @@ export default function MvPlanPage() {
                 </div>
               )}
               <p className="text-[11px] text-[var(--soft)] mt-3 opacity-60 leading-relaxed">
-                ✦ 画面也可来自「单图变视频」的成片或任意图库;想每镜用真视频片段而非静帧动效,是后续增强。
+                ✦ 真片段最好每段 ≥ 对应镜的卡点时长(短了会缩短成片);片段可来自「单图变视频」成片或你自己的素材。
               </p>
             </div>
           </div>

@@ -16,6 +16,28 @@ export interface MvClipSpec {
 
 const ZOOMS: Array<'in' | 'out' | 'pan'> = ['in', 'out', 'pan'];
 
+export interface MvVideoClipSpec {
+  shotNumber: number;
+  videoUrl: string;
+  /** 该镜的卡点时长;合成时源片会被裁到这个长度,实现「真片段按拍硬切」。 */
+  durationSec: number;
+}
+
+/**
+ * 卡点镜头 × 真视频片段 → 每镜一段真片段规格(v12.254)。
+ * 与 assignMvClips 同构:片段不足时按序循环复用。合成层 composeVideo 会把每段源片**裁到 durationSec**
+ * (见 video-composer 的「设计时长裁切」),从而把用户自带/单图变视频出的真片段按卡点硬切成 MV。
+ * shots 或 videoUrls 为空 → 空数组(端点据此回 400,不进 ffmpeg)。
+ */
+export function assignMvVideoClips(shots: MvShot[], videoUrls: string[]): MvVideoClipSpec[] {
+  if (!shots?.length || !videoUrls?.length) return [];
+  return shots.map((s, i) => ({
+    shotNumber: s.index,
+    videoUrl: videoUrls[i % videoUrls.length],
+    durationSec: s.durationSec,
+  }));
+}
+
 /**
  * 卡点镜头 × 图片 → 每镜一段静帧动画的规格。图片不足时循环复用;ken-burns 方向逐镜轮换。
  * shots 或 imageUrls 为空 → 空数组(端点据此回 400,不进 ffmpeg)。

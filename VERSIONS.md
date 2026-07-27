@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.253**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.254**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.253**:**vitest 3459 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.254**:**vitest 3467 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,15 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.254.0** | 2026-07-27 | `ec228e5` | **🎞️ MV 真视频片段:按拍硬切真片段(不止静帧)**。MV 出片从「静帧 ken-burns」升级出**真片段模式**:用户贴几段真视频片段 URL(可来自「单图变视频」成片或自带素材)→ 按卡点时间轴把**每段裁到该镜时长、硬切拼接** + 配乐 → 按拍剪辑的真片段 MV。填了真片段就走真片段,留空回退静帧,二选一。
+
+**为什么是「贴片段」而非「自动生成」**:自动「上传图 → u2v 出片 → 拼」被现有基建卡住 —— u2v 生成服务要**公网抓取图片 URL**,而站内上传返回的是站内签名 serve-file 相对链、provider 够不着(u2v/stream 也只收 http(s))。那需要「公网资产托管 + 签名公链」独立基建。本版落**当下可行且是 MV 核心价值**的一刀:生成交给既有付费端点,MV 只做**卡点剪辑**(`composeVideo` 的「设计时长裁切」把每段精确裁到卡点)。
+
+**实现**:`lib/mv-compose-plan.ts` 加 `assignMvVideoClips`(片段循环分配、带卡点时长,3 例单测);`/api/mv/compose` 加 `video` 模式(`videoClips[]` 落地 → composeVideo 按拍裁切硬切),复用 v12.253 全部护栏(每用户单并发/temp 清理/落地继承 SSRF+64MB;非签名 serve-file `?path=` 被 persistAsset 拒)。
+
+**对抗复检**(2 lens + 逐条验证)查出并修 **3 medium**:**① 配乐被静默丢**:我重写时把 musicUrl 改成裸 absPath,而 composeVideo 配乐分支只认 http/serve-file → 音乐没了却仍 ok:true(改回 `serveFilePathUrl`)。**② 短片段不诚实**:片段短于镜卡点时长 → 成片被 composeVideo 缩短,却无脑报「合成完成」(改:比对实际 vs 规划时长,短于 90% 亮 amber 告警)。**③ 静默回退**:直连 API 若 `videoClips` 全被安全过滤清空却带了 imageUrls,会静默回退静帧(改:传了 videoClips 却全非法 → 400,不静默降级)。
+
+**验收**:tsc 0 + `next build` 通过 + 全量 **3467/3467**(412 文件)+ 门禁零违规;`v12-254-mv-real-clips`(3 映射 + 2 接线 + 3 复检锁)。 |
 | **v12.253.0** | 2026-07-27 | `5faaac8` | **🎬 MV 出片(三模式执行链之三 · 收官):卡点时间轴 + 图片 → 卡点成片**。此前 MV 页只出卡点时间轴;本版接通出片:传几张画面(不够循环用)+ 可选配乐 → 每镜按卡点时长做 ken-burns 静帧动画 → 按时间轴**硬切拼接** + 配乐 → 竖屏 MV。纯本地 ffmpeg,无付费外呼。至此 C 三模式(对话式编辑/漫转/MV)执行链全部走通。
 
 **纯映射层** `lib/mv-compose-plan.ts`(`assignMvClips`,4 例单测):卡点镜头 × 图片 → 每镜静帧规格(图不足循环、ken-burns 方向轮换)。`POST /api/mv/compose`:落地(继承 SSRF/验签/64MB 限流)→ `stillFrameToVideo` 逐镜 → `composeVideo` 卡点硬切 + 配乐 → 签名 URL;镜头封顶 24、图片封顶 40。
