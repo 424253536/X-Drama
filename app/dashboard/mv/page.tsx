@@ -10,7 +10,7 @@
  * generateImage / u2v / video-composer,是下一步(页内如实标注)。
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MusicNotes, Sparkle as Sparkles, Waveform, Warning as AlertTriangle, CircleNotch as Loader2, Upload, Images, FilmSlate, Download, X } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
 
@@ -60,6 +60,17 @@ export default function MvPlanPage() {
   const [plannedParams, setPlannedParams] = useState<{ durationSec: number; bpm: number; beatsPerShot: number } | null>(null);
   const imgRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
+
+  // v12.255:支持 ?clip=<url> 预填真片段(「单图变视频」成片页「加入 MV 片段」交接用)。
+  // 用 window.location 读,避免 useSearchParams 的 Suspense 边界要求;仅接受同站 serve-file / http(s)(视频不收 data:)。
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('clip');
+      if (q && /^(\/api\/serve-file|https?:)/.test(q)) {
+        setVideoClips((prev) => (prev.includes(q) ? prev : [...prev, q]).slice(0, 40));
+      }
+    } catch { /* noop */ }
+  }, []);
 
   const plan = async () => {
     setPlanning(true);

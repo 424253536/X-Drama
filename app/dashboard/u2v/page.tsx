@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Link as LinkIcon, Play, Download, CircleNotch as Loader2, Sparkle as Sparkles, Warning as AlertTriangle, ArrowCounterClockwise as RotateCcw } from '@phosphor-icons/react';
+import { Upload, Link as LinkIcon, Play, Download, CircleNotch as Loader2, Sparkle as Sparkles, Warning as AlertTriangle, ArrowCounterClockwise as RotateCcw, FilmSlate } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
 import { CameraLanguagePicker } from '@/components/create/camera-language-picker';
 import { CircularProgress } from '@/components/ui/circular-progress';
@@ -463,16 +463,27 @@ export default function U2VPage() {
             )}
           </div>
           {resultUrl && (
-            <a
-              href={resultUrl}
-              download={`u2v-${Date.now()}.mp4`}
-              target="_blank"
-              rel="noopener"
-              className="mt-3 w-full px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm inline-flex items-center justify-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              下载 MP4
-            </a>
+            <div className="mt-3 flex gap-2">
+              <a
+                href={resultUrl}
+                download={`u2v-${Date.now()}.mp4`}
+                target="_blank"
+                rel="noopener"
+                className="flex-1 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm inline-flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                下载 MP4
+              </a>
+              {/* v12.255:一键把这段成片送进 MV 卡点台当真片段(免手动复制链接) */}
+              <a
+                href={`/dashboard/mv?clip=${encodeURIComponent(resultUrl)}`}
+                className="flex-1 px-4 py-2 rounded-xl bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 text-sm inline-flex items-center justify-center gap-1.5"
+                title="把这段视频作为真片段加入 MV 卡点台"
+              >
+                <FilmSlate className="w-3.5 h-3.5" weight="bold" />
+                加入 MV 片段
+              </a>
+            </div>
           )}
         </div>
       </div>
