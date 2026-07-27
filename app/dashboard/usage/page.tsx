@@ -7,7 +7,7 @@
  *   + 按 provider 失败计数。创作者可见(非仅 admin),复用 API 健康看板设计语言。
  */
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
   ChartLineUp, ArrowsClockwise as RefreshCw, CircleNotch as Loader2,
   WarningCircle as AlertTriangle, CurrencyCny, Stack, ShieldCheck,
@@ -56,6 +56,10 @@ const cny = (n: number) => `¥${(Number(n) || 0).toFixed(2)}`;
 
 export default function UsagePage() {
   const { t } = useLocale();
+  // v12.257 修闪烁:load 若依赖 t(每次渲染都是新对象),load 每渲染重建 → 下方
+  // useEffect([days, load]) 每渲染重触发 → 无限重取 summary → 页面狂闪。改用 ref 读 t,让 load 稳定([])。
+  const tRef = useRef(t);
+  tRef.current = t;
   const [days, setDays] = useState(30);
   const [cap, setCap] = useState('');
   const [data, setData] = useState<Summary | null>(null);
@@ -82,15 +86,14 @@ export default function UsagePage() {
     try {
       const r = await fetch(`/api/usage/summary?days=${d}`);
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || t.usagePage.loadFailed);
+      if (!r.ok) throw new Error(j?.error || tRef.current.usagePage.loadFailed);
       setData(j);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : t.usagePage.loadFailed);
+      setErr(e instanceof Error ? e.message : tRef.current.usagePage.loadFailed);
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t]);
+  }, []);
 
   // v9.3.4: 月预算改存服务端 — 初次拉已存值
   useEffect(() => {
