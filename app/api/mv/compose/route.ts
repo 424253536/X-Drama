@@ -143,11 +143,14 @@ export async function POST(request: NextRequest) {
 
     // 可选配乐:落地后传**签名 serve-file URL**。composeVideo 的配乐分支只认 http / /api/serve-file
     // (裸本地路径会被它静默丢弃),故这里必须 serveFilePathUrl 而非裸 absPath。
+    // 给了配乐但格式不对 / 落地失败(如超 64MB)→ 记 musicDropped 如实回传,别假装有 BGM。
     let musicUrl: string | undefined;
+    let musicDropped = false;
     const rawMusic = typeof body?.musicUrl === 'string' ? body.musicUrl.trim() : '';
-    if (rawMusic && SAFE_VIDEO_URL.test(rawMusic)) {
-      const m = await persistAsset(rawMusic);
+    if (rawMusic) {
+      const m = SAFE_VIDEO_URL.test(rawMusic) ? await persistAsset(rawMusic) : null;
       if (m?.absPath) musicUrl = serveFilePathUrl(m.absPath);
+      else musicDropped = true;
     }
 
     // 卡点硬切拼接 + 配乐。成片在 composeVideo 自己的 tmp(qf-compose-*),不在本请求 outputDir,
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
       shotCount: shots.length,
       duration: result.totalDuration,
       aspect,
+      musicDropped,
     });
   } catch (e) {
     return NextResponse.json({ message: `MV 合成失败:${e instanceof Error ? e.message : 'unknown'}` }, { status: 500 });

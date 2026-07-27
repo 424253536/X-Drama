@@ -12,7 +12,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Upload, Link as LinkIcon, GridFour, Warning as AlertTriangle, CircleNotch as Loader2, Rows, Scissors, FilmReel, Download } from '@phosphor-icons/react';
+import { Upload, Link as LinkIcon, GridFour, Warning as AlertTriangle, CircleNotch as Loader2, Rows, Scissors, FilmReel, Download, FilmSlate, X, Sparkle as Sparkles } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/toast-provider';
 
@@ -38,7 +38,49 @@ export default function ComicPanelsPage() {
   const [cropping, setCropping] = useState(false);
   const [cropped, setCropped] = useState<CroppedPanel[] | null>(null);
   const [cropError, setCropError] = useState('');
+  // v12.256 真片段 → 动态漫剧:按分格顺序贴每格动效片段,顺序拼接
+  const [dramaClips, setDramaClips] = useState<string[]>([]);
+  const [clipDraft, setClipDraft] = useState('');
+  const [dramaMusic, setDramaMusic] = useState('');
+  const [composing, setComposing] = useState(false);
+  const [dramaUrl, setDramaUrl] = useState('');
+  const [dramaMusicDropped, setDramaMusicDropped] = useState(false); // 配乐被丢(格式不对/超 64MB)→ 诚实提示
+  const [dramaError, setDramaError] = useState('');
   const { showToast } = useToast();
+
+  const addDramaClip = () => {
+    const u = clipDraft.trim();
+    if (!u) return;
+    if (!/^(https?:\/\/|\/api\/serve-file)/.test(u)) { showToast({ title: '片段 URL 需为 http(s) 或站内 serve-file', type: 'error' }); return; }
+    setDramaClips((prev) => (prev.includes(u) ? prev : [...prev, u]).slice(0, 30));
+    setClipDraft('');
+  };
+
+  const composeDrama = async () => {
+    if (dramaClips.length < 2) { showToast({ title: '至少两段片段才能拼成动态漫剧', type: 'error' }); return; }
+    setComposing(true);
+    setDramaUrl(''); setDramaMusicDropped(false); setDramaError('');
+    try {
+      const res = await fetch('/api/comic/compose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoClips: dramaClips, musicUrl: dramaMusic.trim() || undefined }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.ok) {
+        const msg = body?.message || `合成失败 (HTTP ${res.status})`;
+        setDramaError(msg); showToast({ title: msg, type: 'error' });
+        return;
+      }
+      setDramaUrl(body.finalVideoUrl || '');
+      setDramaMusicDropped(!!body.musicDropped);
+      showToast({ title: body.musicDropped ? '动态漫剧已合成(配乐被跳过)' : '动态漫剧已合成', type: body.musicDropped ? 'warning' : 'success' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '网络错误,合成失败';
+      setDramaError(msg); showToast({ title: msg, type: 'error' });
+    } finally {
+      setComposing(false);
+    }
+  };
 
   const uploadFile = async (file: File) => {
     if (!file.type.startsWith('image/')) { showToast({ title: '只能上传图片', type: 'error' }); return; }
@@ -305,8 +347,66 @@ export default function ComicPanelsPage() {
               )}
 
               <p className="text-[11px] text-[var(--soft)] mt-3 opacity-70 leading-relaxed">
-                ✦ 流程:分格 → 裁图(本页)→ 每格「单图变视频」加动效 → 卡点拼接成动态漫剧(拼接复用既有 video-composer,跟进中)。
+                ✦ 流程:分格 → 裁图(本页)→ 每格「单图变视频」加动效 → 下面**按分格顺序**贴回真片段拼成动态漫剧。
               </p>
+
+              {/* v12.256 真片段 → 动态漫剧:按分格顺序贴每格动效片段,顺序拼接 + 可选配乐 */}
+              <div className="mt-5 pt-4 border-t border-white/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <FilmSlate className="w-4 h-4 text-[#E8C547]" weight="duotone" />
+                  <span className="text-sm text-white font-medium">拼成动态漫剧 · 真片段按分格顺序</span>
+                </div>
+                <p className="text-[11px] text-[var(--soft)] mb-3 opacity-70 leading-relaxed">
+                  把每格「单图变视频」出的成片 URL **按阅读顺序**贴进来(≥2 段),顺序拼接成动态漫剧。可选配乐。
+                  片段最好同编码/分辨率(通常同一 provider 出的就是),否则顺序拼接可能报错。
+                </p>
+
+                {dramaClips.length > 0 && (
+                  <ul className="space-y-1 mb-2">
+                    {dramaClips.map((u, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[11px] bg-black/25 rounded px-2 py-1">
+                        <span className="w-4 h-4 rounded bg-[#E8C547]/15 text-[#E8C547] grid place-items-center font-mono shrink-0">{i + 1}</span>
+                        <span className="flex-1 truncate text-[var(--muted)]" title={u}>{u}</span>
+                        <button onClick={() => setDramaClips((prev) => prev.filter((_, j) => j !== i))} title="移除" className="text-[var(--soft)] hover:text-rose-300"><X className="w-3 h-3" /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex gap-1.5 mb-2">
+                  <input
+                    type="url" value={clipDraft} onChange={e => setClipDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addDramaClip(); }}
+                    placeholder="第 N 格的动效片段 URL(http(s) 或站内 serve-file)"
+                    className="flex-1 px-2 py-1.5 bg-black/30 border border-white/10 rounded text-xs focus:outline-none focus:border-[#E8C547]/50"
+                  />
+                  <button onClick={addDramaClip} disabled={!clipDraft.trim()} className="px-3 py-1 text-xs rounded bg-[#E8C547]/15 text-[#E8C547] hover:bg-[#E8C547]/25 disabled:opacity-40">加片段</button>
+                </div>
+                <input
+                  type="url" value={dramaMusic} onChange={e => setDramaMusic(e.target.value)}
+                  placeholder="配乐 URL(可选,http(s) 或站内 serve-file)"
+                  className="w-full px-3 py-2 mb-3 bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-[#E8C547]/50 text-xs"
+                />
+                <button
+                  onClick={composeDrama}
+                  disabled={composing || dramaClips.length < 2}
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#E8C547] hover:bg-[#E8C547]/90 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold inline-flex items-center justify-center gap-2 text-sm"
+                >
+                  {composing ? (<><Loader2 className="w-4 h-4 animate-spin" /> 拼接中…</>) : (<><FilmSlate className="w-4 h-4" weight="bold" /> 拼成动态漫剧({dramaClips.length} 段)</>)}
+                </button>
+                {dramaError && <div className="mt-2 text-[12px] text-rose-300">✕ {dramaError}</div>}
+                {dramaUrl && (
+                  <div className="mt-4">
+                    <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> 动态漫剧合成完成</div>
+                    {dramaMusicDropped && (
+                      <div className="text-[11px] text-amber-300/85 mb-2">⚠ 配乐未生效(URL 格式不对或超 64MB 被限流)—— 成片无 BGM,其余正常。</div>
+                    )}
+                    <video src={dramaUrl} controls className="w-full rounded-xl bg-black/40 max-h-[460px]" />
+                    <a href={dramaUrl} target="_blank" rel="noopener" className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-white">
+                      <Download className="w-3.5 h-3.5" /> 打开 / 下载动态漫剧
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="mt-3 text-center text-[var(--soft)] text-sm opacity-60 py-10">

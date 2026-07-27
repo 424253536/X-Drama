@@ -54,6 +54,7 @@ export default function MvPlanPage() {
   const [composing, setComposing] = useState(false);
   const [mvUrl, setMvUrl] = useState('');
   const [mvDuration, setMvDuration] = useState(0); // 成片实际时长,用于和规划时长比对(真片段短于卡点时会缩短)
+  const [mvMusicDropped, setMvMusicDropped] = useState(false); // 配乐被丢(格式不对/超 64MB)→ 诚实提示
   const [composeError, setComposeError] = useState('');
   // 出片用**生成时间轴那一刻的参数快照**,而非当前 live 输入 —— 否则用户改了 BPM 没重新规划,
   // 合成出来的镜头数会和上面显示的时间轴对不上,却仍报「合成完成」(复检 medium)。
@@ -76,7 +77,7 @@ export default function MvPlanPage() {
     setPlanning(true);
     setErrorMsg('');
     setShots(null);
-    setMvUrl(''); setMvDuration(0); setComposeError('');
+    setMvUrl(''); setMvDuration(0); setMvMusicDropped(false); setComposeError('');
     try {
       const res = await fetch('/api/mv/plan', {
         method: 'POST',
@@ -137,7 +138,7 @@ export default function MvPlanPage() {
     if (!shots || shots.length === 0 || !plannedParams) { showToast({ title: '先生成卡点时间轴', type: 'error' }); return; }
     if (!useRealClips && images.length === 0) { showToast({ title: '先上传画面,或添加真视频片段', type: 'error' }); return; }
     setComposing(true);
-    setMvUrl(''); setMvDuration(0); setComposeError('');
+    setMvUrl(''); setMvDuration(0); setMvMusicDropped(false); setComposeError('');
     try {
       // 用快照参数,保证合成的镜头数 == 上面显示的时间轴(而非可能被改动的 live 输入)。
       // 填了真片段就走真片段(每段按拍裁切),否则用静帧动效。
@@ -157,7 +158,8 @@ export default function MvPlanPage() {
       }
       setMvUrl(body.finalVideoUrl || '');
       setMvDuration(Number(body.duration) || 0);
-      showToast({ title: 'MV 已合成', type: 'success' });
+      setMvMusicDropped(!!body.musicDropped);
+      showToast({ title: body.musicDropped ? 'MV 已合成(配乐被跳过)' : 'MV 已合成', type: body.musicDropped ? 'warning' : 'success' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : '网络错误,合成失败';
       setComposeError(msg); showToast({ title: msg, type: 'error' });
@@ -381,6 +383,9 @@ export default function MvPlanPage() {
               {mvUrl && (
                 <div className="mt-4">
                   <div className="text-[12px] text-emerald-400 mb-2 inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4" weight="duotone" /> MV 合成完成</div>
+                  {mvMusicDropped && (
+                    <div className="text-[11px] text-amber-300/85 mb-2">⚠ 配乐未生效(URL 格式不对或超 64MB 被限流)—— 成片无 BGM,其余正常。</div>
+                  )}
                   {/* 诚实提示:真片段短于其镜卡点时长时,composeVideo 只能用完整段,成片会短于规划时间轴。 */}
                   {mvDuration > 0 && total > 0 && mvDuration < total * 0.9 && (
                     <div className="text-[11px] text-amber-300/85 mb-2 leading-relaxed">
