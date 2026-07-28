@@ -10,7 +10,8 @@ import fs from 'fs';
 
 describe('v12.164 · 遗留双修', () => {
   it('Writer:输出预算铁律 + WRITER_MAX_TOKENS 提档', () => {
-    const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    // v12.261:runWriter 抽到 services/agents/writer-agent.ts,Writer 预算铁律随之迁走。
+    const src = fs.readFileSync('services/agents/writer-agent.ts', 'utf-8');
     expect(src).toContain('输出预算铁律');
     expect(src).toContain("process.env.WRITER_MAX_TOKENS || '', 10) || 24576");
   });

@@ -34,8 +34,11 @@ describe('v12.166 · textMatchesLanguage', () => {
     expect(p).toContain('Japanese');
   });
   it('接线锁:Pass2 user 端二次铁律 + startProduction 产后守门', () => {
+    // v12.261:runWriter 抽到 services/agents/writer-agent.ts,Pass2 铁律随之迁走(this→ctx);
+    // startProduction 的产后守门仍在 orchestrator。锁跟着代码走。
+    const writer = fs.readFileSync('services/agents/writer-agent.ts', 'utf-8');
+    expect(writer).toContain("ctx.targetLanguage() !== 'zh' ? buildLanguageDirective");
     const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
-    expect(src).toContain("this.targetLanguage() !== 'zh' ? buildLanguageDirective");
     expect(src).toContain('needsLanguageFix(script, this._targetLanguage)');
     expect(src).toContain('本地化为');
   });
