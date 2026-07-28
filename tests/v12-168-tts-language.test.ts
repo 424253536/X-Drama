@@ -17,6 +17,6 @@ describe('v12.168 · TTS 语种链', () => {
     expect(s).toContain('lang=${boost');
   });
   it('orchestrator 配音调用带 ttsLangCode(已有,回归锁)', () => {
-    expect(fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8')).toContain('language: ttsLangCode(this.targetLanguage())');
+    expect((fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'))).toContain('language: ttsLangCode(ctx.targetLanguage())');
   });
 });

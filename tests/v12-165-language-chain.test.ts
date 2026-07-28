@@ -16,7 +16,7 @@ describe('v12.164 · 遗留双修', () => {
     expect(src).toContain("process.env.WRITER_MAX_TOKENS || '', 10) || 24576");
   });
   it('网关 401 也进冷却(key 失效不再每镜撞)', () => {
-    const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    const src = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
     expect((src.match(/res\.status === 401 \|\| res\.status === 402/g) || []).length).toBe(2);
   });
 });
@@ -53,7 +53,7 @@ describe('v12.165 · 语言体系', () => {
     expect(fs.readFileSync('app/api/short-video/plan/route.ts', 'utf-8')).toContain('languageDisplayName');
   });
   it('TTS 下达链:orchestrator 配音按 targetLanguage 的 ttsLangCode', () => {
-    const src = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
-    expect(src).toContain('ttsLangCode(this.targetLanguage())');
+    const src = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
+    expect(src).toContain('ttsLangCode(ctx.targetLanguage())');
   });
 });

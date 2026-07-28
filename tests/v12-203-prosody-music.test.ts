@@ -30,7 +30,7 @@ describe('v12.203 · prosody 角色纠偏 + AI 作曲', () => {
     expect(typeof noChar.pitch).toBe('number');
   });
   it('接线锁:orchestrator 传 speaker + music API 存 music 资产', () => {
-    const orch = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    const orch = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
     expect(orch).toContain('character: (t as any).speaker');
     expect(orch).toContain('speaker: (shot as any)?.characters?.[0]');
     const music = fs.readFileSync('app/api/projects/[id]/music/route.ts', 'utf-8');

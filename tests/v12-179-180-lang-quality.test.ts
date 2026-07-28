@@ -15,7 +15,7 @@ describe('v12.179 · 口型语种', () => {
     expect(lipsyncLangCode('en')).toBe('en');
   });
   it('接线锁:orchestrator none 跳过口型', () => {
-    const o = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    const o = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
     expect(o).toContain("lsLang === 'none'");
     expect(o).toContain('跳过口型');
   });

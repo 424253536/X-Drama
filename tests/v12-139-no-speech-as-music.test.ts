@@ -14,7 +14,7 @@ describe('v12.139 · 禁止 TTS 念稿冒充 BGM', () => {
   it('music 失败路径为抛错(上游落无 BGM + audioWarnings 诚实降级)', () => {
     expect(src).toContain('不再回退「TTS 念 prompt」');
     // 上游诚实降级路径存在
-    const orch = fs.readFileSync('services/hybrid-orchestrator.ts', 'utf-8');
+    const orch = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
     expect(orch).toContain('BGM 生成失败, 成片为无配乐版本');
   });
 });
