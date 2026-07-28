@@ -124,6 +124,32 @@ export function buildSrt(
 }
 
 /**
+ * v12.264 音画同步:按**显式起点**构造 SRT —— 起点由 composer 的 xfade 压缩时间轴给出,
+ * 不再内部纯累加 duration。根因:链式 xfade 每次转场把画面压缩 effectiveTd,若字幕仍按
+ * durations 纯累加定位,则字幕相对画面/配音逐镜滞后 Σ effectiveTd(≈0.5~1s)。这里让字幕起点
+ * 与配音 adelay、画面 xfade offset 同源(均来自 computeXfadeTimeline),三轨齐平不脱节。
+ *
+ * @param shots 按播放顺序;startSec=该镜在压缩后输出时间轴的画面起点,durSec=字幕展示时长(通常=该镜终值时长)
+ * @returns srt 文件内容;无台词镜跳过。起点缺省/非法回退 0,时长缺省/非法回退 5s(与 buildSrt 一致)。
+ */
+export function buildSrtWithStarts(
+  shots: Array<{ dialogue?: string; startSec?: number; durSec?: number }>,
+): string {
+  const parts: string[] = [];
+  let index = 1;
+  for (const shot of shots) {
+    const dur = typeof shot.durSec === 'number' && shot.durSec > 0 ? shot.durSec : 5;
+    const start = typeof shot.startSec === 'number' && shot.startSec >= 0 ? shot.startSec : 0;
+    const dialogue = stripNonDialogueBrackets(shot.dialogue || '');
+    if (dialogue) {
+      parts.push(buildSrtEntry(index, start, dur, dialogue));
+      index++;
+    }
+  }
+  return parts.join('\n');
+}
+
+/**
  * 过滤"非台词"括号内容,只保留真正会被说出口的台词,供字幕烧录与 TTS 共用。
  * 剧本里的括号一律是舞台/音效/配乐/语气/动作指示(如「(无对白,只有金属撞击与走火的轰响)」
  * 「(喉间一声闷哑的吸气)」「(沉稳)」「(低哑,对自己)」),都不是出声台词 —— 一律剔除,

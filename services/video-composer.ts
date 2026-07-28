@@ -623,6 +623,35 @@ export function computeJCutAdelay(input: {
 }
 
 /**
+ * v12.264 音画同步单一真源 —— xfade 压缩后每镜在**输出时间轴**上的真实画面起点。
+ *
+ * 根因:链式 xfade 每次转场把画面时间轴压缩 effectiveTd(offset = 累计时长 − effectiveTd),
+ *       而旧版配音 adelay 却按 durations[] **纯累加**(不减转场重叠)定位 → 配音相对画面
+ *       逐镜滞后 Σ effectiveTd(默认转场 0.5s × 转场数 ≈ 真机实测 0.5~1s 延迟)。
+ * 修复:画面 xfade offset 与配音起点都由本函数产出 → 同源对齐,累计漂移归零。口型不脱节。
+ *
+ * @param durations   各镜**终值**时长(秒),已含情绪调速/卡点/逐镜变速。
+ * @param effectiveTds effectiveTds[i] = 进入第 i 镜那次转场的实际 xfade 时长(秒);[0] 恒 0(首镜无转场)。
+ * @returns clipStartSec 各镜画面起点(秒,首镜=0);totalSec 压缩后总时长(= BGM 尾淡出基准)。
+ * 导出供 tests 单测锁住「配音起点 == 画面 xfade offset」不再回归。
+ */
+export function computeXfadeTimeline(
+  durations: number[],
+  effectiveTds: number[],
+): { clipStartSec: number[]; totalSec: number } {
+  const n = durations.length;
+  const clipStartSec: number[] = new Array(n).fill(0); // clipStartSec[0] = 0(首镜从 0 起)
+  if (n === 0) return { clipStartSec, totalSec: 0 };
+  let cumulativeDuration = durations[0] || 0;
+  for (let i = 1; i < n; i++) {
+    const offset = Math.max(0, cumulativeDuration - (effectiveTds[i] || 0));
+    clipStartSec[i] = offset;
+    cumulativeDuration = offset + (durations[i] || 0);
+  }
+  return { clipStartSec, totalSec: cumulativeDuration };
+}
+
+/**
  * FFmpeg xfade 转场类型映射 (v2.11 #6 扩展)
  *
  * 设计:
@@ -1155,18 +1184,16 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       filters.push(`${videoFilter}[v${i}]`);
     }
 
-    // v12.195:durations[] 至此定稿(情绪调速→卡点吸附→逐镜变速全部落账)→ 重写 SRT 时间轴
-    if (srtResyncPath) {
-      try {
-        const { buildSrt: srtF } = require('@/lib/text-control') as typeof import('@/lib/text-control');
-        fs.writeFileSync(srtResyncPath, srtF(validClips.map((c, k) => ({ dialogue: c?.dialogue || '', duration: durations[k] }))), 'utf-8');
-        console.log('[Composer] v12.195 SRT 时间轴按终值时长重写(变速/卡点后不漂移)');
-      } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
-    }
+    // v12.264:SRT 时间轴重写下移到 xfade 时间轴算完之后(见循环后)—— 需用压缩后画面起点定位字幕,
+    // 否则字幕相对画面/配音逐镜滞后 Σ effectiveTd。此处仅保留 xfade 链构建。
 
     // 链式 xfade
     let prevLabel = 'v0';
     let cumulativeDuration = durations[0];
+
+    // v12.264 音画同步:逐镜记录本次转场的实际 xfade 时长,循环后用 computeXfadeTimeline 反推每镜画面起点,
+    // 供下方配音 adelay 同源对齐(详见 computeXfadeTimeline 注释;根因=旧版 adelay 纯累加不减转场重叠)。
+    const effectiveTds: number[] = new Array(n).fill(0); // effectiveTds[0] 恒 0(首镜无转场)
 
     for (let i = 1; i < n; i++) {
       const clipAnalysis = highlights.find(h => h.shotNumber === validClips[i]?.shotNumber);
@@ -1182,6 +1209,7 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         baseTd,
         Math.min(durations[i - 1], durations[i]) / 2
       );
+      effectiveTds[i] = effectiveTd; // v12.264 供 computeXfadeTimeline 反推画面起点(配音同源对齐)
 
       const offset = Math.max(0, cumulativeDuration - effectiveTd);
       // v2.22 fix #2: 最后一段不再直接出 [vout] — 留出 [xvfinal] 给字幕 filter
@@ -1191,6 +1219,32 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
 
       cumulativeDuration = offset + durations[i];
       prevLabel = outLabel;
+    }
+
+    // v12.264 音画同步:配音起点 + 字幕起点的单一真源 —— 与上方画面 xfade offset 同一递推
+    //(同 durations/effectiveTds),clipStartSec[i] === 第 i 镜画面 xfade offset。旧版配音/字幕都按
+    // durations 纯累加 → 相对压缩后画面逐镜滞后 Σ effectiveTd(默认转场 0.5s × 转场数 ≈ 真机 0.5~1s)。
+    const { clipStartSec } = computeXfadeTimeline(durations, effectiveTds); // totalSec == 循环里的 cumulativeDuration
+    const clipStartMs: number[] = clipStartSec.map((s) => Math.round(s * 1000));
+
+    // v12.264:SRT 字幕按压缩后画面起点重写(下移自 xfade 前)—— 起点与配音 adelay / 画面 xfade 同源,
+    // 展示时长仍用各镜终值时长(变速/卡点已落账)。原 v12.195 只重写了「终值时长」,漏了 xfade 压缩位移。
+    if (srtResyncPath) {
+      try {
+        const { buildSrtWithStarts } = require('@/lib/text-control') as typeof import('@/lib/text-control');
+        // 展示时长 = 到下一镜画面起点为止(末镜用自身终值时长)—— 与旧版「首尾相接不重叠」一致,
+        // 避免压缩后本镜字幕尾巴压到下一镜起点上出现两行字幕。
+        fs.writeFileSync(
+          srtResyncPath,
+          buildSrtWithStarts(validClips.map((c, k) => ({
+            dialogue: c?.dialogue || '',
+            startSec: clipStartSec[k],
+            durSec: k < n - 1 ? clipStartSec[k + 1] - clipStartSec[k] : durations[k],
+          }))),
+          'utf-8',
+        );
+        console.log('[Composer] v12.264 SRT 时间轴按 xfade 压缩后画面起点重写(字幕/配音/画面三轨齐平)');
+      } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
     }
 
     // v2.22 fix #2: 烧 CJK 字幕作 last step — 字幕在转场之后, 让所有片段 dialogue 都显示
@@ -1241,12 +1295,12 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     // 每段配音按其所在 shot 的累计起始时间对齐；支持任意镜头数
     if (localVoiceovers.size > 0) {
       // 预计算每个 shot 的起始偏移（ms）
+      // v12.264 音画同步:起点直接取 clipStartMs[k](= 该镜在 xfade 压缩后输出时间轴上的真实画面起点),
+      // 不再用 durations[] 纯累加 —— 后者忽略每次转场的 effectiveTd 重叠,导致配音逐镜滞后 Σ effectiveTd。
       const shotStartMs: Map<number, number> = new Map();
-      let cumMs = 0;
       for (let k = 0; k < n; k++) {
         const sn = validClips[k]?.shotNumber;
-        if (typeof sn === 'number') shotStartMs.set(sn, Math.round(cumMs));
-        cumMs += (durations[k] || 0) * 1000;
+        if (typeof sn === 'number') shotStartMs.set(sn, clipStartMs[k] || 0);
       }
 
       // v12.41 口型/配音同步:变速镜(高光慢放 setpts)画面被拉伸,配音也要同比 atempo
