@@ -20,10 +20,14 @@ import {
 } from '@/services/intro-outro';
 
 describe('escapeDrawtextText (Sprint B.4)', () => {
-  it('escapes : and \\ and % and quotes', () => {
-    expect(escapeDrawtextText("8:30 PM — it's 50% done")).toContain("8\\:30");
-    expect(escapeDrawtextText("8:30 PM — it's 50% done")).toContain("it\\'s");
-    expect(escapeDrawtextText("8:30 PM — it's 50% done")).toContain('50\\%');
+  it('把危险字符替换成安全字形(v12.258:不再反斜杠转义,避免单引号 filter 值破裂/％{}展开)', () => {
+    const out = escapeDrawtextText("8:30 PM — it's 50% done");
+    expect(out).toContain('8:30');   // 冒号在单引号内安全,保持原样
+    expect(out).toContain('it’s');   // 单引号 → 右单引号
+    expect(out).toContain('50％');   // 百分号 → 全角(杜绝 %{...} 展开)
+    // 绝不残留会破坏 filtergraph 的裸字符
+    expect(out).not.toContain("'");
+    expect(escapeDrawtextText('a%{pts}b{x}')).toMatch(/％｛pts｝b｛x｝/);
   });
 
   it('replaces newlines with single space', () => {

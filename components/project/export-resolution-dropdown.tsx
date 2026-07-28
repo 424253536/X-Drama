@@ -58,6 +58,8 @@ export function ExportResolutionDropdown({
   projectId, userTier, className = '',
 }: ExportResolutionDropdownProps) {
   const [open, setOpen] = useState(false);
+  // v12.258: 含片头片尾 —— 勾选后出口 URL 带 &intro=1,路由会前后包上 Wind Comic 品牌片头/片尾。
+  const [withIntro, setWithIntro] = useState(false);
   const userRank = userTier ? (TIER_RANK[userTier] ?? 0) : -1;
 
   const optionsWithLock: ResOption[] = OPTIONS.map((o) => ({
@@ -76,7 +78,7 @@ export function ExportResolutionDropdown({
       window.location.href = '/dashboard/billing';
       return;
     }
-    const url = `/api/projects/${encodeURIComponent(projectId)}/export?type=mp4&resolution=${opt.value}`;
+    const url = `/api/projects/${encodeURIComponent(projectId)}/export?type=mp4&resolution=${opt.value}${withIntro ? '&intro=1' : ''}`;
     window.open(url, '_blank');
     setOpen(false);
   };
@@ -125,6 +127,19 @@ export function ExportResolutionDropdown({
             </button>
           ))}
         </div>
+        {/* v12.258: 含片头片尾开关 */}
+        <label className="flex items-center gap-2 mt-2 px-2 py-1.5 rounded-md hover:bg-[var(--cinema-surface-hi)] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={withIntro}
+            onChange={(e) => setWithIntro(e.target.checked)}
+            className="accent-[var(--cinema-amber)]"
+          />
+          <span className="flex flex-col">
+            <span className="text-[12px] text-[var(--cinema-text)]">含片头片尾</span>
+            <span className="text-[10px] text-[var(--cinema-text-3)]">封面+标题片头 · 角色 roster 片尾(Wind Comic 品牌)</span>
+          </span>
+        </label>
         <div className="cinema-mono text-[9px] opacity-40 mt-2 px-1 tracking-wide">
           锁标项 → 跳转账户升级页
         </div>

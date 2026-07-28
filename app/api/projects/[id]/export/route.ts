@@ -3,6 +3,7 @@ import { resolveVerifiedServeFilePath } from '@/lib/serve-file-sign';
 import { db } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { isValidResolution, transcodeToResolution } from '@/lib/video-transcode';
 import { checkPlan, planRejection, requiredTierForResolution } from '@/lib/plan-gate';
 import { requireProjectAccess } from '@/lib/auth-guard';
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // v2.16 P0.2: resolution 参数 — 不传则保持原 1080p (向后兼容)
     const resolutionParam = request.nextUrl.searchParams.get('resolution');
     const wantTranscode = resolutionParam !== null;
+    // v12.258: 片头/片尾开关 —— 出口时把 Wind Comic 品牌片头(封面+标题)/片尾(角色 roster)前后包上。
+    const wantIntro = request.nextUrl.searchParams.get('intro') === '1';
     if (wantTranscode && !isValidResolution(resolutionParam)) {
       return NextResponse.json(
         { error: `unsupported resolution: ${resolutionParam}. allowed: 720p / 1080p / 2160p` },
@@ -99,9 +102,62 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
         }
 
+        // v12.258: 片头/片尾包边 —— 在(可选转码后的)本地成片前后 concat 品牌片头/片尾。
+        // 三段 scale+pad 到正片分辨率后重编码,兼容任意画幅;失败明确 500,不静默返回无片头版本。
+        // 复检修:**每请求唯一目录**(否则并发导出会撞 intro.mp4/outro.mp4/wrapped.mp4 固定名 → 拿到别人的片头)。
+        let introTmpDir: string | null = null;
+        if (wantIntro) {
+          try {
+            const { wrapWithIntroOutro } = await import('@/services/intro-outro');
+            const { findCjkFont } = await import('@/lib/text-control');
+            const { resolveByKey } = await import('@/lib/asset-storage');
+            // 封面 = 第一张分镜图(有则用,无则片头走纯黑底);?path= 走验签,?key= 走内容寻址解析
+            let coverImagePath: string | undefined;
+            const cov = db.prepare(
+              `SELECT persistent_url, media_urls FROM project_assets WHERE project_id = ? AND type = 'storyboard' ORDER BY shot_number ASC LIMIT 1`
+            ).get(projectId) as { persistent_url: string | null; media_urls: string } | undefined;
+            const covUrl = cov?.persistent_url || (() => { try { return JSON.parse(cov?.media_urls || '[]')[0] || ''; } catch { return ''; } })();
+            if (covUrl && covUrl.startsWith('/api/serve-file')) {
+              let cp = resolveVerifiedServeFilePath(covUrl);
+              if (!cp) {
+                const km = covUrl.match(/[?&]key=([^&]+)/);
+                if (km) cp = resolveByKey(decodeURIComponent(km[1]))?.absPath || null;
+              }
+              if (cp && fs.existsSync(cp)) coverImagePath = cp;
+            }
+            // 角色 roster
+            const chRows = db.prepare(
+              `SELECT name, data FROM project_assets WHERE project_id = ? AND type = 'character'`
+            ).all(projectId) as Array<{ name: string; data: string }>;
+            const characters = chRows.map((r) => {
+              let d: any = {}; try { d = JSON.parse(r.data || '{}'); } catch { /* empty */ }
+              return { name: r.name, role: d.role || d.identity || undefined };
+            }).filter((c) => c.name);
+
+            introTmpDir = path.join(process.cwd(), 'data', 'exports', `intro-${crypto.randomUUID()}`);
+            pathToServe = await wrapWithIntroOutro(pathToServe, {
+              title: project.title || '未命名作品',
+              coverImagePath,
+              characters,
+              fontFile: findCjkFont() || undefined,
+              outputDir: introTmpDir,
+            });
+            cacheNote += ' [intro/outro]';
+          } catch (e) {
+            console.error('[export] intro/outro wrap failed:', e);
+            if (introTmpDir) { try { fs.rmSync(introTmpDir, { recursive: true, force: true }); } catch { /* noop */ } }
+            return NextResponse.json({ error: '片头片尾合成失败: ' + (e instanceof Error ? e.message : 'unknown') }, { status: 500 });
+          }
+        }
+
         const stat = fs.statSync(pathToServe);
         const stream = fs.createReadStream(pathToServe);
-        const filenameSuffix = wantTranscode ? `-${resolutionParam}` : '';
+        // 流发完(或客户端断开)后清掉本请求的唯一片头目录,防临时盘堆积。
+        if (introTmpDir) {
+          const dir = introTmpDir;
+          stream.on('close', () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ } });
+        }
+        const filenameSuffix = `${wantTranscode ? `-${resolutionParam}` : ''}${wantIntro ? '-branded' : ''}`;
         return new Response(stream as any, {
           headers: {
             'Content-Type': 'video/mp4',
@@ -114,10 +170,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // 远端 URL：302 让浏览器直接下载 (转码暂不支持远端 URL — 需先下到本地再转, 留 v2.16 P1)
-    if (wantTranscode) {
+    // 远端 URL：302 让浏览器直接下载 (转码/片头片尾暂不支持远端 URL — 需先下到本地再处理)
+    if (wantTranscode || wantIntro) {
       return NextResponse.json(
-        { error: '远端成片暂不支持转码下载, 请直接 302 跳到原始 URL 后用本地工具转码' },
+        { error: '远端成片暂不支持转码 / 片头片尾, 请直接 302 跳到原始 URL 后用本地工具处理' },
         { status: 501 },
       );
     }
