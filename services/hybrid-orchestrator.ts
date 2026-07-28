@@ -15,7 +15,7 @@ import { VeoService, hasVeo } from './veo.service';
 import { MidjourneyService, hasMidjourney } from './midjourney.service';
 import { KlingService, hasKling } from './kling.service';
 import { FalFluxService, hasFalFlux } from './fal-flux.service';
-import { ComfyUIService, hasComfyUI } from './comfyui.service';
+import { ComfyUIService, hasComfyUI, hasComfyUIControlNet } from './comfyui.service';
 import { XVerseService, hasXVerse, isXVersePrimary } from './xverse.service';
 import {
   getDirectorSystemPrompt, getMcKeeWriterPrompt,
@@ -1303,14 +1303,28 @@ export class HybridOrchestrator {
         });
       } catch (e) { console.warn(`[ImageRouter] FalFlux failed for ${label}:`, e); }
     }
-    if (this.comfyuiService && hasRefImages) {
-      try {
-        return await this.comfyuiService.generateWithIPAdapter(prompt, {
-          characterRefImage: opts?.cref, sceneRefImage: opts?.sref,
-          consistencyMode: opts?.cref ? 'full_character' : 'style_transfer',
-          width: 1344, height: 768,
-        });
-      } catch (e) { console.warn(`[ImageRouter] ComfyUI failed for ${label}:`, e); }
+    // v12.260 草图 ControlNet 硬锁:有草图 + 启用 ControlNet 时,用 Canny 边缘作**刚性构图约束**
+    // (比 IP-Adapter 软参考更严);否则走 IP-Adapter 软参考(需参考图)。硬锁失败回落 IP-Adapter。
+    const wantControlNet = !!(opts?.sketchUrl && hasComfyUIControlNet());
+    if (this.comfyuiService && (hasRefImages || wantControlNet)) {
+      if (wantControlNet) {
+        try {
+          return await this.comfyuiService.generateWithControlNet(prompt, {
+            controlImageUrl: opts!.sketchUrl!,
+            characterRefImage: opts?.cref, sceneRefImage: opts?.sref,
+            width: 1344, height: 768,
+          });
+        } catch (e) { console.warn(`[ImageRouter] ComfyUI ControlNet failed for ${label}, 回落 IP-Adapter:`, e); }
+      }
+      if (hasRefImages) {
+        try {
+          return await this.comfyuiService.generateWithIPAdapter(prompt, {
+            characterRefImage: opts?.cref, sceneRefImage: opts?.sref,
+            consistencyMode: opts?.cref ? 'full_character' : 'style_transfer',
+            width: 1344, height: 768,
+          });
+        } catch (e) { console.warn(`[ImageRouter] ComfyUI failed for ${label}:`, e); }
+      }
     }
 
     // v12.96.0 P0-2:OpenRouter 图像档(跨网关,provider 级自动 failover)—— mock 前最后真实档。

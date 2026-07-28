@@ -21,6 +21,20 @@ export function hasComfyUI(): boolean {
   return COMFYUI_ENABLED;
 }
 
+/** ControlNet 硬锁草图的 canny 模型名(safetensors),由 `COMFYUI_CONTROLNET_MODEL` 配。 */
+export function comfyControlNetModel(): string | null {
+  return process.env.COMFYUI_CONTROLNET_MODEL || null;
+}
+
+/**
+ * v12.260:是否具备「草图 ControlNet 硬锁」能力 —— 需 ComfyUI 开启 + 配了 canny ControlNet 模型名。
+ * 硬锁比 IP-Adapter 软参考更刚性:用草图的 Canny 边缘图作空间约束,严格锁构图/机位。
+ * 需自托管 ComfyUI + 装 comfyui_controlnet_aux 节点 + 对应 canny 模型 —— 预备态,须 live 验证。
+ */
+export function hasComfyUIControlNet(): boolean {
+  return process.env.COMFYUI_ENABLED === 'true' && !!comfyControlNetModel();
+}
+
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 /**
@@ -36,6 +50,10 @@ interface ComfyUIGenerateOptions {
   characterRefImage?: string;
   /** 场景参考图 URL */
   sceneRefImage?: string;
+  /** v12.260 ControlNet 硬锁:草图/控制图 URL(取其 Canny 边缘作空间硬约束) */
+  controlImageUrl?: string;
+  /** ControlNet 强度 0-1,默认 0.8 */
+  controlStrength?: number;
   /** 一致性模式 */
   consistencyMode?: ConsistencyMode;
   /** IP-Adapter 权重 (0-1, 默认 0.85) */
@@ -137,6 +155,23 @@ export class ComfyUIService {
     const imageFilename = await this.waitForResult(promptId);
 
     // Step 5: 返回图片 URL
+    return `${this.baseUrl}/view?filename=${imageFilename}`;
+  }
+
+  /**
+   * v12.260:草图 ControlNet 硬锁生成 —— 用控制图的 Canny 边缘作**刚性空间约束**(比 IP-Adapter 软参考更严),
+   * 严格锁住构图/机位/主体位置。需 ComfyUI 装 comfyui_controlnet_aux + 配 COMFYUI_CONTROLNET_MODEL。
+   */
+  async generateWithControlNet(prompt: string, options: ComfyUIGenerateOptions): Promise<string> {
+    if (!hasComfyUIControlNet()) throw new Error('ComfyUI ControlNet 未启用(需 COMFYUI_ENABLED + COMFYUI_CONTROLNET_MODEL)');
+    if (!options.controlImageUrl) throw new Error('generateWithControlNet 需要 controlImageUrl(草图/控制图)');
+    if (!(await this.isOnline())) throw new Error(`ComfyUI server not available at ${this.baseUrl}`);
+
+    console.log(`[ComfyUI] Generating with ControlNet (canny hard-lock): ${prompt.slice(0, 100)}...`);
+    const controlFilename = await this.uploadImageFromUrl(options.controlImageUrl, 'ctrl_sketch');
+    const workflow = buildControlNetWorkflow(prompt, { ...options, controlFilename, controlNetModel: comfyControlNetModel()! });
+    const promptId = await this.queuePrompt(workflow);
+    const imageFilename = await this.waitForResult(promptId);
     return `${this.baseUrl}/view?filename=${imageFilename}`;
   }
 
@@ -354,4 +389,66 @@ export class ComfyUIService {
 
     throw new Error('ComfyUI timeout (4 min)');
   }
+}
+
+/**
+ * v12.260:构建「Canny ControlNet 硬锁」ComfyUI 工作流(纯函数,可测)。
+ *
+ * 节点链:Checkpoint → CLIP(正/负) → LoadImage(草图) → CannyEdgePreprocessor(取边缘)
+ *   → ControlNetLoader + ControlNetApplyAdvanced(用边缘图硬约束正/负条件)→ KSampler → VAEDecode → Save。
+ * 与 buildIPAdapterWorkflow 对称,区别:IP-Adapter 改 model,ControlNet 改 conditioning(空间硬锁)。
+ * 需 ComfyUI 装 comfyui_controlnet_aux(CannyEdgePreprocessor)+ 对应 canny ControlNet 模型。
+ */
+export function buildControlNetWorkflow(
+  prompt: string,
+  options: ComfyUIGenerateOptions & { controlFilename: string; controlNetModel: string; seed?: number },
+): { prompt: Record<string, any> } {
+  const checkpoint = options.checkpoint || 'dreamshaperXL_v21TurboDPMSDE.safetensors';
+  const width = options.width || 1344;
+  const height = options.height || 768;
+  const steps = options.steps || 25;
+  const cfgScale = options.cfgScale || 7.0;
+  const strength = options.controlStrength ?? 0.8;
+
+  const workflow: Record<string, any> = {};
+  workflow['1'] = { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: checkpoint } };
+  workflow['2'] = { class_type: 'CLIPTextEncode', inputs: { text: prompt, clip: ['1', 1] } };
+  workflow['3'] = {
+    class_type: 'CLIPTextEncode',
+    inputs: { text: 'worst quality, low quality, blurry, deformed, ugly, bad anatomy, bad hands, text, watermark', clip: ['1', 1] },
+  };
+  workflow['4'] = { class_type: 'EmptyLatentImage', inputs: { width, height, batch_size: 1 } };
+
+  // 控制图 → Canny 边缘
+  workflow['20'] = { class_type: 'LoadImage', inputs: { image: options.controlFilename } };
+  workflow['21'] = {
+    class_type: 'CannyEdgePreprocessor',
+    inputs: { image: ['20', 0], low_threshold: 100, high_threshold: 200, resolution: Math.max(width, height) },
+  };
+  workflow['22'] = { class_type: 'ControlNetLoader', inputs: { control_net_name: options.controlNetModel } };
+  workflow['23'] = {
+    class_type: 'ControlNetApplyAdvanced',
+    inputs: {
+      positive: ['2', 0], negative: ['3', 0],
+      control_net: ['22', 0], image: ['21', 0],
+      strength, start_percent: 0.0, end_percent: 1.0,
+    },
+  };
+
+  workflow['6'] = {
+    class_type: 'KSampler',
+    inputs: {
+      // 注:此文件既有代码亦用 Math.random 作种子;seed 可传入以便测试确定性
+      seed: options.seed ?? Math.floor(Math.random() * 2147483647),
+      steps, cfg: cfgScale, sampler_name: 'dpmpp_2m_sde', scheduler: 'karras', denoise: 1.0,
+      model: ['1', 0],
+      positive: ['23', 0],   // ControlNet 硬约束后的正条件
+      negative: ['23', 1],   // ControlNet 硬约束后的负条件
+      latent_image: ['4', 0],
+    },
+  };
+  workflow['7'] = { class_type: 'VAEDecode', inputs: { samples: ['6', 0], vae: ['1', 2] } };
+  workflow['8'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'comic_controlnet', images: ['7', 0] } };
+
+  return { prompt: workflow };
 }
