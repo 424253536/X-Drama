@@ -9,11 +9,28 @@ import { normalizeLanguage, languageDisplayName, ttsLangCode } from '@/lib/langu
 import fs from 'fs';
 
 describe('v12.164 · 遗留双修', () => {
-  it('Writer:输出预算铁律 + WRITER_MAX_TOKENS 提档', () => {
-    // v12.261:runWriter 抽到 services/agents/writer-agent.ts,Writer 预算铁律随之迁走。
-    const src = fs.readFileSync('services/agents/writer-agent.ts', 'utf-8');
-    expect(src).toContain('输出预算铁律');
-    expect(src).toContain("process.env.WRITER_MAX_TOKENS || '', 10) || 24576");
+  // v12.263:grep→真行为。④ 让 runWriter 可注入 ctx,得以真跑并验证 Pass2 的**实际** LLM 调用参数
+  //(user 消息含输出预算铁律 + maxTokens 提档到 24576),而非 grep 源码字符串。
+  it('行为:Writer Pass2 注入输出预算铁律 + maxTokens 提档 24576', async () => {
+    const { runWriter } = await import('@/services/agents/writer-agent');
+    const plan: any = {
+      theme: 't', genre: '剧情', style: '写实', logline: 'x', synopsis: 'x',
+      characters: [{ name: '张三', appearance: '青年男性' }],
+      scenes: [{ location: '室内', description: 's', dialogues: [] }],
+      storyStructure: { totalShots: 4 },
+    };
+    const calls: Array<{ usr: string; opts: any }> = [];
+    const ctx: any = {
+      parsedScript: null, originalIdea: 't', projectId: '', template: null,
+      characterAppearanceMap: {}, qualityLedger: [], openai: {}, xverseService: null,
+      emit: () => {}, update: () => {},
+      callLLM: (_sys: string, usr: string, _json?: boolean, _cr?: boolean, opts?: any) => { calls.push({ usr, opts }); return Promise.resolve(''); },
+      fallbackScript: () => ({ title: 'fb', shots: [] }),
+      targetLanguage: () => 'zh',
+    };
+    await runWriter(ctx, plan).catch(() => { /* 只验 Pass2 调用参数 */ });
+    expect(calls.some((c) => typeof c.usr === 'string' && c.usr.includes('输出预算铁律'))).toBe(true);
+    expect(calls.some((c) => c.opts?.maxTokens === 24576)).toBe(true);
   });
   it('网关 401 也进冷却(key 失效不再每镜撞)', () => {
     const src = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
