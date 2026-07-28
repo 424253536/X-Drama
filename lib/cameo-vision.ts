@@ -34,6 +34,7 @@ import fs from 'fs';
 import path from 'path';
 import { API_CONFIG } from './config';
 import { resolveByKey } from './asset-storage';
+import { embedImage, cosineSimilarity, hasImageEmbeddingKey } from './asset-embedding';
 
 export interface CameoPreviewDimensions {
   /** 画面清晰度 0-100 */
@@ -241,6 +242,8 @@ export interface ShotConsistencyResult {
   dimensions: ShotConsistencyDimensions;
   /** LLM 一句话说明为什么是这个分 (会被持久化到 storyboard.cameoReason) */
   reasoning: string;
+  /** v12.259: 打分方式 —— 'embedding'(视觉嵌入余弦硬判) / 'llm'(Vision 打分) */
+  method?: 'embedding' | 'llm';
 }
 
 const CONSISTENCY_SYSTEM_PROMPT = `你是 AI 视频后期的角色一致性审核员。
@@ -356,11 +359,90 @@ export async function scoreShotConsistency(
       reasoning: typeof parsed.reasoning === 'string'
         ? parsed.reasoning.slice(0, 200)
         : '',
+      method: 'llm',
     };
   } catch (e) {
     console.warn('[CameoConsistency] score failed:', e instanceof Error ? e.message : e);
     return null;
   }
+}
+
+/**
+ * v12.259:视觉嵌入余弦 → 一致性分(纯函数,可测)。
+ *
+ * 余弦[-1,1] 线性映射到 0-100 一致性分。用 floor/ceil 校准(env `IMAGE_EMBED_SIM_FLOOR`/`_CEIL`):
+ * cos ≤ floor → 0,cos ≥ ceil → 100,之间线性。默认 floor 0.5 / ceil 0.92 是**起点**,
+ * 不同嵌入模型的相似度分布不同,上线后应拿标注样本重新校准这两个阈值。
+ */
+const DEFAULT_SIM_FLOOR = 0.5;
+const DEFAULT_SIM_CEIL = 0.92;
+export function mapCosineToScore(cos: number, floor?: number, ceil?: number): number {
+  let lo = floor ?? Number(process.env.IMAGE_EMBED_SIM_FLOOR ?? DEFAULT_SIM_FLOOR);
+  let hi = ceil ?? Number(process.env.IMAGE_EMBED_SIM_CEIL ?? DEFAULT_SIM_CEIL);
+  // 复检修:env 配错(NaN / floor≥ceil,如把两个环境变量填反)时,别静默用一套没人预期的映射
+  // (会漏触/误触重生)。回落到文档默认 0.5/0.92 并告警。显式传参的 hi≤lo 仍保留裸 cos*100(编程用途)。
+  if (floor === undefined && ceil === undefined && (!(hi > lo) || !isFinite(lo) || !isFinite(hi))) {
+    console.warn(`[CameoConsistency] IMAGE_EMBED_SIM_FLOOR/CEIL 无效(lo=${lo} hi=${hi}),回落默认 ${DEFAULT_SIM_FLOOR}/${DEFAULT_SIM_CEIL}`);
+    lo = DEFAULT_SIM_FLOOR; hi = DEFAULT_SIM_CEIL;
+  }
+  const c = Math.max(-1, Math.min(1, Number(cos) || 0));
+  if (!(hi > lo)) return Math.round(Math.max(0, Math.min(1, c)) * 100);
+  const s = (c - lo) / (hi - lo);
+  return Math.round(Math.max(0, Math.min(1, s)) * 100);
+}
+
+/**
+ * 视觉嵌入版一致性打分:对生成图 + 参考图各取图像嵌入,算余弦相似度硬判(确定性,不靠 LLM 主观打分)。
+ * 需配 `IMAGE_EMBED_MODEL`(多模态嵌入端点)且两图为 http(s)(嵌入端点要能抓)。任一条件不满足 → null,
+ * 由 `scoreShotConsistencyBest` 回落到 LLM。
+ */
+export async function scoreShotConsistencyEmbedding(
+  shotImageUrl: string,
+  referenceImageUrl: string,
+): Promise<ShotConsistencyResult | null> {
+  if (!shotImageUrl || !referenceImageUrl || !hasImageEmbeddingKey()) return null;
+  try {
+    const [shotEmb, refEmb] = await Promise.all([embedImage(shotImageUrl), embedImage(referenceImageUrl)]);
+    // 复检修:维度不等时 cosineSimilarity 返 0 → 会算成 score 0 → 误触每镜重生。这种情况当作嵌入不可比,
+    // 返 null 交给 LLM 回落,而不是拿一个假的 0 分逼重生。
+    if (!shotEmb || !refEmb || shotEmb.dim !== refEmb.dim) return null;
+    const cos = cosineSimilarity(shotEmb.vector, refEmb.vector);
+    const score = mapCosineToScore(cos);
+    return {
+      score,
+      dimensions: { face: score, outfit: score, identity: score },
+      reasoning: `视觉嵌入余弦 ${cos.toFixed(3)} → ${score}(${shotEmb.model})`,
+      method: 'embedding',
+    };
+  } catch (e) {
+    console.warn('[CameoConsistency] embedding score failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
+ * 是否对 cameo 一致性启用嵌入打分 —— **专用开关** `CAMEO_EMBED_SCORING=1` + 配了图像嵌入端点。
+ * 用独立开关(而非仅凭 IMAGE_EMBED_MODEL):因为 IMAGE_EMBED_MODEL 也被角色库检索用,
+ * 不能因为开了检索就悄悄改 cameo 的重生判定(默认阈值未校准,可能误触/漏触重生)。
+ */
+export function cameoEmbeddingScoringEnabled(): boolean {
+  return process.env.CAMEO_EMBED_SCORING === '1' && hasImageEmbeddingKey();
+}
+
+/**
+ * 一致性打分总入口:显式开启且嵌入可用时**优先视觉嵌入余弦硬判**(确定性、抗 LLM 幻觉);
+ * 嵌入不可用/失败时**回落 LLM Vision**。默认(未开 CAMEO_EMBED_SCORING)即纯 LLM,行为与升级前一致 —— 零回归。
+ */
+export async function scoreShotConsistencyBest(
+  shotImageUrl: string,
+  referenceImageUrl: string,
+  characterName?: string,
+): Promise<ShotConsistencyResult | null> {
+  if (cameoEmbeddingScoringEnabled()) {
+    const emb = await scoreShotConsistencyEmbedding(shotImageUrl, referenceImageUrl);
+    if (emb) return emb;
+  }
+  return scoreShotConsistency(shotImageUrl, referenceImageUrl, characterName);
 }
 
 export function safeParseJson(raw: string): any | null {

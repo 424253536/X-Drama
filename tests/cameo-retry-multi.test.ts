@@ -14,13 +14,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/cameo-vision', () => ({
-  scoreShotConsistency: vi.fn(),
+  scoreShotConsistencyBest: vi.fn(),
 }));
 
 import { evaluateAndRetry } from '@/services/cameo-retry';
-import { scoreShotConsistency } from '@/lib/cameo-vision';
+import { scoreShotConsistencyBest } from '@/lib/cameo-vision';
 
-const mockScore = scoreShotConsistency as unknown as ReturnType<typeof vi.fn>;
+const mockScore = scoreShotConsistencyBest as unknown as ReturnType<typeof vi.fn>;
 
 const mkScore = (score: number, reasoning = 'mock') => ({
   score,

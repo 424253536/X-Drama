@@ -25,7 +25,7 @@
  *   storyboard.cameoAttempts = outcome.attempts;
  */
 
-import { scoreShotConsistency, type ShotConsistencyResult } from '@/lib/cameo-vision';
+import { scoreShotConsistencyBest, type ShotConsistencyResult } from '@/lib/cameo-vision';
 
 /** Sprint A.1 决策值 — 改这里就改全管线行为, 不要散落到 orchestrator */
 export const CAMEO_RETRY_THRESHOLD = 75;
@@ -134,7 +134,7 @@ export async function evaluateAndRetry(input: CameoRetryInput): Promise<CameoRet
 
   // 第一次评分 — 并行,避免多角色把延迟拉成 N 倍
   const firstResults = await Promise.all(
-    allRefs.map(ref => scoreShotConsistency(input.shotImageUrl, ref.url, ref.name)),
+    allRefs.map(ref => scoreShotConsistencyBest(input.shotImageUrl, ref.url, ref.name)),
   );
   const firstPerChar = allRefs.map((ref, i) => ({
     name: ref.name,
@@ -192,7 +192,7 @@ export async function evaluateAndRetry(input: CameoRetryInput): Promise<CameoRet
       break; // 重生失败 → 停,保最优
     }
 
-    const results = await Promise.all(allRefs.map(ref => scoreShotConsistency(regenUrl, ref.url, ref.name)));
+    const results = await Promise.all(allRefs.map(ref => scoreShotConsistencyBest(regenUrl, ref.url, ref.name)));
     const perChar = allRefs.map((ref, i) => ({ name: ref.name, score: results[i]?.score ?? null, reasoning: results[i]?.reasoning || '' }));
     const valid = results
       .map((r, i) => (r ? { result: r, name: allRefs[i].name } : null))

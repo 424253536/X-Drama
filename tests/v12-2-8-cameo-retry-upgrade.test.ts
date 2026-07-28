@@ -3,11 +3,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/cameo-vision', () => ({ scoreShotConsistency: vi.fn() }));
+vi.mock('@/lib/cameo-vision', () => ({ scoreShotConsistencyBest: vi.fn() }));
 import { evaluateAndRetry, CAMEO_RETRY_MAX_ATTEMPTS } from '@/services/cameo-retry';
-import { scoreShotConsistency } from '@/lib/cameo-vision';
+import { scoreShotConsistencyBest } from '@/lib/cameo-vision';
 
-const mockScore = scoreShotConsistency as unknown as ReturnType<typeof vi.fn>;
+const mockScore = scoreShotConsistencyBest as unknown as ReturnType<typeof vi.fn>;
 const mk = (score: number) => ({ score, dimensions: { face: score, outfit: score, identity: score }, reasoning: `s${score}` });
 beforeEach(() => mockScore.mockReset());
 
