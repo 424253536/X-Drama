@@ -11,6 +11,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # 2026-08-06 Actions 大规模故障期间 webhook 被限流(只处理 ~15%),两次推 main 都没触发 CI,
+  # 且恢复后不追溯补触发。留一个手动触发口:`gh workflow run CI --ref main`,
+  # 免得每次都要靠推空提交来换一次 CI。
+  workflow_dispatch:
 
 jobs:
   test:
