@@ -1187,45 +1187,43 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     // v12.264:SRT 时间轴重写下移到 xfade 时间轴算完之后(见循环后)—— 需用压缩后画面起点定位字幕,
     // 否则字幕相对画面/配音逐镜滞后 Σ effectiveTd。此处仅保留 xfade 链构建。
 
-    // 链式 xfade
-    let prevLabel = 'v0';
-    let cumulativeDuration = durations[0];
-
-    // v12.264 音画同步:逐镜记录本次转场的实际 xfade 时长,循环后用 computeXfadeTimeline 反推每镜画面起点,
-    // 供下方配音 adelay 同源对齐(详见 computeXfadeTimeline 注释;根因=旧版 adelay 纯累加不减转场重叠)。
-    const effectiveTds: number[] = new Array(n).fill(0); // effectiveTds[0] 恒 0(首镜无转场)
-
+    // ── v12.265 音画同步「单一真源」结构化 ──────────────────────────────────────
+    // v12.264 修对了数值,但画面 offset 与配音/字幕的起点是**两处独立递推**(数值恰好相等)——
+    // 将来任一处被改就会无声错位,正是本次 bug 的成因模式。这里彻底消除:
+    //   ① 前置 pass 只算「每次转场的类型 + 实际时长」(纯数据,不产滤镜);
+    //   ② computeXfadeTimeline 一次性给出压缩后时间轴;
+    //   ③ 画面 xfade offset / 配音 adelay / 字幕起点 / 打击音效**四者共用同一份 clipStartSec**。
+    const effectiveTds: number[] = new Array(n).fill(0); // [0] 恒 0(首镜无转场)
+    const transitionOf: string[] = new Array(n).fill('');
     for (let i = 1; i < n; i++) {
       const clipAnalysis = highlights.find(h => h.shotNumber === validClips[i]?.shotNumber);
       const pick = transitionNames[i] || validClips[i]?.transition || 'dissolve';
       const isLastCut = pick === 'cut' || pick === 'flash-cut';
-      const transition = mapTransition(pick);
+      transitionOf[i] = mapTransition(pick);
       // 关键镜 fade 略长(郑重入场);其余用高光分析推荐时长
       const enteringKey = !isLastCut && keyShots.has(validClips[i]?.shotNumber as number);
       const baseTd = enteringKey
         ? Math.max(td, clipAnalysis?.editStrategy.transitionDuration || td) * 1.3
         : (clipAnalysis?.editStrategy.transitionDuration || td);
-      const effectiveTd = isLastCut ? 0.1 : Math.min(
+      effectiveTds[i] = isLastCut ? 0.1 : Math.min(
         baseTd,
         Math.min(durations[i - 1], durations[i]) / 2
       );
-      effectiveTds[i] = effectiveTd; // v12.264 供 computeXfadeTimeline 反推画面起点(配音同源对齐)
-
-      const offset = Math.max(0, cumulativeDuration - effectiveTd);
-      // v2.22 fix #2: 最后一段不再直接出 [vout] — 留出 [xvfinal] 给字幕 filter
-      const outLabel = i === n - 1 ? 'xvfinal' : `xv${i}`;
-
-      filters.push(`[${prevLabel}][v${i}]xfade=transition=${transition}:duration=${effectiveTd.toFixed(2)}:offset=${offset.toFixed(2)}[${outLabel}]`);
-
-      cumulativeDuration = offset + durations[i];
-      prevLabel = outLabel;
     }
 
-    // v12.264 音画同步:配音起点 + 字幕起点的单一真源 —— 与上方画面 xfade offset 同一递推
-    //(同 durations/effectiveTds),clipStartSec[i] === 第 i 镜画面 xfade offset。旧版配音/字幕都按
-    // durations 纯累加 → 相对压缩后画面逐镜滞后 Σ effectiveTd(默认转场 0.5s × 转场数 ≈ 真机 0.5~1s)。
-    const { clipStartSec } = computeXfadeTimeline(durations, effectiveTds); // totalSec == 循环里的 cumulativeDuration
+    // 压缩后时间轴:clipStartSec[i] = 第 i 镜画面真实起点(= 其 xfade offset),totalSec = 成片总时长
+    const { clipStartSec, totalSec } = computeXfadeTimeline(durations, effectiveTds);
     const clipStartMs: number[] = clipStartSec.map((s) => Math.round(s * 1000));
+    const cumulativeDuration = totalSec; // 供 BGM 尾淡出 / totalDuration(与旧版逐值相同)
+
+    // 链式 xfade —— offset 直接取 clipStartSec[i],与音轨/字幕同源
+    let prevLabel = 'v0';
+    for (let i = 1; i < n; i++) {
+      // v2.22 fix #2: 最后一段不再直接出 [vout] — 留出 [xvfinal] 给字幕 filter
+      const outLabel = i === n - 1 ? 'xvfinal' : `xv${i}`;
+      filters.push(`[${prevLabel}][v${i}]xfade=transition=${transitionOf[i]}:duration=${effectiveTds[i].toFixed(2)}:offset=${clipStartSec[i].toFixed(2)}[${outLabel}]`);
+      prevLabel = outLabel;
+    }
 
     // v12.264:SRT 字幕按压缩后画面起点重写(下移自 xfade 前)—— 起点与配音 adelay / 画面 xfade 同源,
     // 展示时长仍用各镜终值时长(变速/卡点已落账)。原 v12.195 只重写了「终值时长」,漏了 xfade 压缩位移。
@@ -1236,11 +1234,13 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         // 避免压缩后本镜字幕尾巴压到下一镜起点上出现两行字幕。
         fs.writeFileSync(
           srtResyncPath,
-          buildSrtWithStarts(validClips.map((c, k) => ({
-            dialogue: c?.dialogue || '',
-            startSec: clipStartSec[k],
-            durSec: k < n - 1 ? clipStartSec[k + 1] - clipStartSec[k] : durations[k],
-          }))),
+          buildSrtWithStarts(validClips.map((c, k) => {
+            // v12.265:gap 退化保护 —— isLastCut 分支的 effectiveTd 硬写 0.1(绕过 /2 夹取),
+            // 极短镜下 gap 可能算成 0/负数,落进 buildSrtWithStarts「非法→5s」兜底会显示 5 秒错字幕
+            // 并压住下一条。gap 不为正时退回该镜自身时长(= 旧版行为,绝不放大成 5s)。
+            const gap = k < n - 1 ? clipStartSec[k + 1] - clipStartSec[k] : durations[k];
+            return { dialogue: c?.dialogue || '', startSec: clipStartSec[k], durSec: gap > 0 ? gap : durations[k] };
+          })),
           'utf-8',
         );
         console.log('[Composer] v12.264 SRT 时间轴按 xfade 压缩后画面起点重写(字幕/配音/画面三轨齐平)');
@@ -1400,12 +1400,13 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     let sfxCount = 0;
     if (actionMode && options.impactCues?.length && process.env.IMPACT_SFX_DISABLE !== '1') {
       try {
+        // v12.265:打击音效起点同样取 clipStartMs(xfade 压缩后画面起点)—— v12.264 修了配音/字幕
+        // 却漏了这里:本块原是**独立的第二处** durations 纯累加,拳拳到肉的闷响会比画面上的拳头
+        // 晚 Σ effectiveTd(与配音同根同量),动作片越往后越"打完才响"。
         const startMs2: Map<number, number> = new Map();
-        let cum2 = 0;
         for (let k = 0; k < n; k++) {
           const sn = validClips[k]?.shotNumber;
-          if (typeof sn === 'number') startMs2.set(sn, Math.round(cum2));
-          cum2 += (durations[k] || 0) * 1000;
+          if (typeof sn === 'number') startMs2.set(sn, clipStartMs[k] || 0);
         }
         const sfxLabels: string[] = [];
         for (const cue of options.impactCues) {

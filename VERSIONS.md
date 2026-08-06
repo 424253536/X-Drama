@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.264**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.265**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.264**:**vitest 3517 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.265**:**vitest 3523 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,17 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.265.0** | 2026-07-28 | `0ef68f4` | **🔍 v12.264 音画同步的对抗复检补漏(自查抓出漏改一处 + 结构性收口)**。对 v12.264 起 4 视角对抗复检,**逮到 v12.264 只修了三处纯累加里的两处**:
+
+**① 打击音效仍在旧时间轴(HIGH,真漏)**:`impactCues` 分支另有**独立的第二处** `cum2 += durations[k]*1000`,v12.264 只改了配音与字幕。后果与配音同根同量 —— 闷响比画面上的拳头晚 Σ effectiveTd,动作片越往后越"打完才响"(4 镜 ×0.5s 转场 → 末镜晚 **1.5s**)。改取 `clipStartMs`。
+
+**② 字幕退化保护(LOW,v12.264 自己引入)**:v12.264 把字幕展示时长改成「到下一镜起点的 gap」,但 `isLastCut` 分支的 `effectiveTd` 硬写 0.1 **绕过了 `/2` 夹取** —— 极短镜下 gap 会算成 0,落进 `buildSrtWithStarts`「非法→5s」兜底,显示 5 秒错字幕并压住下一条(比旧版更糟)。调用方加 `gap > 0 ? gap : durations[k]` 退化保护。
+
+**③ 结构性收口(消除成因模式)**:v12.264 数值对了,但画面 `offset` 与音轨/字幕起点仍是**两处独立递推**(恰好相等)—— 将来任一处被改就会无声错位,**这正是本 bug 的成因模式**。本版拆成「前置 pass 只算转场类型+时长 → `computeXfadeTimeline` 一次性出时间轴 → 画面/配音/字幕/打击音效**四轨共用同一份 `clipStartSec`**」,`cumulativeDuration` 亦改取 `totalSec`。漂移风险由"靠测试盯"降为"结构上不可能"。
+
+**诚实边界**:复检 7 个 agent 有 5 个撞周限额挂掉(alignment/regression 两个视角 + 全部 3 个验证者),**"0 confirmed" 在这种情况下不作数** —— 上述三条系人工逐条复核代码确认;两个死掉视角的检查项(SRT 重写时序、`require('@/lib/text-control')` 运行时可解析、单镜路径未触及、纯硬切等价、TDZ)已手工补验通过。karaoke 字幕与 nativeAudioShots 原生音轨(均非默认路径)的同根漂移仍单列待办。
+
+**验收**:tsc 0 + 全量 **3523/3523**(422 文件,+6:SFX 同源 + 量化回归 + gap 退化 + 四轨同源接线)+ 门禁零违规。 |
 | **v12.264.0** | 2026-07-28 | `ade64ac` | **🎬 音画同步根因修复(真机实测配音/字幕滞后画面 0.5~1s)**。链式 xfade 每次转场把**画面**时间轴压缩 `effectiveTd`(`offset = 累计 − effectiveTd`),而配音 `adelay` 与 SRT 字幕却按 `durations[]` **纯累加**定位(不减转场重叠)→ 二者相对压缩后画面**逐镜滞后 Σ effectiveTd**(默认转场 0.5s × 转场数 ≈ 0.5~1s,与真机观感吻合)。旧 v12.195「按终值时长重写 SRT」只治了变速漂移,漏了 xfade 压缩位移。
 
 **修复**:抽出纯函数 `computeXfadeTimeline(durations, effectiveTds)` 作**单一真源** —— 画面 xfade offset、配音 `adelay` 起点、字幕起点三者同一递推产出(`clipStartSec[i] === 第 i 镜画面 xfade offset`),累计漂移归零、口型不脱节。配音 `shotStartMs` 改取 `clipStartMs`(不再 `cumMs += durations`);SRT 重写下移到 xfade 时间轴算完之后,新增 `buildSrtWithStarts`(显式起点定位,展示时长取到下一镜起点、首尾相接不重叠)。
