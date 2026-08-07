@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.273**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.274**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.273**:**vitest 3559 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.274**:**vitest 3565 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,19 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.274.0** | 2026-08-07 | `8f89e59` | **🎙️ 音色韵律单一真源 —— 补上 v12.229 扩容时漏掉的 18 档腔调**。
+
+**先纠正我自己的一处误判**:本版原计划做「音色库扩容」,盘点时我数的是 `voiceId` 字符串出现次数(9),据此以为音色只有 9 个 —— **实际 v12.229 已把 `VOICE_CATALOG` 从 4 扩到 22**,角色音色绑定 `pickVoiceForCharacter` 也早已存在。计数方式错了,差点做重复劳动。
+
+**改为修真缺口**:`VOICE_CATALOG` 有 **22** 档,而 tts.service 的 `VOICE_PROFILES`(决定 speed/vol/pitch)**只有 4 条** —— 另外 **18 档**全部落进 `VOICE_PROFILES[voiceId] || 默认旁白男声` 的兜底。后果:「俏皮少女」「奶音男孩」**音色换了、腔调没换**,语速 1.0 / 音高 0,与成熟男旁白逐字节相同 —— 童声档听起来像成年人在装嫩。v12.229 扩了目录却没扩这张平行表,正是「两份表各写各的」必然漂移。
+
+**结构性修法(不是补 18 行)**:把韵律并进 `VoiceMeta`(`speed`/`pitch`/`vol` 可选),`VOICE_PROFILES` 改为**从 `VOICE_CATALOG` 派生** —— 今后再扩音色,profile 自动跟随,**结构上不可能再出现「目录有、profile 没有」**。与 v12.265 音画同步「四轨同源」同一思路:让漂移不可能,而不是靠测试盯。
+
+**韵律按气质/年龄段赋值**:童幼档快而高(奶音男孩 pitch +4、俏皮少女 speed 1.12),低沉档慢而低(男有声书② speed 0.92 / pitch −2),旁白与主播**故意保持中性**(这 3 档仍是 1.0/0,是设计选择不是遗漏)。
+
+**零回归**:原 4 档(`narrator_male_cn` 等)数值在目录里保持原样(1.0/0、1.0/0、1.1/2、1.05/3),测试逐值断言;既有项目的 voice-overrides 不受影响。
+
+**验收**:tsc 0 + 全量 **3565/3565**(427 文件,+6:派生完整性/取值合法区间/零回归逐值/腔调真分化/**真实请求体 voice_setting 带对 speed+pitch**/显式入参仍优先)+ 门禁零违规。 |
 | **v12.273.0** | 2026-08-07 | `5c1aa9b` | **🎨 风格预设库 64 → 155(+91)**。路线图待办「风格模板扩容」落地。五分类并行创作 100 个,经**三道过滤**留 91。
 
 **过滤链(内容资产最怕注水,故不靠人眼)**:① 新增内部**程序化三重去重**(id/中文名/英文名)剔 2;② 质量复核 agent 按「promptFragment 含空泛无效词 / 实质同质 / 与分类不符」剔 2(例:`overcast-grey` 与 `nordic-pale` 同为阴天漫射低对比 35mm f/5.6,仅换名);③ **与原有 64 个交叉比对**——尽管创作 prompt 已明示不许重复,**仍又抓出 5 个撞车**(ukiyo-e/impressionism/art-nouveau/surrealism/art-deco)。
