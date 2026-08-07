@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
-import { buildEDL, buildFCPXML, type EdlShot, type EdlAudio } from '@/lib/edl-export';
+import { buildEDL, buildFCPXML, pacingReportToMarkers, type EdlShot, type EdlAudio, type EdlMarker } from '@/lib/edl-export';
 import { normalizeProjectFormat } from '@/lib/project-format';
 import { requireProjectAccess } from '@/lib/auth-guard';
 
@@ -100,16 +100,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
   }
 
+  // v12.278:把节奏审计结论作为标记带进剪辑线 —— 审计与 EDL 各自都是竞品空白,
+  // 接起来更没有第二家:剪辑师在自己的时间轴上直接看到「第 3~5 镜是拖沓段」。
+  // 需 script.pacingReport 已落库(v12.278 起 saveAsset 带上它;老项目无此字段则自然为空)。
+  const markers: EdlMarker[] = (() => {
+    try {
+      const starts: number[] = [];
+      let cur = 0;
+      for (const sh of shots) { starts.push(cur); cur += sh.durationS; }
+      return pacingReportToMarkers((script as any)?.pacingReport, starts);
+    } catch { return []; }
+  })();
+
   const title = `wind-comic-${projectId}`;
   if (format === 'fcpxml') {
-    return new Response(buildFCPXML(shots, fps, title, audio), {
+    return new Response(buildFCPXML(shots, fps, title, audio, markers), {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': `attachment; filename="${title}.xml"`,
       },
     });
   }
-  return new Response(buildEDL(shots, fps, title, audio), {
+  return new Response(buildEDL(shots, fps, title, audio, markers), {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Disposition': `attachment; filename="${title}.edl"`,

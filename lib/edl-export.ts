@@ -20,6 +20,23 @@ export interface EdlShot {
   transitionDurationS?: number;
 }
 
+/**
+ * v12.278:剪辑线标记 —— 把**节奏审计的结论**带进 NLE。
+ *
+ * 为什么值得做:节奏审计与 EDL/AAF 导出各自都是「全部已查竞品的空白」,
+ * 把两者接起来更没有第二家 —— 剪辑师在自己的时间轴上直接看到
+ * 「第 3~5 镜是拖沓段」「高潮在第 8 镜」,而不是去翻另一个网页里的报告。
+ * 这正对着本项目的价值主张:**降废片率,并且要说出改哪几镜**。
+ */
+export interface EdlMarker {
+  /** 在成片时间轴上的位置(秒) */
+  atS: number;
+  /** 覆盖时长(秒);0/缺省表示点标记 */
+  durationS?: number;
+  name: string;
+  comment?: string;
+}
+
 /** v12.277:音轨条目(逐镜配音 / 整条 BGM)。 */
 export interface EdlAudio {
   name: string;
@@ -76,7 +93,7 @@ export function isDissolveTransition(t: string | undefined | null): boolean {
 }
 
 /** CMX3600 EDL */
-export function buildEDL(shots: EdlShot[], fps = 24, title = 'WIND COMIC TIMELINE', audio: EdlAudio[] = []): string {
+export function buildEDL(shots: EdlShot[], fps = 24, title = 'WIND COMIC TIMELINE', audio: EdlAudio[] = [], markers: EdlMarker[] = []): string {
   const norm = normShots(shots).map((s) => ({ ...s, frames: toFrames(s.durationS, fps) }));
   const lines: string[] = [`TITLE: ${title}`, 'FCM: NON-DROP FRAME', ''];
   let rec = 0;
@@ -115,6 +132,19 @@ export function buildEDL(shots: EdlShot[], fps = 24, title = 'WIND COMIC TIMELIN
     if (a.sourceUrl) lines.push(`* SOURCE FILE: ${a.sourceUrl}`);
     lines.push('');
   }
+  // v12.278:节奏审计标记 —— CMX3600 无标准 marker 事件,按通用做法以注释块附在末尾,
+  // 各家 NLE 导入时保留为片段注释/日志,剪辑师肉眼可见「哪几镜要改」。
+  if (Array.isArray(markers) && markers.length > 0) {
+    lines.push('* ─── PACING AUDIT MARKERS (wind-comic) ───');
+    for (const m of markers) {
+      const at = framesToTimecode(Math.max(0, Math.round((m?.atS || 0) * fps)), fps);
+      const span = m?.durationS && m.durationS > 0
+        ? `–${framesToTimecode(Math.round(((m.atS || 0) + m.durationS) * fps), fps)}`
+        : '';
+      lines.push(`* MARKER ${at}${span}  ${m.name}${m.comment ? ` — ${m.comment}` : ''}`);
+    }
+    lines.push('');
+  }
   return lines.join('\n');
 }
 
@@ -123,7 +153,7 @@ function xmlEscape(s: string): string {
 }
 
 /** FCP7 XML (xmeml v5) — DaVinci / Premiere 可导入 */
-export function buildFCPXML(shots: EdlShot[], fps = 24, title = 'Wind Comic Sequence', audio: EdlAudio[] = []): string {
+export function buildFCPXML(shots: EdlShot[], fps = 24, title = 'Wind Comic Sequence', audio: EdlAudio[] = [], markers: EdlMarker[] = []): string {
   const norm = normShots(shots).map((s) => ({ ...s, frames: toFrames(s.durationS, fps) }));
   const total = norm.reduce((a, s) => a + s.frames, 0);
   const rate = `<rate><timebase>${fps}</timebase><ntsc>FALSE</ntsc></rate>`;
@@ -178,6 +208,20 @@ export function buildFCPXML(shots: EdlShot[], fps = 24, title = 'Wind Comic Sequ
     `    <name>${xmlEscape(title)}</name>`,
     `    <duration>${total}</duration>`,
     `    ${rate}`,
+    // v12.278:FCPXML 有原生 <marker>,比 EDL 的注释更实用 —— DaVinci/Premiere 导入后
+    // 直接落在时间轴标尺上,剪辑师一眼看到「这段是拖沓段」。
+    ...(Array.isArray(markers) ? markers : []).map((m) => {
+      const inF = Math.max(0, Math.round((m?.atS || 0) * fps));
+      const outF = m?.durationS && m.durationS > 0 ? inF + Math.round(m.durationS * fps) : inF + 1;
+      return [
+        '    <marker>',
+        `      <comment>${xmlEscape(m.comment || '')}</comment>`,
+        `      <name>${xmlEscape(m.name || 'marker')}</name>`,
+        `      <in>${inF}</in>`,
+        `      <out>${outF}</out>`,
+        '    </marker>',
+      ].join('\n');
+    }),
     '    <media>',
     '      <video>',
     '        <track>',
@@ -191,4 +235,52 @@ export function buildFCPXML(shots: EdlShot[], fps = 24, title = 'Wind Comic Sequ
     '  </sequence>',
     '</xmeml>',
   ].join('\n');
+}
+
+/**
+ * v12.278:节奏审计报告 → 剪辑线标记。
+ *
+ * 只翻译**能指到具体镜号**的结论(拖沓段、高潮峰值、开场不达标),
+ * 不把「平均分 5.2」这种没法操作的数字塞进时间轴 —— 那只会变成噪声。
+ *
+ * @param shotStartsS 各镜在成片时间轴上的起点(秒),由调用方按终值时长累计得出
+ */
+export function pacingReportToMarkers(
+  report: any,
+  shotStartsS: number[],
+): EdlMarker[] {
+  const out: EdlMarker[] = [];
+  const v2 = report?.v2;
+  if (!v2 || !Array.isArray(shotStartsS) || shotStartsS.length === 0) return out;
+  const startOf = (shot1Based: number) => shotStartsS[Math.max(0, Math.min(shotStartsS.length - 1, shot1Based - 1))] ?? 0;
+
+  // 拖沓段 —— 最该让剪辑师看到的:范围 + 均分 + 怎么改
+  for (const d of (Array.isArray(v2.dragSegments) ? v2.dragSegments : [])) {
+    const from = startOf(d.fromShot);
+    const to = startOf(d.toShot) + 0.001;
+    out.push({
+      atS: from,
+      durationS: Math.max(0.001, to - from),
+      name: `拖沓段 S${d.fromShot}-${d.toShot}`,
+      comment: `连续 ${d.length} 镜低冲突(均分 ${Number(d.avgScore).toFixed(1)})—— 建议合并/删减/插一次反转`,
+    });
+  }
+  // 高潮峰值 —— 点标记,便于核对高潮是否落在该落的位置
+  if (v2.shape?.peakIndex > 0) {
+    out.push({
+      atS: startOf(v2.shape.peakIndex),
+      name: `高潮 S${v2.shape.peakIndex}`,
+      comment: `曲线形状 ${v2.shape.shape};峰值高出均值 ${Number(v2.shape.peakProminence).toFixed(1)} 分`,
+    });
+  }
+  // 开场不达标 —— 完播率由这里决定
+  if (v2.opening && v2.opening.passed === false) {
+    out.push({
+      atS: 0,
+      durationS: Math.max(0.001, startOf(v2.opening.sampled + 1) || 0.001),
+      name: '开场密度不足',
+      comment: `前 ${v2.opening.sampled} 镜均分 ${Number(v2.opening.avgScore).toFixed(1)} —— 完播率主要由开场决定`,
+    });
+  }
+  return out;
 }

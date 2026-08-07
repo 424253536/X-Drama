@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.277**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.278**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.277**:**vitest 3606 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.278**:**vitest 3616 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,19 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.278.0** | 2026-08-08 | `8b28379` | **📌 节奏审计:落库 + 回流剪辑线(护城河接起来)**。
+
+**① 修一个「算了但没存」的洞**:writer-agent 算完节奏审计后挂在 `script.pacingReport` 上并经 SSE 推前端 —— 但 `saveAsset(projectId,'script',…)` **只存 `{synopsis,title,shots,theme}`**,报告**从不落库**。前端那份是 `store.updateAsset` 写进 **Zustand 客户端状态**(纯 `set`,不打服务端),所以项目页「节奏分析」tab **一刷新就空白**;而项目页有三处读它(tab 计数 / 逐镜冲突分 / 报告面板)。**全部竞品都没有的核心差异化能力,自己却存不住**。两处 saveAsset 均补上 `pacingReport`。
+
+**② 把审计结论送进剪辑师的时间轴**:节奏审计与 EDL/AAF 导出**各自都是竞品空白**,接起来更没有第二家 —— 剪辑师应当在自己的 NLE 里直接看到「第 3~5 镜是拖沓段」,而不是去翻另一个网页里的报告。新增 `EdlMarker` + `pacingReportToMarkers()`:EDL 按通用做法以注释块附标记(CMX3600 无标准 marker 事件),**FCPXML 用原生 `<marker>`**(可落到 DaVinci/Premiere 的时间轴标尺上)。
+
+**只翻译能指到镜号的结论**:拖沓段(范围标记 + 均分 + 「建议合并/删减/插一次反转」)、高潮峰值(点标记 + 曲线形状)、开场密度不足(覆盖开场区间)。**「平均分 5.2」这类没法操作的数字不塞进时间轴** —— 那只会变成噪声。测试直接断言每条标记名都指向镜号或明确阶段。
+
+**端到端实证**:用真 `auditScript` 跑废片样本 → 报「第 3~6 镜拖沓」→ 标记精确落在 `00:00:08:00–00:00:20:00`(第 3 镜起点 = 4+4s),FCPXML 得 `<in>192</in>`(8s × 24fps)。
+
+**零回归**:不传标记时两种格式与旧版逐字节同形;老项目无 `pacingReport` 字段时自然产出空标记数组。
+
+**验收**:tsc 0 + 全量 **3616/3616**(431 文件,+10)+ 门禁零违规。 |
 | **v12.277.0** | 2026-08-08 | `2f9fc8e` | **🎞️ 剪辑线导出对齐成片真实时间轴 + 补音轨与转场(护城河纵深)**。EDL/AAF 导出是「全部已查竞品(含开源 ViMax)的共同空白」,但盘点自家实现,发现它既**浅**又**错**。
 
 **① 错:导出的时间码与成片对不上**。两个导出路由(`export-edl` / `export-aaf`)都只读 script 的 `s.duration` —— 那是**设计时长**;而成片时长会被**卡点吸附**(`snapDurationsToBeatsClamped`)与**逐镜变速**(`durations[i] /= speed`)改写。timeline 资产里明明存着终值(`editResult` 整体落库,含 `timeline[].duration`),两个路由却**一次都没读过**(grep 计数为 0)。剪辑师拿到的是一份「看着像、对不上」的表,越往后偏得越多 —— 与之前修的音画不同步同源:**设计值 vs 终值**。本版改为 timeline 终值优先、script 仅兜底(未出片时行为与旧版一致)。
