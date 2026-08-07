@@ -16,7 +16,7 @@ export default function ApiConfigPage() {
               API 路由台
             </h1>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)] text-pretty">
-              按文本、图像、视频和声音维护多渠道，数字越小优先级越高，失败自动切换下一渠道。
+              连接一个或多个 NewAPI 网关，为每个网关维护多种模型，并按逻辑模型设置跨网关优先级。
             </p>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-[var(--muted)] border border-[var(--border)] bg-[var(--surface)] rounded-lg px-3 py-2">

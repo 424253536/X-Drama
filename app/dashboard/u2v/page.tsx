@@ -10,14 +10,17 @@
  *   4. 点生成 → 等 1-3 分钟 → 内嵌 video player + 下载按钮
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Link as LinkIcon, Play, Download, CircleNotch as Loader2, Sparkle as Sparkles, Warning as AlertTriangle, ArrowCounterClockwise as RotateCcw, FilmSlate } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/toast-provider';
 import { CameraLanguagePicker } from '@/components/create/camera-language-picker';
 import { CircularProgress } from '@/components/ui/circular-progress';
+import { getToken } from '@/lib/auth';
+import type { ModelCatalogItem } from '@/lib/model-routing';
 
 // v5.0.2: 各时长档的预计耗时 (秒) — 给进度环做时间估算 (无真实进度事件时的兜底)
 const EXPECTED_SEC: Record<number, number> = { 5: 120, 6: 120, 10: 150, 15: 180 };
+const VIDEO_MODEL_STORAGE_KEY = 'qfmj-u2v-video-model-v2';
 function fmtMMSS(s: number): string {
   const m = Math.floor(s / 60); const ss = Math.floor(s % 60);
   return `${m}:${ss.toString().padStart(2, '0')}`;
@@ -53,9 +56,43 @@ export default function U2VPage() {
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [videoModels, setVideoModels] = useState<ModelCatalogItem[]>([]);
+  const [modelKey, setModelKey] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try { return localStorage.getItem(VIDEO_MODEL_STORAGE_KEY) || ''; } catch { return ''; }
+  });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { showToast } = useToast();
   const isFlfMode = !!tailImageUrl;
+
+  useEffect(() => {
+    const token = getToken();
+    void fetch('/api/model-catalog?mediaType=video', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store',
+    }).then(async (response) => {
+      const body = await response.json();
+      if (response.ok) setVideoModels(body.models || []);
+    }).catch(() => {});
+  }, []);
+
+  const compatibleVideoModels = useMemo(() => videoModels.filter((model) => model.taskKinds.includes(
+    isFlfMode ? 'video.first_last_frame' : 'video.default',
+  )), [isFlfMode, videoModels]);
+
+  useEffect(() => {
+    if (compatibleVideoModels.some((model) => model.modelKey === modelKey)) return;
+    const next = compatibleVideoModels.find((model) => model.isDefaultFor.includes(
+      isFlfMode ? 'video.first_last_frame' : 'video.default',
+    )) || compatibleVideoModels[0];
+    setModelKey(next?.modelKey || '');
+  }, [compatibleVideoModels, isFlfMode, modelKey]);
+
+  useEffect(() => {
+    try {
+      if (modelKey) localStorage.setItem(VIDEO_MODEL_STORAGE_KEY, modelKey);
+      else localStorage.removeItem(VIDEO_MODEL_STORAGE_KEY);
+    } catch { /* ignore unavailable browser storage */ }
+  }, [modelKey]);
 
   // 清理计时器
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
@@ -162,10 +199,14 @@ export default function U2VPage() {
     try {
       const res = await fetch('/api/u2v-flf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        },
         body: JSON.stringify({
           firstFrameUrl: imageUrl, lastFrameUrl: tailImageUrl, prompt,
           duration: duration === 5 || duration === 6 ? 5 : 10, cameraPreset,
+          modelKey: modelKey || undefined,
         }),
         signal: ctrl.signal,
       });
@@ -195,8 +236,11 @@ export default function U2VPage() {
       const { parseSSEChunk } = await import('@/lib/sse');
       const res = await fetch('/api/u2v/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, prompt, duration, cameraPreset }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        },
+        body: JSON.stringify({ imageUrl, prompt, duration, cameraPreset, modelKey: modelKey || undefined }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -246,7 +290,7 @@ export default function U2VPage() {
           单图变视频(I2V)
         </h1>
         <p className="text-sm text-[var(--soft)] mt-1">
-          上传一张图,写一句描述 — AI 给你 5-15s 视频(Minimax / Kling / Vidu 按时长自动选)。独立工具,不进项目管线。
+          上传一张图，选择视频模型并描述画面运动，直接生成 5-15 秒视频。
         </p>
       </div>
 
@@ -381,6 +425,16 @@ export default function U2VPage() {
 
           {/* v2.14 P0.2: 镜头语言预设 — chip 单选, 不强制 */}
           <CameraLanguagePicker value={cameraPreset} onChange={setCameraPreset} disabled={generating} />
+
+          <label className="block">
+            <span className="text-xs text-[var(--soft)] uppercase tracking-wider">视频模型</span>
+            <select value={modelKey} onChange={(event) => setModelKey(event.target.value)} disabled={generating}
+              className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#111113] px-3 text-xs outline-none focus:border-[#E8C547]/50">
+              {compatibleVideoModels.length === 0 && <option value="">旧版按时长自动选择</option>}
+              {compatibleVideoModels.map((model) => <option key={model.modelKey} value={model.modelKey}>{model.displayName}</option>)}
+            </select>
+            {modelKey && <span className="mt-1 block truncate font-mono text-[9px] text-[var(--soft)]">{modelKey}</span>}
+          </label>
 
           <div>
             <label className="text-xs text-[var(--soft)] uppercase tracking-wider">时长</label>

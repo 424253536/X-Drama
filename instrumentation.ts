@@ -17,6 +17,12 @@ export async function register() {
       if (n) console.log(`[ApiChannels] ${n} enabled channel(s) restored`);
     } catch { /* 首次建库时序 */ }
 
+    try {
+      const { loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+      const n = await loadModelRoutingIntoEnv();
+      if (n) console.log(`[ModelRouting] ${n} active route(s) restored`);
+    } catch { /* 首次建库时序 */ }
+
     // v10.6.3: 模型雷达覆盖重放 —— 扫描采用过的模型 ID 写回 process.env,
     // config.ts 的模型 getter 即读到(DB 覆盖优先于 .env 默认,它是用户显式动作)。
     try {

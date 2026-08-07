@@ -8,13 +8,14 @@
 
 import { API_CONFIG } from './config';
 import { listRuntimeApiChannelsSync } from './runtime-api-channels';
+import { resolveModelRoutesSync } from './model-routing';
 
 export interface LLMAttempt {
   baseURL: string;
   apiKey: string;
   model: string;
   label: string;
-  format?: 'openai' | 'gemini' | 'anthropic';
+  format?: 'openai' | 'openai-responses' | 'gemini' | 'anthropic';
   channelId?: string;
   options?: Record<string, string | number | boolean>;
 }
@@ -24,7 +25,27 @@ export interface LLMAttempt {
  * fast=true 且 useCreative 时, 主用创意"快档"模型 (deepseek-v4-flash) —— 推理 token 少、秒级响应,
  * 适合"快草稿/润色basic"; 默认 false 用 creativeModel (deepseek-v4-pro, 质量优先).
  */
-export function buildLLMAttempts(useCreative: boolean, cfg: any = API_CONFIG.openai, fast = false): LLMAttempt[] {
+export function buildLLMAttempts(
+  useCreative: boolean,
+  cfg: any = API_CONFIG.openai,
+  fast = false,
+  modelKey?: string,
+): LLMAttempt[] {
+  if (modelKey) {
+    return resolveModelRoutesSync(modelKey, 'text').map((route) => ({
+      baseURL: route.gateway.baseUrl.replace(/\/+$/, ''),
+      apiKey: route.gateway.apiKey,
+      model: route.upstreamModelId,
+      label: `${route.profile.displayName} · ${route.gateway.name} · P${route.priority}`,
+      format: route.protocol === 'gemini-generate-content'
+        ? 'gemini'
+        : route.protocol === 'anthropic-messages'
+          ? 'anthropic'
+          : route.protocol === 'openai-responses' ? 'openai-responses' : 'openai',
+      channelId: route.id,
+      options: route.protocolOptions as Record<string, string | number | boolean>,
+    }));
+  }
   const runtimeChannels = listRuntimeApiChannelsSync('text');
   const runtimeAttempts: LLMAttempt[] = runtimeChannels.map((channel) => ({
     baseURL: channel.baseUrl.replace(/\/+$/, ''),
@@ -116,7 +137,11 @@ export async function executeLLMAttempt(
 
   if (format === 'gemini') {
     url = `${attempt.baseURL.replace(/\/+$/, '')}/models/${encodeURIComponent(attempt.model)}:generateContent`;
-    headers = { 'Content-Type': 'application/json', 'x-goog-api-key': attempt.apiKey };
+    headers = {
+      Authorization: `Bearer ${attempt.apiKey}`,
+      'Content-Type': 'application/json',
+      'x-goog-api-key': attempt.apiKey,
+    };
     body = {
       systemInstruction: { parts: [{ text: input.system }] },
       contents: [{ role: 'user', parts: [{ text: input.user }] }],
@@ -130,6 +155,7 @@ export async function executeLLMAttempt(
     url = endpoint(attempt.baseURL, '/v1/messages');
     headers = {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${attempt.apiKey}`,
       'x-api-key': attempt.apiKey,
       'anthropic-version': String(attempt.options?.anthropicVersion || '2023-06-01'),
     };
@@ -138,6 +164,16 @@ export async function executeLLMAttempt(
       system: input.system,
       messages: [{ role: 'user', content: input.user }],
       max_tokens: input.maxTokens,
+      ...(input.temperature != null ? { temperature: input.temperature } : {}),
+    };
+  } else if (format === 'openai-responses') {
+    url = endpoint(attempt.baseURL, '/v1/responses');
+    headers = { Authorization: `Bearer ${attempt.apiKey}`, 'Content-Type': 'application/json' };
+    body = {
+      model: attempt.model,
+      instructions: input.system,
+      input: input.user,
+      max_output_tokens: input.maxTokens,
       ...(input.temperature != null ? { temperature: input.temperature } : {}),
     };
   } else {
@@ -160,12 +196,17 @@ export async function executeLLMAttempt(
     ? (payload?.candidates?.[0]?.content?.parts || []).map((part: any) => part?.text || '').join('')
     : format === 'anthropic'
       ? (payload?.content || []).map((part: any) => part?.text || '').join('')
-      : payload?.choices?.[0]?.message?.content || '';
+      : format === 'openai-responses'
+        ? payload?.output_text || (payload?.output || [])
+          .flatMap((item: any) => item?.content || [])
+          .map((part: any) => part?.text || part?.output_text || '')
+          .join('')
+        : payload?.choices?.[0]?.message?.content || '';
   const finishReason = format === 'gemini'
     ? payload?.candidates?.[0]?.finishReason
     : format === 'anthropic'
       ? payload?.stop_reason
-      : payload?.choices?.[0]?.finish_reason;
+      : format === 'openai-responses' ? payload?.status : payload?.choices?.[0]?.finish_reason;
   if (response.ok && content) {
     return { ok: true, content: stripThink(content), status: response.status, finishReason, usage: payload?.usage || payload?.usageMetadata };
   }
@@ -191,6 +232,8 @@ export interface LLMCallOpts {
   jsonMode?: boolean;
   /** 每个端点遇"瞬时错误"(过载/限流/5xx)时退避重试次数, 默认 1 (即最多打 2 次该端点再切兜底) */
   retriesPerAttempt?: number;
+  /** 用户选择的逻辑文本模型。传入后只允许同一逻辑模型的网关映射故障转移。 */
+  modelKey?: string;
 }
 
 export interface LLMCallResult {
@@ -210,7 +253,9 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
   const { filterHealthyAttempts, markLLMDown, llmKey } = await import('@/lib/llm-health');
   // v12.127:再叠一层配额感知 —— 已破产网关(配额耗尽/欠费)整段跳过,省重复 403 往返。
   const { filterFundedAttempts, markGatewayOutOfCredits, isOutOfCreditsError } = await import('@/lib/gateway-budget');
-  const attempts = filterFundedAttempts(filterHealthyAttempts(buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast)));
+  const attempts = filterFundedAttempts(filterHealthyAttempts(
+    buildLLMAttempts(!!opts.useCreative, API_CONFIG.openai, !!opts.fast, opts.modelKey),
+  ));
   if (attempts.length === 0) return { ok: false, error: 'LLM 未配置 (缺 DEEPSEEK_API_KEY / OPENAI_API_KEY)' };
   const timeoutMs = opts.timeoutMs ?? 150_000;
   const retries = Math.max(0, opts.retriesPerAttempt ?? 1);
@@ -249,6 +294,13 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
       }
       // v12.120:瞬时错误/超时进健康缓存,同进程后续调用冷却期内跳过该端点
       if (isTransientLLMError(lastErr) || lastErr === 'timeout') markLLMDown(llmKey(a));
+      if (opts.modelKey) {
+        const { classifyModelRouteError } = await import('@/lib/model-routing');
+        const classified = classifyModelRouteError(lastErr);
+        if (!classified.safeToFailover) {
+          return { ok: false, error: `${classified.category}: ${classified.message}`, attemptsTried: tried };
+        }
+      }
       // 仅"瞬时错误 + 还有重试余量"才退避重试同端点; 否则跳出去打下一个端点 (兜底)
       if (attempt < retries && isTransientLLMError(lastErr)) {
         await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));

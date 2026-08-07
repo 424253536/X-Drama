@@ -10,7 +10,12 @@ export const dynamic = 'force-dynamic';
 export { activeOrchestrators };
 
 export async function POST(request: NextRequest) {
-  const { idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, editStyle, language, sketchLock } = await request.json();
+  const {
+    idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset,
+    enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage,
+    references, editStyle, language, sketchLock, modelSelections: rawModelSelections,
+    routingVersion: requestedRoutingVersion, audioStrategy: rawAudioStrategy,
+  } = await request.json();
 
   if (!rawIdea || !rawIdea.trim()) {
     return new Response(JSON.stringify({ error: '请提供故事创意' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -38,6 +43,23 @@ export async function POST(request: NextRequest) {
     }
     ownerUserId = uid;
   }
+
+  let modelSelections: import('@/lib/model-routing').ModelSelections = {};
+  try {
+    const { validateModelSelections, loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+    modelSelections = await validateModelSelections(rawModelSelections);
+    if (Object.keys(modelSelections).length > 0) await loadModelRoutingIntoEnv();
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : '模型选择无效',
+      code: 'MODEL_SELECTION_INVALID',
+    }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+  const routingVersion = Object.keys(modelSelections).length > 0
+    ? 2
+    : requestedRoutingVersion === 2 ? 2 : 1;
+  const audioStrategy = rawAudioStrategy === 'native' || rawAudioStrategy === 'hybrid'
+    ? rawAudioStrategy : 'separate';
 
   // v2.18: idea 预处理 — 规则清洗 + (信息不足时) LLM 扩写
   // 这一步在安全闸门之前, 让闸门看到的是已清洗 + 已扩写的版本 (规则更准, 扩写不引入有害词)
@@ -101,6 +123,10 @@ export async function POST(request: NextRequest) {
     editStyle, // v12.0.4 一句指令调剪辑风格
     language, // v12.134 issue #2:显式选剧本语言('auto'/空 → 自动检测)
     sketchLock: sketchLock === true, // v12.143 全片草图锁(对标阅文分镜面板)
+    modelSelections,
+    routingVersion,
+    audioStrategy,
+    ownerUserId,
   };
   const encoder = new TextEncoder();
   const sseHeaders = { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' };

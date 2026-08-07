@@ -17,10 +17,15 @@ import { PromptEditor } from '@/components/prompt-editor';
 import { MultimodalRefShelf } from '@/components/multimodal-ref-shelf';
 import type { ReferenceAsset } from '@/lib/multimodal-ref';
 import { PromptReadiness } from '@/components/prompt-readiness';
+import { ModelSelectionPanel } from '@/components/model-selection-panel';
+import { getToken } from '@/lib/auth';
+import type { AudioStrategy, ModelSelections } from '@/lib/model-routing';
 
 export default function CreatePage() {
   const [idea, setIdea] = useState('');
   const [videoProvider, setVideoProvider] = useState('minimax');
+  const [modelSelections, setModelSelections] = useState<ModelSelections>({});
+  const [audioStrategy, setAudioStrategy] = useState<AudioStrategy>('separate');
   // v12.0.4 一句指令调剪辑风格 —— ''(默认中速)/ preset / 自由文本
   const [editStyle, setEditStyle] = useState('');
   // v6.1.2: 多模态参考 (图/音/视频), 随创作请求一起提交
@@ -129,10 +134,14 @@ export default function CreatePage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
         },
         body: JSON.stringify({
           idea: sanitizedIdea,
           videoProvider,
+          routingVersion: Object.keys(modelSelections).length ? 2 : 1,
+          modelSelections,
+          audioStrategy,
           // v2.9 P0 Cameo: 如果用户上传了主角脸,以 data URI 形式发给后端
           // 后端会 persistAsset 落盘并写入 projects.primary_character_ref
           primaryCharacterRef: cameoPreview || undefined,
@@ -354,64 +363,12 @@ export default function CreatePage() {
                   {/* v6.1.2: 多模态参考 (图/音/视频) */}
                   <MultimodalRefShelf refs={references} onChange={setReferences} />
 
-                  {/* 视频引擎选择 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      {t.create.videoProviderLabel}
-                    </label>
-                    <div className="grid grid-cols-3 gap-4">
-                      <button
-                        onClick={() => setVideoProvider('minimax')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          videoProvider === 'minimax'
-                            ? 'border-[#E8C547] bg-[#E8C547]/10'
-                            : 'border-white/10 bg-white/5 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Zap className={`w-6 h-6 mx-auto mb-2 ${
-                            videoProvider === 'minimax' ? 'text-[#E8C547]' : 'text-gray-400'
-                          }`} />
-                          <div className="font-semibold mb-1">Minimax</div>
-                          <div className="text-xs text-gray-400">速度快</div>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => setVideoProvider('vidu')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          videoProvider === 'vidu'
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-white/10 bg-white/5 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Sparkles className={`w-6 h-6 mx-auto mb-2 ${
-                            videoProvider === 'vidu' ? 'text-blue-400' : 'text-gray-400'
-                          }`} />
-                          <div className="font-semibold mb-1">Vidu</div>
-                          <div className="text-xs text-gray-400">质量高</div>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => setVideoProvider('keling')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          videoProvider === 'keling'
-                            ? 'border-orange-500 bg-orange-500/10'
-                            : 'border-white/10 bg-white/5 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <Lightbulb className={`w-6 h-6 mx-auto mb-2 ${
-                            videoProvider === 'keling' ? 'text-orange-400' : 'text-gray-400'
-                          }`} />
-                          <div className="font-semibold mb-1">可灵 AI</div>
-                          <div className="text-xs text-gray-400">中文好</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
+                  <ModelSelectionPanel
+                    value={modelSelections}
+                    onChange={setModelSelections}
+                    audioStrategy={audioStrategy}
+                    onAudioStrategyChange={setAudioStrategy}
+                  />
 
                   {/* v12.0.4: 一句指令调剪辑风格(快节奏燃向 / 慢叙抒情 / 自由文本)→ 智能剪辑管线 */}
                   <div data-testid="edit-style-picker">

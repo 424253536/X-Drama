@@ -31,6 +31,17 @@ export async function POST(request: NextRequest) {
   const rawPrompt: string = typeof body?.prompt === 'string' ? body.prompt : '';
   const duration: number = [5, 6, 10, 15].includes(Number(body?.duration)) ? Number(body.duration) : 5;
   const cameraPreset: string | null = typeof body?.cameraPreset === 'string' ? body.cameraPreset : null;
+  const modelKey = typeof body?.modelKey === 'string' ? body.modelKey.trim() : '';
+
+  if (modelKey) {
+    try {
+      const { validateModelSelections, loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+      await validateModelSelections({ 'video.default': modelKey });
+      await loadModelRoutingIntoEnv();
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : '视频模型不可用' }, { status: 400 });
+    }
+  }
 
   // 校验 (与同步路由一致的护栏)
   if (!/^https?:\/\//i.test(imageUrl)) {
@@ -67,7 +78,7 @@ export async function POST(request: NextRequest) {
         const mapped = 5 + Math.max(0, Math.min(100, pct)) * 0.9;
         lastRealPct = Math.max(lastRealPct, mapped);
         send({ event: 'progress', data: { phase: 'rendering', pct: Math.round(lastRealPct), real: true } });
-      });
+      }, { modelKey: modelKey || undefined, taskKind: 'video.default', userId: _pg.userId });
       clearInterval(timer);
       if (signal.aborted) {
         console.warn('[u2v/stream] 客户端已断开,结果不再回传(费用已发生,记账照常)');

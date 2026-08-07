@@ -22,11 +22,13 @@ process.stdin.on('end', async () => {
     const endpoint = (path) => /\/v1$/i.test(base) && path.startsWith('/v1/') ? base + path.slice(3) : base + path;
     const url = format === 'gemini'
       ? `${base}/models/${encodeURIComponent(model)}:generateContent`
-      : format === 'anthropic' ? endpoint('/v1/messages') : endpoint('/v1/chat/completions');
-    const headers = format === 'gemini'
-      ? { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
       : format === 'anthropic'
-        ? { 'x-api-key': apiKey, 'anthropic-version': options.anthropicVersion || '2023-06-01', 'Content-Type': 'application/json' }
+        ? endpoint('/v1/messages')
+        : format === 'openai-responses' ? endpoint('/v1/responses') : endpoint('/v1/chat/completions');
+    const headers = format === 'gemini'
+      ? { 'Authorization': `Bearer ${apiKey}`, 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
+      : format === 'anthropic'
+        ? { 'Authorization': `Bearer ${apiKey}`, 'x-api-key': apiKey, 'anthropic-version': options.anthropicVersion || '2023-06-01', 'Content-Type': 'application/json' }
         : { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
     const body = format === 'gemini'
       ? {
@@ -36,6 +38,8 @@ process.stdin.on('end', async () => {
         }
       : format === 'anthropic'
         ? { model, system, messages: [{ role: 'user', content: user }], max_tokens: maxTokens }
+        : format === 'openai-responses'
+          ? { model, instructions: system, input: user, max_output_tokens: maxTokens }
         : {
             model,
             messages: [
@@ -65,11 +69,15 @@ process.stdin.on('end', async () => {
       ? (data?.candidates?.[0]?.content?.parts || []).map((part) => part?.text || '').join('')
       : format === 'anthropic'
         ? (data?.content || []).map((part) => part?.text || '').join('')
+        : format === 'openai-responses'
+          ? data?.output_text || (data?.output || []).flatMap((item) => item?.content || []).map((part) => part?.text || part?.output_text || '').join('')
         : data?.choices?.[0]?.message?.content || '';
     // v2.18.2: forward finish_reason — orchestrator 用它侦测截断 ('length' 表示撞 maxTokens)
     const finishReason = format === 'gemini'
       ? data?.candidates?.[0]?.finishReason || ''
-      : format === 'anthropic' ? data?.stop_reason || '' : data?.choices?.[0]?.finish_reason || '';
+      : format === 'anthropic'
+        ? data?.stop_reason || ''
+        : format === 'openai-responses' ? data?.status || '' : data?.choices?.[0]?.finish_reason || '';
     const usage = data?.usage || data?.usageMetadata || null;
     process.stdout.write(JSON.stringify({ ok: true, content, elapsed, finishReason, usage }));
     process.exit(0);

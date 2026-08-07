@@ -122,6 +122,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // 4. orchestrator 实例
   const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
   const orchestrator = new HybridOrchestrator();
+  const { applyProjectModelRouting } = await import('@/lib/project-model-routing');
+  await applyProjectModelRouting(orchestrator, projectId);
   try {
     const proj = db.prepare('SELECT style_id FROM projects WHERE id = ?').get(projectId) as { style_id?: string } | undefined;
     if (proj?.style_id) orchestrator.setUserStyle(proj.style_id);

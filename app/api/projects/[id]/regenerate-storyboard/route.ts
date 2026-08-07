@@ -138,6 +138,8 @@ export async function POST(
         // 用 orchestrator 的 generateImage 走完整路由 (multi-ref router / style anchor / 等)
         const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
         const orchestrator = new HybridOrchestrator();
+        const { applyProjectModelRouting } = await import('@/lib/project-model-routing');
+        await applyProjectModelRouting(orchestrator, projectId);
         if (ctx.styleId) orchestrator.setUserStyle(ctx.styleId);
         if (useStyleBible !== false && ctx.styleAnchorUrl) {
           // setPreviewSeedImage 复用 (它内部存到 styleAnchorImageUrl 兼容路径? 不, 我们要 setter)

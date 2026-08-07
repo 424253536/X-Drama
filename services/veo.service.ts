@@ -126,8 +126,10 @@ export class VeoService {
       aspectRatio?: string; // v12.14.0 横竖屏:'16:9'|'9:16'|'1:1'
       style?: string;
       referenceImages?: string[];
+      lastFrameUrl?: string;
       nativeAudio?: boolean;
       onProgress?: ProgressCallback;
+      onTaskCreated?: (taskId: string) => void;
     }
   ): Promise<string> {
     // 网页 API 路由台支持热更新，不能继续使用构造时缓存的 key/base/model。
@@ -177,6 +179,7 @@ export class VeoService {
           : await this.createTaskUnified(prompt, imageUrl, options);
 
         console.log(`[Veo] Task created on ${m}: ${taskId}`);
+        options?.onTaskCreated?.(taskId);
         const videoUrl = await this.pollResult(taskId, 60, options?.onProgress);
 
         // 成功, 恢复原始配置 (下次调用仍然先用用户选定的主模型)
@@ -228,7 +231,7 @@ export class VeoService {
   private async createTaskUnified(
     prompt: string,
     imageUrl: string,
-    options?: { duration?: number; resolution?: string; aspectRatio?: string; referenceImages?: string[]; nativeAudio?: boolean }
+    options?: { duration?: number; resolution?: string; aspectRatio?: string; referenceImages?: string[]; lastFrameUrl?: string; nativeAudio?: boolean }
   ): Promise<string> {
     const body: Record<string, any> = {
       model: this.model,
@@ -256,6 +259,9 @@ export class VeoService {
     if (primaryImage) {
       body.first_frame_image = primaryImage;
       console.log(`[Veo3.1] Using scene image as first_frame_image for composition`);
+    }
+    if (options?.lastFrameUrl && /^https?:\/\//.test(options.lastFrameUrl)) {
+      body.last_frame_image = options.lastFrameUrl;
     }
 
     // v2.8 (Seedance 2.0 同款): 把"主角图+次要角色图+风格图"打包成多参考图,
@@ -309,7 +315,7 @@ export class VeoService {
   private async createTaskOpenAI(
     prompt: string,
     imageUrl: string,
-    options?: { duration?: number; aspectRatio?: string; referenceImages?: string[]; nativeAudio?: boolean }
+    options?: { duration?: number; aspectRatio?: string; referenceImages?: string[]; lastFrameUrl?: string; nativeAudio?: boolean }
   ): Promise<string> {
     const body: Record<string, any> = {
       model: this.model,
@@ -330,6 +336,9 @@ export class VeoService {
       if (refs.length) body.reference_images = refs;
       if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
       if (options?.nativeAudio) body.generate_audio = true;
+    }
+    if (options?.lastFrameUrl && /^https?:\/\//.test(options.lastFrameUrl)) {
+      body.last_frame_image = options.lastFrameUrl;
     }
 
     const response = await fetchWithTimeout(this.apiUrl('/v1/videos'), {

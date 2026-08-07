@@ -55,12 +55,20 @@ export interface CreatePipelineInput {
   seriesRecap?: string;
   /** v12.143(对标阅文分镜面板):全片草图锁 —— 每镜先出构图草图再锁构图渲染(每镜多一次出图)。 */
   sketchLock?: boolean;
+  modelSelections?: import('@/lib/model-routing').ModelSelections;
+  routingVersion?: number;
+  audioStrategy?: import('@/lib/model-routing').AudioStrategy;
+  ownerUserId?: string;
 }
 
 export type PipelineEmit = (type: string, data: unknown) => void;
 
 export async function runCreatePipeline(input: CreatePipelineInput, emit: PipelineEmit, opts?: { resume?: boolean }): Promise<void> {
-  const { idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef, lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle, language, sketchLock } = input as CreatePipelineInput & Record<string, any>;
+  const {
+    idea, projectId, videoProvider, style, aspect, enableGates, templateId, primaryCharacterRef,
+    lockedCharacters, cameraDefault, previewSeedImage, references, replicaScript, editStyle,
+    language, sketchLock, modelSelections, routingVersion, audioStrategy, ownerUserId,
+  } = input as CreatePipelineInput & Record<string, any>;
   // v12.32.0:阶段耗时归因 —— 各阶段边界本就发 send('step',{step}),顺手用它做计时埋点(零额外侵入)。
   const _stageTimer = new StageTimer();
   let _curStage: string | null = null;
@@ -87,6 +95,8 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
   try {
     const orchestrator = new HybridOrchestrator();
+    orchestrator.setModelSelections(modelSelections || {});
+    if (audioStrategy) orchestrator.setAudioStrategy(audioStrategy);
     orchestrator.onProgress = (type, data) => {
       send(type, data);
       // v12.143:草图锁的每镜草图落 storyboard-sketch 资产(面板展示/重生复用);fire-and-forget
@@ -330,9 +340,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     // v12.233 复核保留:这里**不是 HTTP 入口**,而是管线内部为资产落库找归属。
     // 调用方(create-stream / pipeline-worker)已在入口做过鉴权(v12.232 起匿名 401),
     // 走到这里时身份已确定;此处只是「DB 里一个用户都没有」的冷启动兜底。
-    let userId = 'WM-U2zcG9DmjuJ06NS9D9'; // 默认使用已存在的用户
+    let userId = ownerUserId || 'WM-U2zcG9DmjuJ06NS9D9';
     try {
-      const user = db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
+      const user = ownerUserId
+        ? { id: ownerUserId }
+        : db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined;
       if (user) {
         userId = user.id;
       } else {
@@ -358,6 +370,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
           aspect: aspect || '16:9', // v10.6.0 项目级画幅(注:题材触发的 orchestrator 内部自动竖屏翻转不回写,以用户显式选择为准)
           styleId: style || null, primaryCharacterRef: effectiveCameoRef || null,
           lockedCharacters: sanitizedLocked,
+          modelSelections: modelSelections || {},
+          routingVersion: routingVersion || 1,
+          audioStrategy: audioStrategy || 'separate',
         });
         console.log(`[DB] Project created: ${projectId}${style ? ` (style=${style})` : ''}${sanitizedLocked.length ? ` lockedChars=${sanitizedLocked.length}` : ''}`);
       } else {
@@ -369,6 +384,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
             ...(aspect ? { aspect } : {}), // v10.6.0 换画幅重跑时同步
             locked_characters: lockedJson,
             ...(effectiveCameoRef ? { primary_character_ref: effectiveCameoRef } : {}),
+            model_selections_json: JSON.stringify(modelSelections || {}),
+            routing_version: routingVersion || 1,
+            audio_strategy: audioStrategy || 'separate',
           });
           await upsertLockedCharacters(projectId, sanitizedLocked); // v12.2.5 双写归一表(重跑路径)
         } catch (e) {

@@ -76,6 +76,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           // 真实模式：调用视频生成服务（优先 Veo 3.1）
           const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
           const orchestrator = new HybridOrchestrator();
+          const { applyProjectModelRouting } = await import('@/lib/project-model-routing');
+          await applyProjectModelRouting(orchestrator, projectId);
 
           // v2.9 + v12.132(issue #2 Bug B):贯通画风 + 角色参考(此前只读 style_id,漏角色参考)
           try {

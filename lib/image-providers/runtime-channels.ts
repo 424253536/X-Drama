@@ -2,6 +2,13 @@ import { registerImageProvider } from './registry';
 import type { ImageGenerateInput } from './types';
 import { listRuntimeApiChannelsSync } from '@/lib/runtime-api-channels';
 import {
+  listRuntimeModelRoutesSync,
+  mergeRouteParameters,
+  resolveModelRoutesSync,
+  runModelRouteChain,
+  type RuntimeModelRoute,
+} from '@/lib/model-routing';
+import {
   buildGeminiImageRequest,
   extractGeminiImage,
   toInlineDataPart,
@@ -49,14 +56,77 @@ async function generateGemini(channel: ReturnType<typeof listRuntimeApiChannelsS
   return imageUrl;
 }
 
+async function generateOpenAIRoute(route: RuntimeModelRoute, input: ImageGenerateInput) {
+  const path = route.endpointPathOverride || '/v1/images/generations';
+  const parameters = mergeRouteParameters(route, {});
+  const response = await fetch(apiUrl(route.gateway.baseUrl, path), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${route.gateway.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...buildGptImageRequest(input, { ...process.env, OPENAI_IMAGE_MODEL: route.upstreamModelId }),
+      ...parameters,
+      model: route.upstreamModelId,
+    }),
+    signal: AbortSignal.timeout(route.gateway.timeoutMs),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
+  const imageUrl = extractGptImageUrl(payload);
+  if (!imageUrl) throw new Error('响应中没有图像');
+  return imageUrl;
+}
+
+async function generateGeminiRoute(route: RuntimeModelRoute, input: ImageGenerateInput) {
+  const refUrls = [
+    ...(input.cref ? [input.cref] : []),
+    ...(input.sref ? [input.sref] : []),
+    ...(input.referenceImages || []),
+  ].filter(Boolean).slice(0, 3);
+  const refParts = (await Promise.all(refUrls.map((url) => toInlineDataPart(url))))
+    .filter((part): part is { inlineData: { mimeType: string; data: string } } => !!part);
+  const defaultPath = `/models/${encodeURIComponent(route.upstreamModelId)}:generateContent`;
+  const response = await fetch(apiUrl(route.gateway.baseUrl, route.endpointPathOverride || defaultPath), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${route.gateway.apiKey}`,
+      'Content-Type': 'application/json',
+      'x-goog-api-key': route.gateway.apiKey,
+    },
+    body: JSON.stringify(buildGeminiImageRequest(input, refParts)),
+    signal: AbortSignal.timeout(route.gateway.timeoutMs),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
+  const imageUrl = extractGeminiImage(payload);
+  if (!imageUrl) throw new Error('响应中没有图像');
+  return imageUrl;
+}
+
 registerImageProvider({
   id: 'runtime-image-channels',
   name: '用户图像渠道链',
   supportsRefs: true,
   maxRefImages: 3,
   priority: 20,
-  available: () => listRuntimeApiChannelsSync('image').length > 0,
+  available: () => listRuntimeModelRoutesSync('image').length > 0 || listRuntimeApiChannelsSync('image').length > 0,
   async generate(input) {
+    if (input.modelKey) {
+      const routes = resolveModelRoutesSync(input.modelKey, 'image', input.taskKind || 'image.default');
+      const imageUrl = await runModelRouteChain(routes, async (route) => {
+        if (route.protocol === 'gemini-image') return generateGeminiRoute(route, input);
+        if (route.protocol === 'openai-images') return generateOpenAIRoute(route, input);
+        throw new Error(`不支持的图像协议: ${route.protocol}`);
+      }, {
+        operation: 'image.generate', taskKind: input.taskKind || 'image.default',
+        projectId: input.projectId, userId: input.userId,
+        requestParameters: {
+          aspectRatio: input.aspectRatio,
+          referenceImageCount: [input.cref, input.sref, ...(input.referenceImages || [])].filter(Boolean).length,
+        },
+      });
+      return { imageUrl, provider: `model:${input.modelKey}` };
+    }
+
     const refCount = [input.cref, input.sref, ...(input.referenceImages || [])].filter(Boolean).length;
     const errors: string[] = [];
     for (const channel of listRuntimeApiChannelsSync('image')) {

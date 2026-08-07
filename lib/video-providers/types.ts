@@ -58,6 +58,11 @@ export interface VideoGenerateInput {
 
   /** 用户在创作页显式选择的 provider id；registry 命中时将其置于链首。 */
   preferredProvider?: string;
+  /** 用户选择的逻辑模型键；存在时禁止切换到其他逻辑模型或旧 Provider。 */
+  modelKey?: string;
+  taskKind?: string;
+  projectId?: string;
+  userId?: string;
 
   /**
    * v12.29.0(P1 原生音画一体):请求引擎**自带音频**(对白+音效),供后续跳过 TTS/对唇形.

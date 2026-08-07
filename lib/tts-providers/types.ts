@@ -41,6 +41,11 @@ export interface TTSGenerateInput {
 
   /** 调试 label. */
   label?: string;
+  /** 用户选择的逻辑声音模型键。 */
+  modelKey?: string;
+  taskKind?: string;
+  projectId?: string;
+  userId?: string;
 }
 
 export interface TTSGenerateResult {

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Next.js dev resources are served from localhost by default, while the
+  // documented local URL for this project uses 127.0.0.1.
+  allowedDevOrigins: ['127.0.0.1'],
   images: {
     remotePatterns: [
       {

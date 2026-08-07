@@ -113,19 +113,23 @@ export async function dispatchVideoGenerate(
   input: VideoGenerateInput,
   selection?: VideoSelectInput,
 ): Promise<VideoDispatchResult> {
-  const chain = selectProviders(selection ?? {
+  const selected = selectProviders(selection ?? {
     hasFirstFrame: !!input.firstFrameUrl,
     hasLastFrame: !!input.lastFrameUrl,
     hasSubjectReference: !!(input.subjectReferences && input.subjectReferences.length > 0),
     durationSec: input.durationSec,
   });
+  const chain = input.modelKey
+    ? selected.filter((provider) => provider.id === 'runtime-video-channels')
+    : selected;
 
   const tried: VideoDispatchResult['tried'] = [];
   for (const p of chain) {
     // v12.63.0:瞬时错误(引擎偶发生成失败/超时/网络/5xx)同 provider 重试 1 次(3s 后)——
     // 此前一败即跳下家甚至掉光,Minimax video-01 error 这类偶发把 10 分镜拖成 3 成片。
     // 非瞬时(鉴权/额度/限流/参数/审核)不重试,交给熔断 + 下家。
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const maxAttempts = input.modelKey ? 1 : 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const r = await p.generate(input);
         if (!r || !r.videoUrl) {
@@ -141,7 +145,7 @@ export async function dispatchVideoGenerate(
       } catch (e) {
         const _msg = e instanceof Error ? e.message : String(e);
         tried.push({ id: p.id, error: _msg });
-        if (attempt === 0 && isTransientVideoError(_msg)) {
+        if (attempt === 0 && maxAttempts > 1 && isTransientVideoError(_msg)) {
           console.log(`[VideoDispatch] ${p.id} 瞬时错误,3s 后同引擎重试一次: ${_msg.slice(0, 80)}`);
           await new Promise((res) => setTimeout(res, VIDEO_TRANSIENT_RETRY_DELAY_MS));
           continue;

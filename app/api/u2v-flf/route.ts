@@ -17,29 +17,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getUserFromRequest } from '../auth/lib';
 import { KlingService } from '@/services/kling.service';
 import { MinimaxService } from '@/services/minimax.service';
 import { API_CONFIG } from '@/lib/config';
 import { persistAsset } from '@/lib/asset-storage';
 import { checkPlan, planRejection, requiredTierForVideoDuration } from '@/lib/plan-gate';
+import { guardPaidEndpoint } from '@/lib/paid-endpoint-guard';
+import { routeVideoByDuration } from '../u2v/route';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-function resolveUserId(request: Request): string {
-  const payload = getUserFromRequest(request);
-  if (payload?.sub) return payload.sub;
-  // v12.233(对抗复检收尾):删「无 token 回落 DB 第一个用户」——
-  // 那等于匿名即以第一注册用户身份读写,且把行为记到真人头上。
-  // 改哨兵:匿名请求查到的永远是空集,既不泄露也不误伤(与 v12.218 同款处理)。
-  return '__no_auth__';
-}
-
 export async function POST(request: NextRequest) {
-  const userId = resolveUserId(request);
+  const guard = await guardPaidEndpoint(request, { pendingCostCny: 1.8 });
+  if (!guard.ok) return guard.response;
+  const userId = guard.userId;
 
   let body: any = {};
   try { body = await request.json(); } catch { /* swallow */ }
@@ -49,6 +42,17 @@ export async function POST(request: NextRequest) {
   const rawPrompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
   const duration: 5 | 10 = body?.duration === 10 ? 10 : 5;
   const cameraPreset = typeof body?.cameraPreset === 'string' ? body.cameraPreset : null;
+  const modelKey = typeof body?.modelKey === 'string' ? body.modelKey.trim() : '';
+
+  if (modelKey) {
+    try {
+      const { validateModelSelections, loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+      await validateModelSelections({ 'video.first_last_frame': modelKey });
+      await loadModelRoutingIntoEnv();
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : '首尾帧视频模型不可用' }, { status: 400 });
+    }
+  }
 
   if (!firstFrameUrl) return NextResponse.json({ error: '缺 firstFrameUrl' }, { status: 400 });
   if (!lastFrameUrl) return NextResponse.json({ error: '缺 lastFrameUrl' }, { status: 400 });
@@ -95,7 +99,7 @@ export async function POST(request: NextRequest) {
   const minimaxReady =
     API_CONFIG.minimax.apiKey && !API_CONFIG.minimax.apiKey.startsWith('your_');
 
-  if (!klingReady && !minimaxReady) {
+  if (!modelKey && !klingReady && !minimaxReady) {
     return NextResponse.json(
       { error: 'KELING_API_KEY / MINIMAX_API_KEY 都未配置, 无法生成视频' },
       { status: 422 },
@@ -124,6 +128,13 @@ export async function POST(request: NextRequest) {
       resolveOne(lastFrameUrl),
     ]);
     console.log(`[U2V-FLF] frames resolved: ${firstAbs.slice(0, 60)} → ${lastAbs.slice(0, 60)}`);
+
+    if (modelKey) {
+      const selected = await routeVideoByDuration(firstAbs, prompt, duration, undefined, {
+        modelKey, taskKind: 'video.first_last_frame', userId, lastFrameUrl: lastAbs,
+      });
+      return NextResponse.json({ videoUrl: selected.videoUrl, duration, model: selected.model });
+    }
 
     // ── 首选:Kling 首尾帧 ──
     if (klingReady) {

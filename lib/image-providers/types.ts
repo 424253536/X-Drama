@@ -58,6 +58,11 @@ export interface ImageGenerateInput {
   cw?: number;
   /** UI label, 仅日志用 */
   label?: string;
+  /** 用户选择的逻辑模型键；存在时必须严格走该模型的 NewAPI 映射。 */
+  modelKey?: string;
+  taskKind?: string;
+  projectId?: string;
+  userId?: string;
   /** 进度回调 (可选 — 长任务) */
   onProgress?: (pct: number, msg: string) => void;
 }

@@ -311,6 +311,8 @@ export class HybridOrchestrator {
   private comfyuiService: ComfyUIService | null;
   private xverseService: XVerseService | null;
   public onProgress?: ProgressCallback;
+  private modelSelections: import('@/lib/model-routing').ModelSelections = {};
+  private audioStrategy: import('@/lib/model-routing').AudioStrategy = nativeAudioEnabled() ? 'native' : 'separate';
 
   // Pipeline intervention gate support
   private gateResolvers: Map<string, (data: any) => void> = new Map();
@@ -547,6 +549,23 @@ export class HybridOrchestrator {
   setProjectId(id: string) {
     if (!id) return;
     this.projectId = id;
+  }
+
+  setModelSelections(selections: import('@/lib/model-routing').ModelSelections) {
+    this.modelSelections = { ...(selections || {}) };
+  }
+
+  setAudioStrategy(strategy: import('@/lib/model-routing').AudioStrategy) {
+    this.audioStrategy = strategy;
+  }
+
+  getModelSelection(taskKind: string): string | undefined {
+    const mediaType = taskKind.split('.')[0];
+    return this.modelSelections[taskKind] || this.modelSelections[`${mediaType}.default`];
+  }
+
+  getModelCallContext(): { projectId?: string; userId?: string } {
+    return { projectId: this.projectId || undefined, userId: this.userId || undefined };
   }
 
   // v12.4.0(阶段二十三):注入计费用户,让主管线视频/图像成本能落库(cost_log.user_id 是 FK,缺则跳过)。
@@ -853,7 +872,8 @@ export class HybridOrchestrator {
     // + 健康缓存跳过冷却中的饱和模型 —— 主模型 429/503 时秒级切同网关健康模型,不再每次白撞饱和模型。
     const { buildLLMAttempts } = await import('@/lib/llm-client');
     const { filterHealthyAttempts } = await import('@/lib/llm-health');
-    const llmAttempts = filterHealthyAttempts(buildLLMAttempts(useCreativeModel, cfg, false));
+    const textModelKey = this.getModelSelection(useCreativeModel ? 'text.creative' : 'text.default');
+    const llmAttempts = filterHealthyAttempts(buildLLMAttempts(useCreativeModel, cfg, false, textModelKey));
     if (llmAttempts.length === 0) return '';
     const primaryAttempt = llmAttempts[0];
 
@@ -925,40 +945,84 @@ export class HybridOrchestrator {
         child.stdin?.end();
       });
 
-      // 依次尝试 主 → MiniMax 兜底; 第一个成功即用.
+      // 旧配置按原有尝试链执行；显式逻辑模型只在该模型的网关映射内安全切换。
       let parsed: any = null;
       let lastErr = 'no attempt';
       let elapsed = '0';
-      for (let ai = 0; ai < llmAttempts.length; ai++) {
-        const a = llmAttempts[ai];
-        const aStart = Date.now();
-        console.log(`[LLM:${callId}] 尝试 ${ai + 1}/${llmAttempts.length} [${a.label}] model=${a.model} base=${a.baseURL}`);
-        const r = await runAttempt(a);
-        elapsed = ((Date.now() - aStart) / 1000).toFixed(1);
-        if (r && r.ok && (r.content || '').trim()) {
-          parsed = r;
-          if (ai > 0) {
-            console.log(`[LLM:${callId}] ✅ 兜底成功 [${a.label}] | ${elapsed}s`);
-            this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `主 LLM 异常,已自动兜底到 ${a.label} 继续` });
+      if (textModelKey) {
+        const { resolveModelRoutesSync, runModelRouteChain } = await import('@/lib/model-routing');
+        const taskKind = useCreativeModel ? 'text.creative' : 'text.default';
+        const enabledAttemptIds = new Set(llmAttempts.map((item) => item.channelId).filter(Boolean));
+        const routes = resolveModelRoutesSync(textModelKey, 'text')
+          .filter((route) => enabledAttemptIds.has(route.id));
+        try {
+          parsed = await runModelRouteChain(routes, async (route, sequence) => {
+            const a = llmAttempts.find((item) => item.channelId === route.id);
+            if (!a) throw new Error('模型渠道当前处于冷却或不可用状态');
+            const aStart = Date.now();
+            console.log(`[LLM:${callId}] 尝试 ${sequence}/${routes.length} [${a.label}] model=${a.model} base=${a.baseURL}`);
+            const r = await runAttempt(a);
+            elapsed = ((Date.now() - aStart) / 1000).toFixed(1);
+            if (!r?.ok || !(r.content || '').trim()) {
+              lastErr = r?.error || 'empty';
+              try {
+                const { isTransientLLMError } = await import('@/lib/llm-client');
+                const { markLLMDown, llmKey } = await import('@/lib/llm-health');
+                if (isTransientLLMError(lastErr) || lastErr === 'timeout') markLLMDown(llmKey(a));
+              } catch { /* ignore */ }
+              try {
+                const { recordApiCall } = await import('@/lib/api-usage-tracker');
+                await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: false, errorMessage: String(lastErr).slice(0, 200), projectId: this.projectId });
+              } catch { /* ignore */ }
+              throw new Error(lastErr);
+            }
+            if (sequence > 1) {
+              this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `主网关异常，已切换到 ${a.label} 继续` });
+            }
+            try {
+              const { recordApiCall } = await import('@/lib/api-usage-tracker');
+              await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: true, projectId: this.projectId });
+            } catch { /* ignore */ }
+            return r;
+          }, {
+            operation: 'text.generate', taskKind, projectId: this.projectId || undefined,
+            userId: this.userId || undefined,
+            requestParameters: { maxTokens, json, systemLength: finalSystem.length, inputLength: finalUser.length },
+          });
+        } catch (error) {
+          lastErr = error instanceof Error ? error.message : String(error);
+        }
+      } else {
+        for (let ai = 0; ai < llmAttempts.length; ai++) {
+          const a = llmAttempts[ai];
+          const aStart = Date.now();
+          console.log(`[LLM:${callId}] 尝试 ${ai + 1}/${llmAttempts.length} [${a.label}] model=${a.model} base=${a.baseURL}`);
+          const r = await runAttempt(a);
+          elapsed = ((Date.now() - aStart) / 1000).toFixed(1);
+          if (r && r.ok && (r.content || '').trim()) {
+            parsed = r;
+            if (ai > 0) {
+              console.log(`[LLM:${callId}] ✅ 兜底成功 [${a.label}] | ${elapsed}s`);
+              this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `主 LLM 异常,已自动兜底到 ${a.label} 继续` });
+            }
+            try {
+              const { recordApiCall } = await import('@/lib/api-usage-tracker');
+              await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: true, projectId: this.projectId });
+            } catch { /* ignore */ }
+            break;
           }
+          lastErr = (r && r.error) || 'empty';
+          console.warn(`[LLM:${callId}] ⚠️ 尝试 [${a.label}] 失败: ${lastErr} | ${elapsed}s`);
+          try {
+            const { isTransientLLMError } = await import('@/lib/llm-client');
+            const { markLLMDown, llmKey } = await import('@/lib/llm-health');
+            if (isTransientLLMError(lastErr) || lastErr === 'timeout') markLLMDown(llmKey(a));
+          } catch { /* ignore */ }
           try {
             const { recordApiCall } = await import('@/lib/api-usage-tracker');
-            await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: true, projectId: this.projectId });
+            await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: false, errorMessage: String(lastErr).slice(0, 200), projectId: this.projectId });
           } catch { /* ignore */ }
-          break;
         }
-        lastErr = (r && r.error) || 'empty';
-        console.warn(`[LLM:${callId}] ⚠️ 尝试 [${a.label}] 失败: ${lastErr} | ${elapsed}s`);
-        // v12.61.0 P0-2:瞬时错误(429/503/超时)→ 标记该模型冷却,同片后续 LLM 调用直接跳过它(不再白撞)
-        try {
-          const { isTransientLLMError } = await import('@/lib/llm-client');
-          const { markLLMDown, llmKey } = await import('@/lib/llm-health');
-          if (isTransientLLMError(lastErr) || lastErr === 'timeout') markLLMDown(llmKey(a));
-        } catch { /* ignore */ }
-        try {
-          const { recordApiCall } = await import('@/lib/api-usage-tracker');
-          await recordApiCall({ provider: 'openai', model: a.model, method: 'chat.completions', success: false, errorMessage: String(lastErr).slice(0, 200), projectId: this.projectId });
-        } catch { /* ignore */ }
       }
 
       if (!parsed) {
@@ -1059,6 +1123,9 @@ export class HybridOrchestrator {
         cw: opts?.cw,
         referenceImages: opts?.referenceImages,
         label: opts?.label,
+        modelKey: this.getModelSelection('image.default'),
+        taskKind: 'image.default',
+        ...this.getModelCallContext(),
       },
       () => this.doLegacyGenerateImage(prompt, opts),
     );
@@ -3359,7 +3426,7 @@ ${shots.map((s, i) => {
 
       // v12.29.0(P1):native 模式 → 向引擎请求自带音频 + 把台词作 spokenDialogue(仅原生引擎可见,
       // 不进 visualPrompt → 非原生引擎不会把 CJK 渲染成画面文字)。是否真拿到原生音频取决于真出片引擎。
-      const wantNativeAudio = nativeAudioEnabled() && !!scriptDialogue;
+      const wantNativeAudio = this.audioStrategy !== 'separate';
       let ranVideoProvider = '';
       const videoUrl: string = await withVideoPlugin(
         {
@@ -3372,12 +3439,15 @@ ${shots.map((s, i) => {
           aspectRatio: this.videoAspect(), // v12.14.0 横竖屏:plugin-chain provider 也按项目比例出片
           durationSec: 8,
           nativeAudio: wantNativeAudio || undefined,
-          spokenDialogue: wantNativeAudio ? scriptDialogue : undefined,
+          spokenDialogue: this.audioStrategy === 'native' && scriptDialogue ? scriptDialogue : undefined,
           preferredProvider: videoProvider === 'keling'
             ? 'kling'
             : videoProvider === 'minimax'
               ? 'minimax-video'
               : videoProvider,
+          modelKey: this.getModelSelection('video.default'),
+          taskKind: 'video.default',
+          ...this.getModelCallContext(),
           label: `shot-${board.shotNumber}`,
         },
         legacyVideoGen,
@@ -3386,8 +3456,17 @@ ${shots.map((s, i) => {
       // plugin 命中拿 dispatch provider;否则用 legacy 路径的 usedVideoEngine(veo/minimax/kling)。
       ranVideoProvider = ranVideoProvider || usedVideoEngine;
       // 本镜成片是否带原生音频:开关 on + 有台词 + 真由原生音频引擎出片(veo/kling/grok/seedance/ltx)。
-      const clipNativeAudio = wantNativeAudio && isNativeAudioProvider(ranVideoProvider);
-      if (clipNativeAudio) {
+      let selectedModelHasNativeAudio = false;
+      const selectedVideoModel = this.getModelSelection('video.default');
+      if (selectedVideoModel) {
+        const { resolveModelRoutesSync } = await import('@/lib/model-routing');
+        selectedModelHasNativeAudio = resolveModelRoutesSync(selectedVideoModel, 'video')
+          .some((route) => route.profile.capabilities.nativeAudio === true);
+      }
+      const hasNativeAudio = wantNativeAudio
+        && (isNativeAudioProvider(ranVideoProvider) || selectedModelHasNativeAudio);
+      const clipNativeAudio = this.audioStrategy === 'native' && !!scriptDialogue && hasNativeAudio;
+      if (hasNativeAudio) {
         this.emit('consistencyStatus', { shotNumber: board.shotNumber, type: 'nativeAudio', provider: ranVideoProvider });
       }
 
@@ -3406,7 +3485,11 @@ ${shots.map((s, i) => {
       // 之前恒 8s → 剪辑层把 3s 设计的爆发镜整段拼成 8s 慢镜;现在让设计时长一路传到 composer 裁切。
       const designedDur = (shot as any)?.duration;
       const clipDuration = designedDur && designedDur > 0 ? Math.max(2, Math.min(designedDur, 8)) : 8;
-      const clip = { shotNumber: board.shotNumber, videoUrl, duration: clipDuration, status: 'completed' as const, nativeAudio: clipNativeAudio };
+      const clip = {
+        shotNumber: board.shotNumber, videoUrl, duration: clipDuration, status: 'completed' as const,
+        nativeAudio: clipNativeAudio,
+        preserveNativeAudio: this.audioStrategy === 'hybrid' && hasNativeAudio,
+      };
 
       // v2.9 P1 Keyframes: 异步抽末帧存进 shotLastFrames,下一 shot 开始时会读它作参考图
       // fire-and-forget —— 抽帧耗时 ~0.5s,不阻塞主推理流,失败也不影响本 shot 结果
@@ -3494,7 +3577,7 @@ ${shots.map((s, i) => {
     //   Pass-B: 剥离首帧,纯 T2V 简化 prompt,duration=5(更容易过审) — 扛住图片/时长问题
     //   Pass-C: 还不行才交给后面的 Ken Burns animatic 兜底
     const failedVideos = videos.filter(v => !isValidVideoUrl(v.videoUrl));
-    if (failedVideos.length > 0) {
+    if (failedVideos.length > 0 && !this.getModelSelection('video.default')) {
       this.emit('agentTalk', {
         role: AgentRole.VIDEO_PRODUCER,
         text: `🔄 ${failedVideos.length} 个镜头生成失败，启动三级重试策略...`

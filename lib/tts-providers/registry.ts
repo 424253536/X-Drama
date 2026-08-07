@@ -87,11 +87,14 @@ export async function dispatchTTSGenerate(
   input: TTSGenerateInput,
   selection?: TTSSelectInput,
 ): Promise<TTSDispatchResult> {
-  const chain = selectProviders(selection ?? {
+  const selected = selectProviders(selection ?? {
     requiresEmotion: !!input.emotion,
     textLen: input.text.length,
     language: input.language,
   });
+  const chain = input.modelKey
+    ? selected.filter((provider) => provider.id === 'runtime-audio-channels')
+    : selected;
 
   const tried: TTSDispatchResult['tried'] = [];
   for (const p of chain) {

@@ -136,6 +136,10 @@ export async function withImagePlugin(
   input: ImageGenerateInput,
   fallback: () => Promise<string>,
 ): Promise<string> {
+  if (input.modelKey) {
+    const result = await tryImagePlugin(input);
+    return result.value;
+  }
   let modeOverride: PluginChainMode | undefined;
   // v12.239:必须区分「用户显式设了 off」与「没设、默认 off」——
   // 前者是用户明确要关掉整条 plugin 链,隐含开启会夺走他的一票否决权(这条是被自己的测试抓到的)。
@@ -178,6 +182,11 @@ export async function withVideoPlugin(
   fallback: () => Promise<string>,
   onProvider?: (provider?: string) => void, // v12.29.0(P1):回传真出片 provider id(供原生音画判定)
 ): Promise<string> {
+  if (input.modelKey) {
+    const result = await tryVideoPlugin(input);
+    onProvider?.(result.provider);
+    return result.value;
+  }
   let modeOverride: PluginChainMode | undefined;
   const rawMode = (process.env.PLUGIN_CHAIN_MODE || '').trim().toLowerCase();
   const explicitlySet = rawMode === 'off' || rawMode === 'primary' || rawMode === 'shadow';
@@ -218,5 +227,9 @@ export async function withTTSPlugin(
   input: TTSGenerateInput,
   fallback: () => Promise<TTSGenerateResult>,
 ): Promise<TTSGenerateResult> {
+  if (input.modelKey) {
+    const result = await tryTTSPlugin(input);
+    return result.value;
+  }
   return runWithPlugin('tts', () => tryTTSPlugin(input), fallback);
 }

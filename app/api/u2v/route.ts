@@ -45,7 +45,21 @@ export async function routeVideoByDuration(
   prompt: string,
   duration: number,
   onProgress?: (pct: number, msg?: string) => void,  // v4.1.4: Kling 真实进度回调
+  selected?: { modelKey?: string; taskKind?: string; userId?: string; lastFrameUrl?: string },
 ): Promise<{ videoUrl: string; model: string }> {
+  if (selected?.modelKey) {
+    await import('@/lib/video-providers/builtins');
+    const { dispatchVideoGenerate } = await import('@/lib/video-providers/registry');
+    const dispatched = await dispatchVideoGenerate({
+      prompt, firstFrameUrl: imageUrl, lastFrameUrl: selected.lastFrameUrl,
+      durationSec: duration, modelKey: selected.modelKey,
+      taskKind: selected.taskKind || 'video.default', userId: selected.userId, onProgress,
+    });
+    if (!dispatched.result?.videoUrl) {
+      throw new Error(dispatched.tried.map((item) => `${item.id}: ${item.error}`).join(' | ') || '所选视频模型不可用');
+    }
+    return { videoUrl: dispatched.result.videoUrl, model: selected.modelKey };
+  }
   // 5/6s → Minimax 主路径
   if (duration === 5 || duration === 6) {
     const svc = new MinimaxService();
@@ -124,6 +138,17 @@ export async function POST(request: NextRequest) {
   const duration = [5, 6, 10, 15].includes(body?.duration) ? body.duration : 5;
   // v2.14 P0.2: 镜头语言预设 id (来自 CAMERA_LANGUAGE_PRESETS), 可空
   const cameraPreset = typeof body?.cameraPreset === 'string' ? body.cameraPreset : null;
+  const modelKey = typeof body?.modelKey === 'string' ? body.modelKey.trim() : '';
+
+  if (modelKey) {
+    try {
+      const { validateModelSelections, loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+      await validateModelSelections({ 'video.default': modelKey });
+      await loadModelRoutingIntoEnv();
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : '视频模型不可用' }, { status: 400 });
+    }
+  }
 
   if (!imageUrl) return NextResponse.json({ error: '缺 imageUrl' }, { status: 400 });
   if (!rawPrompt) return NextResponse.json({ error: '缺 prompt' }, { status: 400 });
@@ -164,7 +189,7 @@ export async function POST(request: NextRequest) {
   const { enhanceU2VMotionPrompt } = await import('@/lib/prompt-templates');
   const prompt = enhanceU2VMotionPrompt(verdict.sanitized, cameraPreset || undefined);
 
-  if (!API_CONFIG.minimax.apiKey) {
+  if (!modelKey && !API_CONFIG.minimax.apiKey) {
     return NextResponse.json(
       { error: 'MINIMAX_API_KEY 未配置, 无法跑 I2V' },
       { status: 422 },
@@ -200,7 +225,10 @@ export async function POST(request: NextRequest) {
 
     // v2.14 P0.4: 长镜头模式路由 — 5/6s → Minimax I2V-01, 10s → Kling Master, 15s → Vidu Q3 Pro。
     // 每档失败时降级到下一档(优先长镜头不可得 → 5s I2V 兜底)。
-    const { videoUrl, model } = await routeVideoByDuration(resolvedImageUrl, prompt, duration);
+    const { videoUrl, model } = await routeVideoByDuration(
+      resolvedImageUrl, prompt, duration, undefined,
+      { modelKey: modelKey || undefined, taskKind: 'video.default', userId },
+    );
     if (!videoUrl) {
       return NextResponse.json({ error: '所有可用模型都返回空视频 URL' }, { status: 422 });
     }

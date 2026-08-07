@@ -3,7 +3,7 @@ import { DemoOrchestrator, isDemoMode } from '@/services/demo-orchestrator';
 
 export async function POST(request: NextRequest) {
   try {
-    const { idea, videoProvider } = await request.json();
+    const { idea, videoProvider, modelSelections: rawModelSelections, routingVersion } = await request.json();
 
     if (!idea || !idea.trim()) {
       return NextResponse.json({ error: '请提供故事创意' }, { status: 400 });
@@ -12,6 +12,13 @@ export async function POST(request: NextRequest) {
     let orchestrator: any;
     if (isDemoMode()) {
       orchestrator = new DemoOrchestrator();
+    } else if (routingVersion === 2 || rawModelSelections) {
+      const { validateModelSelections, loadModelRoutingIntoEnv } = await import('@/lib/model-routing');
+      const modelSelections = await validateModelSelections(rawModelSelections);
+      await loadModelRoutingIntoEnv();
+      const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
+      orchestrator = new HybridOrchestrator();
+      orchestrator.setModelSelections(modelSelections);
     } else {
       const { AgentOrchestrator } = await import('@/services/agent-orchestrator');
       orchestrator = new AgentOrchestrator();

@@ -281,7 +281,7 @@ CREATE TABLE IF NOT EXISTS projects (
   cover_urls TEXT,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL, script_data TEXT, director_notes TEXT, pipeline_state TEXT, mode TEXT DEFAULT 'episodic', execution_mode TEXT DEFAULT 'dialogue', style_id TEXT, global_asset_ids TEXT DEFAULT '[]', output_config TEXT, primary_character_ref TEXT, locked_characters TEXT NOT NULL DEFAULT '[]', share_token TEXT, share_created_at TEXT
+  updated_at TEXT NOT NULL, script_data TEXT, director_notes TEXT, pipeline_state TEXT, mode TEXT DEFAULT 'episodic', execution_mode TEXT DEFAULT 'dialogue', style_id TEXT, global_asset_ids TEXT DEFAULT '[]', output_config TEXT, primary_character_ref TEXT, locked_characters TEXT NOT NULL DEFAULT '[]', share_token TEXT, share_created_at TEXT, model_selections_json TEXT NOT NULL DEFAULT '{}', audio_strategy TEXT NOT NULL DEFAULT 'separate', routing_version INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS shot_vision_audits (
   id TEXT PRIMARY KEY,
@@ -514,3 +514,144 @@ CREATE TABLE IF NOT EXISTS api_channels (
 );
 CREATE INDEX IF NOT EXISTS idx_api_channels_type_priority
   ON api_channels(channel_type, enabled, priority, created_at);
+
+-- 多 NewAPI 网关与逻辑模型目录。旧 api_channels 保留给 routingVersion=1 任务兼容读取。
+CREATE TABLE IF NOT EXISTS api_gateways (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'newapi',
+  base_url TEXT NOT NULL,
+  api_key_encrypted TEXT NOT NULL DEFAULT '',
+  auth_mode TEXT NOT NULL DEFAULT 'bearer',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  timeout_ms INTEGER NOT NULL DEFAULT 120000,
+  config_version INTEGER NOT NULL DEFAULT 1,
+  key_version INTEGER NOT NULL DEFAULT 1,
+  options_json TEXT NOT NULL DEFAULT '{}',
+  last_test_status TEXT,
+  last_tested_at TEXT,
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_api_gateways_enabled ON api_gateways(enabled, created_at);
+
+CREATE TABLE IF NOT EXISTS ai_model_profiles (
+  id TEXT PRIMARY KEY,
+  model_key TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  media_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  is_default_for_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 100,
+  task_kinds_json TEXT NOT NULL DEFAULT '[]',
+  capability_schema_version INTEGER NOT NULL DEFAULT 1,
+  capabilities_json TEXT NOT NULL DEFAULT '{}',
+  default_parameters_json TEXT NOT NULL DEFAULT '{}',
+  locked_parameters_json TEXT NOT NULL DEFAULT '{}',
+  route_policy TEXT NOT NULL DEFAULT 'priority_failover',
+  pricing_policy_json TEXT NOT NULL DEFAULT '{}',
+  access_policy_json TEXT NOT NULL DEFAULT '{}',
+  limits_json TEXT NOT NULL DEFAULT '{}',
+  config_version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_model_profiles_catalog
+  ON ai_model_profiles(media_type, status, sort_order, created_at);
+
+CREATE TABLE IF NOT EXISTS api_gateway_models (
+  id TEXT PRIMARY KEY,
+  gateway_id TEXT NOT NULL REFERENCES api_gateways(id),
+  model_profile_id TEXT NOT NULL REFERENCES ai_model_profiles(id),
+  upstream_model_id TEXT NOT NULL,
+  protocol TEXT NOT NULL,
+  protocol_version TEXT NOT NULL DEFAULT '1',
+  adapter_version TEXT NOT NULL DEFAULT '1',
+  priority INTEGER NOT NULL DEFAULT 100,
+  status TEXT NOT NULL DEFAULT 'active',
+  capabilities_override_json TEXT NOT NULL DEFAULT '{}',
+  parameters_override_json TEXT NOT NULL DEFAULT '{}',
+  protocol_options_json TEXT NOT NULL DEFAULT '{}',
+  voice_map_json TEXT NOT NULL DEFAULT '{}',
+  pricing_override_json TEXT NOT NULL DEFAULT '{}',
+  price_version INTEGER NOT NULL DEFAULT 1,
+  input_transport_json TEXT NOT NULL DEFAULT '{}',
+  output_policy_json TEXT NOT NULL DEFAULT '{}',
+  endpoint_path_override TEXT,
+  config_version INTEGER NOT NULL DEFAULT 1,
+  last_test_status TEXT,
+  last_test_detail TEXT,
+  last_tested_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(gateway_id, model_profile_id)
+);
+CREATE INDEX IF NOT EXISTS idx_api_gateway_models_route
+  ON api_gateway_models(model_profile_id, status, priority, created_at);
+CREATE INDEX IF NOT EXISTS idx_api_gateway_models_gateway
+  ON api_gateway_models(gateway_id, status, created_at);
+
+CREATE TABLE IF NOT EXISTS ai_model_calls (
+  id TEXT PRIMARY KEY,
+  idempotency_key TEXT UNIQUE NOT NULL,
+  project_id TEXT,
+  pipeline_job_id TEXT,
+  user_id TEXT,
+  operation TEXT NOT NULL,
+  task_kind TEXT NOT NULL,
+  media_type TEXT NOT NULL,
+  state TEXT NOT NULL,
+  routing_version INTEGER NOT NULL DEFAULT 2,
+  requested_model_key TEXT NOT NULL,
+  requested_model_snapshot_json TEXT NOT NULL DEFAULT '{}',
+  ordered_routes_snapshot_json TEXT NOT NULL DEFAULT '[]',
+  successful_attempt_id TEXT,
+  returned_model_id TEXT,
+  request_parameters_json TEXT NOT NULL DEFAULT '{}',
+  usage_json TEXT NOT NULL DEFAULT '{}',
+  estimated_cost_cny DOUBLE PRECISION,
+  actual_cost_cny DOUBLE PRECISION,
+  error_category TEXT,
+  error_summary TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  next_poll_at TEXT,
+  lease_owner TEXT,
+  lease_expires_at TEXT,
+  cancel_requested_at TEXT,
+  result_asset_id TEXT,
+  submitted_at TEXT,
+  last_polled_at TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_model_calls_project ON ai_model_calls(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_model_calls_state ON ai_model_calls(state, next_poll_at, created_at);
+
+CREATE TABLE IF NOT EXISTS ai_model_call_attempts (
+  id TEXT PRIMARY KEY,
+  model_call_id TEXT NOT NULL REFERENCES ai_model_calls(id),
+  sequence INTEGER NOT NULL,
+  gateway_model_id TEXT NOT NULL,
+  gateway_id TEXT NOT NULL,
+  gateway_model_snapshot_json TEXT NOT NULL DEFAULT '{}',
+  attempt_idempotency_key TEXT UNIQUE NOT NULL,
+  state TEXT NOT NULL,
+  upstream_model_id TEXT NOT NULL,
+  returned_model_id TEXT,
+  upstream_request_id TEXT,
+  upstream_task_id TEXT,
+  usage_json TEXT NOT NULL DEFAULT '{}',
+  estimated_cost_cny DOUBLE PRECISION,
+  actual_cost_cny DOUBLE PRECISION,
+  error_category TEXT,
+  error_summary TEXT,
+  submitted_at TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(model_call_id, sequence)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_model_call_attempts_call
+  ON ai_model_call_attempts(model_call_id, sequence);

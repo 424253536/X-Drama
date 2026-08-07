@@ -23,9 +23,13 @@ export interface ProjectRow {
   aspect: string;
   created_at: string;
   updated_at: string;
+  model_selections_json?: string;
+  routing_version?: number;
+  audio_strategy?: string;
 }
 
-const COLS = 'id, user_id, title, description, cover_urls, status, aspect, created_at, updated_at';
+const COLS = `id, user_id, title, description, cover_urls, status, aspect,
+  model_selections_json, routing_version, audio_strategy, created_at, updated_at`;
 
 export async function getProject(id: string): Promise<ProjectRow | null> {
   return getDbDriver().get<ProjectRow>(`SELECT ${COLS} FROM projects WHERE id = ?`, [id]);
@@ -162,20 +166,26 @@ export interface InsertProjectFullInput {
   primaryCharacterRef?: string | null;
   /** 锁定角色数组 (repo 负责 JSON 序列化). */
   lockedCharacters?: unknown[];
+  modelSelections?: Record<string, string>;
+  routingVersion?: number;
+  audioStrategy?: string;
 }
 
 export async function insertProjectFull(input: InsertProjectFullInput): Promise<ProjectRow> {
   const driver = getDbDriver();
   const ts = new Date().toISOString();
   await driver.run(
-    `INSERT INTO projects (id, user_id, title, description, cover_urls, status, aspect, style_id, primary_character_ref, locked_characters, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (id, user_id, title, description, cover_urls, status, aspect, style_id,
+       primary_character_ref, locked_characters, model_selections_json, routing_version, audio_strategy,
+       created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id, input.userId, input.title, input.description ?? null,
       JSON.stringify(input.coverUrls ?? []), input.status || 'active',
       input.aspect || '16:9', // v10.6.0 项目级画幅
       input.styleId ?? null, input.primaryCharacterRef ?? null,
-      JSON.stringify(input.lockedCharacters ?? []), ts, ts,
+      JSON.stringify(input.lockedCharacters ?? []), JSON.stringify(input.modelSelections ?? {}),
+      input.routingVersion ?? 1, input.audioStrategy || 'separate', ts, ts,
     ],
   );
   const row = await getProject(input.id);
@@ -189,18 +199,19 @@ const PROJECT_UPDATABLE_COLS = new Set([
   'title', 'description', 'cover_urls', 'status', 'aspect',
   'style_id', 'primary_character_ref', 'locked_characters',
   'director_notes', 'script_data',
+  'model_selections_json', 'routing_version', 'audio_strategy',
   // v9.0.2b: 轻量共享链接
   'share_token', 'share_created_at',
 ]);
 
 /**
  * v9.0.2: 按 id 更新项目列 (无 owner 守卫, 给创作管线/cameo 用).
- * patch 用 snake_case 列名 → 值 (string|null, JSON 列调用方已 stringify); 自动带 updated_at.
+ * patch 用 snake_case 列名 → 数据库标量值（JSON 列调用方已 stringify）；自动带 updated_at.
  * 传 undefined 的键跳过; 空 patch 返回 false. 非白名单列抛错.
  */
 export async function updateProjectById(
   id: string,
-  patch: Record<string, string | null | undefined>,
+  patch: Record<string, string | number | boolean | null | undefined>,
 ): Promise<boolean> {
   const sets: string[] = [];
   const params: unknown[] = [];

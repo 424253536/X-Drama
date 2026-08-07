@@ -40,6 +40,8 @@ import { saveCreatePrefs, loadCreatePrefs } from '@/lib/create-prefs';
 import { LanguagePicker } from '@/components/create/language-picker';
 import { getSystemLanguage } from '@/lib/system-language';
 import { getToken } from '@/lib/auth';
+import { ModelSelectionPanel } from '@/components/model-selection-panel';
+import type { AudioStrategy, ModelSelections } from '@/lib/model-routing';
 
 // Pika-style art presets with visual indicators and color themes
 const stylePresets = [
@@ -94,6 +96,8 @@ export default function DashboardCreatePage() {
   const [urlExtracting, setUrlExtracting] = useState(false);
   const [urlHint, setUrlHint] = useState<string | null>(null);
   const [videoProvider, setVideoProvider] = useState('veo');
+  const [modelSelections, setModelSelections] = useState<ModelSelections>({});
+  const [audioStrategy, setAudioStrategy] = useState<AudioStrategy>('separate');
   const [style, setStyle] = useState(stylePresets[0].en);
   const [selectedTemplate, setSelectedTemplate] = useState<StoryTemplate | null>(null);
   // v2.18 P1: 模板展开 / 详情逻辑 已迁移到 <TemplateLibraryPicker> 内, 老 expandedTemplate 状态废弃
@@ -329,6 +333,9 @@ export default function DashboardCreatePage() {
         },
         body: JSON.stringify({
           idea: sanitizedIdea, videoProvider, style, duration, aspect, projectId,
+          routingVersion: Object.keys(modelSelections).length ? 2 : 1,
+          modelSelections,
+          audioStrategy,
           templateId: selectedTemplate?.id,
           // v2.12 Phase 1: 携带 1-3 角色锁脸;create-stream 会持久化到 projects.locked_characters,
           // 并把第一个角色 imageUrl 同步到 projects.primary_character_ref(兜底现有单角色编排链路)
@@ -1028,32 +1035,13 @@ export default function DashboardCreatePage() {
             </div>
           </div>
 
-          {createMode === 'pro' && <div>
-            <Eyebrow>Engine · 视频引擎</Eyebrow>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-              {[
-                { id: 'veo', label: '视频网关', sub: 'Veo / Seedance · New API' },
-                { id: 'seedance', label: 'Seedance', sub: '火山格式 · 原生音画' },
-                { id: 'minimax', label: 'Minimax', sub: 'balanced · fast' },
-                { id: 'keling', label: '可灵 AI', sub: '官方API · 已接入' }, // v12.157:key 已接,别名在 engine-order 归一
-              ].map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setVideoProvider(v.id)}
-                  className={`cinema-card-hi p-3 transition-all text-left ${
-                    videoProvider === v.id
-                      ? 'border-[var(--cinema-amber-deep)] bg-[var(--cinema-amber-glow)]'
-                      : 'hover:border-[var(--cinema-border-hi)]'
-                  }`}
-                  style={videoProvider === v.id ? { borderColor: 'var(--cinema-amber)' } : undefined}
-                >
-                  <div className="cinema-mono text-[10px] opacity-50 mb-0.5 tracking-wider">{v.id.toUpperCase()}</div>
-                  <div className="cinema-headline text-sm">{v.label}</div>
-                  <div className="cinema-mono text-[9px] mt-0.5 opacity-60">{v.sub}</div>
-                </button>
-              ))}
-            </div>
-          </div>}
+          <ModelSelectionPanel
+            value={modelSelections}
+            onChange={setModelSelections}
+            audioStrategy={audioStrategy}
+            onAudioStrategyChange={setAudioStrategy}
+            className="cinema-card-hi"
+          />
 
           {/* v2.14 P1.1 + v2.16 P1.2: 全局默认镜头语言 — 包到 cinema-card-hi 与周围 cards 视觉对齐 */}
           {createMode === 'pro' && <div className="cinema-card-hi p-3">

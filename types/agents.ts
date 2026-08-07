@@ -232,6 +232,8 @@ export interface VideoClip {
   status?: 'pending' | 'generating' | 'completed' | 'error';
   /** v12.29.0(P1):本镜成片是否带原生音频(真由原生音频引擎出片)→ 跳 TTS + composer 取真音轨。 */
   nativeAudio?: boolean;
+  /** 混合模式保留成片环境音，但仍生成独立对白。 */
+  preserveNativeAudio?: boolean;
 }
 
 // 导演计划输出

@@ -88,6 +88,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
         const orchestrator = new HybridOrchestrator();
+        const { applyProjectModelRouting } = await import('@/lib/project-model-routing');
+        await applyProjectModelRouting(orchestrator, projectId);
         if (ctx.styleId) orchestrator.setUserStyle(ctx.styleId);
         if (useStyleBible !== false && ctx.styleAnchorUrl) (orchestrator as unknown as { styleAnchorImageUrl?: string }).styleAnchorImageUrl = ctx.styleAnchorUrl;
         if (useCref !== false && ctx.primaryCharacterRef) orchestrator.setPrimaryCharacterRef(ctx.primaryCharacterRef);

@@ -117,6 +117,8 @@ export interface EditorAgentCtx {
   update(role: AgentRole, u: Partial<Agent>): void;
   callLLM(systemPrompt: string, userMessage: string, json?: boolean, useCreativeModel?: boolean, opts?: { maxTokens?: number; timeoutMs?: number }): Promise<string>;
   targetLanguage(): TargetLanguage;
+  getModelSelection(taskKind: string): string | undefined;
+  getModelCallContext(): { projectId?: string; userId?: string };
   regenerateShot(shotNumber: number, storyboard: Storyboard, options?: { duration?: number; videoProvider?: string; tailFrameUrl?: string }): Promise<VideoClip>;
 }
 export async function runEditor(ctx: EditorAgentCtx, videos: VideoClip[], script: Script): Promise<EditResult> {
@@ -339,6 +341,10 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
     // ═══ 第3步：AI 配音生成（MiniMax TTS）═══
     // v12.29.0(P1):runEditor 级别算「原生音频镜」集合,供 TTS 跳过 + composer 取真音轨共用。
     const nativeShotsSet = new Set(nativeAudioShotNumbers(videos));
+    const sourceAudioShotsSet = new Set(videos
+      .filter((clip) => clip.nativeAudio || clip.preserveNativeAudio)
+      .map((clip) => clip.shotNumber)
+      .filter((shotNumber): shotNumber is number => typeof shotNumber === 'number'));
     const voiceoverClips: Array<{ shotNumber: number; audioUrl: string }> = [];
     const voiceoverDurations: Record<number, number> = {}; // v12.68 镜号→TTS 真实时长(karaoke 对齐)
     // v2.11 #B1: 收集音频相关的降级信号, 最后带入 final payload 让前端明示"哪些镜头降级了"
@@ -410,6 +416,9 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
                 volume: prosody.vol,
                 language: ttsLangCode(ctx.targetLanguage()), // v12.6.1: 按目标语种(zh-CN/en-US)
                 label: `shot-${t.shotNumber}`,
+                modelKey: ctx.getModelSelection('audio.tts'),
+                taskKind: 'audio.tts',
+                ...ctx.getModelCallContext(),
               },
               async () => {
                 // v12.7.0: 先走注册表(vectorengine-tts 50 → minimax-tts 100,按 priority);
@@ -422,6 +431,9 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
                   pitch: prosody.pitch,
                   volume: prosody.vol,
                   language: ttsLangCode(ctx.targetLanguage()),
+                  modelKey: ctx.getModelSelection('audio.tts'),
+                  taskKind: 'audio.tts',
+                  ...ctx.getModelCallContext(),
                 });
                 if (d.result?.audioUrl) {
                   return { audioUrl: d.result.audioUrl, duration: d.result.duration ?? 0, subtitle: d.result.subtitle ?? [], provider: d.result.provider ?? 'registry' };
@@ -814,7 +826,7 @@ transitionDuration: 0.0-1.5 (cut 类用 0, fade 类用 0.5-1.2)`,
           voiceoverDurations: Object.keys(voiceoverDurations).length > 0 ? voiceoverDurations : undefined, // v12.68 扫光对齐 TTS
           musicUrl: musicUrl || undefined,
           voiceoverClips: voiceoverClips.length > 0 ? voiceoverClips : undefined,
-          nativeAudioShots: nativeShotsSet.size > 0 ? [...nativeShotsSet] : undefined, // v12.29.0(P1):这些镜用成片真音轨
+          nativeAudioShots: sourceAudioShotsSet.size > 0 ? [...sourceAudioShotsSet] : undefined,
 
           transitionDuration: 0.5,
           musicVolume: voiceoverClips.length > 0 ? 0.2 : 0.3, // 有配音时降低配乐音量

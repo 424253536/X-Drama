@@ -79,7 +79,9 @@ export async function dispatchImageGenerate(
   input: ImageGenerateInput,
   selection: SelectInput,
 ): Promise<{ result: ImageGenerateResult | null; tried: Array<{ id: string; error: string }> }> {
-  const chain = selectProviders(selection);
+  const chain = input.modelKey
+    ? selectProviders(selection).filter((provider) => provider.id === 'runtime-image-channels')
+    : selectProviders(selection);
   const tried: Array<{ id: string; error: string }> = [];
   for (const p of chain) {
     try {

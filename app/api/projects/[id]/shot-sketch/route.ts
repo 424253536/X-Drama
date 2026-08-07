@@ -55,6 +55,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try {
       const { HybridOrchestrator } = await import('@/services/hybrid-orchestrator');
       const orchestrator = new HybridOrchestrator();
+      const { applyProjectModelRouting } = await import('@/lib/project-model-routing');
+      await applyProjectModelRouting(orchestrator, id);
       if (proj.style_id) { try { orchestrator.setUserStyle(proj.style_id); } catch { /* ignore */ } }
       // 草图本身不套角色/风格参考(要的就是干净构图);走完整图像路由。
       sketchUrl = await (orchestrator as any).generateImage(sketchPrompt, { aspectRatio, label: `Shot ${shotNumber} 草图` });
