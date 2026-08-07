@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
-import { buildEDL, buildFCPXML, type EdlShot } from '@/lib/edl-export';
+import { buildEDL, buildFCPXML, type EdlShot, type EdlAudio } from '@/lib/edl-export';
 import { normalizeProjectFormat } from '@/lib/project-format';
 import { requireProjectAccess } from '@/lib/auth-guard';
 
@@ -50,22 +50,66 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try { fmt = JSON.parse(fmtRows[0]?.data || '{}'); } catch { fmt = {}; }
   const fps = normalizeProjectFormat(fmt).fps;
 
-  const shots: EdlShot[] = shotsData.map((s, i) => ({
-    name: `Shot ${String(s.shotNumber ?? i + 1).padStart(2, '0')}${s.emotion ? ` (${s.emotion})` : ''}`,
-    durationS: typeof s.duration === 'number' && s.duration > 0 ? s.duration : 5,
-    sourceUrl: urlFor(s.shotNumber ?? i + 1),
-  }));
+  // ── v12.277:以 **timeline 资产(成片终值)** 为准,script 仅作兜底 ──
+  // 病根:此前只读 script 的 `s.duration`,那是**设计时长**;而成片时长会被
+  // 卡点吸附(video-composer snapDurationsToBeatsClamped)与逐镜变速(durations[i] /= speed)改写。
+  // 于是导出的剪辑线时间码与实际 mp4 对不上,且越往后偏得越多 —— 剪辑师拿到的是一份「看着像、对不上」的表。
+  // 同时 timeline 还带 transition / voiceoverClips / musicUrl,此前全被忽略(EDL 只有一条硬切视频轨)。
+  const timelineRows = await listAssetsByType(projectId, 'timeline');
+  let tl: any = {};
+  try { tl = JSON.parse(timelineRows[0]?.data || '{}'); } catch { tl = {}; }
+  const tlShots: any[] = Array.isArray(tl?.timeline) ? tl.timeline : [];
+  const tlBySn = new Map<number, any>();
+  for (const t of tlShots) if (typeof t?.shotNumber === 'number') tlBySn.set(t.shotNumber, t);
+
+  const shots: EdlShot[] = shotsData.map((s, i) => {
+    const sn = s.shotNumber ?? i + 1;
+    const t = tlBySn.get(sn);
+    return {
+      name: `Shot ${String(sn).padStart(2, '0')}${s.emotion ? ` (${s.emotion})` : ''}`,
+      // 终值优先;无 timeline(未出片)时退回设计时长,行为与旧版一致
+      durationS: (typeof t?.duration === 'number' && t.duration > 0)
+        ? t.duration
+        : (typeof s.duration === 'number' && s.duration > 0 ? s.duration : 5),
+      sourceUrl: t?.videoUrl || urlFor(sn),
+      transition: t?.transition,
+      transitionDurationS: typeof t?.transitionDurationS === 'number' ? t.transitionDurationS : undefined,
+    };
+  });
+
+  // v12.277:音轨 —— 逐镜配音按其在成片时间轴上的起点排布;BGM 覆盖全片。
+  const audio: EdlAudio[] = [];
+  {
+    let cursor = 0;
+    const startBySn = new Map<number, number>();
+    for (const sh of shots) { startBySn.set(Number(String(sh.name).replace(/^Shot 0*(\d+).*$/, '$1')), cursor); cursor += sh.durationS; }
+    for (const vo of (Array.isArray(tl?.voiceoverClips) ? tl.voiceoverClips : [])) {
+      const sn = Number(vo?.shotNumber);
+      if (!Number.isFinite(sn) || !vo?.audioUrl) continue;
+      const t = tlBySn.get(sn);
+      audio.push({
+        name: `VO Shot ${String(sn).padStart(2, '0')}${t?.speaker ? ` — ${t.speaker}` : ''}`,
+        sourceUrl: vo.audioUrl,
+        startS: startBySn.get(sn) ?? 0,
+        durationS: (typeof t?.duration === 'number' && t.duration > 0) ? t.duration : 5,
+        kind: 'vo',
+      });
+    }
+    if (tl?.musicUrl) {
+      audio.push({ name: 'BGM', sourceUrl: tl.musicUrl, startS: 0, durationS: cursor || 1, kind: 'bgm' });
+    }
+  }
 
   const title = `wind-comic-${projectId}`;
   if (format === 'fcpxml') {
-    return new Response(buildFCPXML(shots, fps, title), {
+    return new Response(buildFCPXML(shots, fps, title, audio), {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': `attachment; filename="${title}.xml"`,
       },
     });
   }
-  return new Response(buildEDL(shots, fps, title), {
+  return new Response(buildEDL(shots, fps, title, audio), {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Disposition': `attachment; filename="${title}.edl"`,
