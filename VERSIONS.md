@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.271**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.272**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.271**:**vitest 3540 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.272**:**vitest 3550 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,17 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.272.0** | 2026-08-07 | `fb57d34` | **🐎 HappyHorse 1.1(阿里)引擎接入 —— 兑现「竞品越强,本管线越强」**。接 v12.270 竞品核验:HappyHorse 1.1 稳居 AA 双榜前五,**单次 Transformer 联合生成视频+音频** + 7 语种原生唇形。BYO 架构的意义就在于榜上模型开放 API 即应可被调度。
+
+**接口契约是「问」出来的,不是猜的**:先探通用视频口 —— 网关明确 400 回绝:「模型 happyhorse-1.1-t2v 属于 **阿里百炼专属接口**,禁止通过通用视频接口 `/v1/video/create` 调用」,并直接给出正确路径。据此实现百炼原生异步格式:`POST /alibailian/api/v1/services/aigc/video-generation/video-synthesis`(body `{model, input:{prompt, img_url?}, parameters}`)→ 轮询 `GET /alibailian/api/v1/tasks/{id}`。实测**不需要** `X-DashScope-Async` 头。
+
+**live 真跑验收(非 mock)**:用本版新写的 service 跑完整生命周期 → `SUCCEEDED` → 真 GET 下载 → **ffprobe 实证 h264 1920×1080 + aac 音轨、3.16s**(印证其「视频+音频联合生成」)。耗时约 170s/3s 片段。
+
+**⚠️ live 抓到一个真限制,未假装修好**:请求 `9:16` 实际出 **1920×1080(16:9)**,画幅参数未被采纳;继续探正确形态时网关返回 429(上游饱和)**无法当场确证**。因此:代码同时透传 `size`+`aspect_ratio` 并提供 `HAPPYHORSE_SIZE` 让运营者指定其网关要的确切字符串;**README 与代码注释均如实标注「竖屏未验证,勿排链首」**。另记录 OSS 签名 URL **HEAD 返回 403 而 GET 200**(已核实本项目下载链路不用 HEAD,无影响)。
+
+**零回归设计**:`VideoEngineName` 与 orchestrator 的 `VideoEngine` 两套类型此前各写各的(漏改任一处 = 新引擎「配得上、永远派不到」),本版对齐为同一集合;但**默认链序不含 happyhorse** —— 只有 `VIDEO_ENGINE_ORDER` 显式列出或用户显式选择才参与,装了 key 也不改变既有用户的出片结果。
+
+**验收**:tsc 0 + 全量 **3550/3550**(425 文件,+10:时长夹取/模型选择/可用性/URL 抽取/链序别名/零回归/请求形态×3)+ 门禁零违规 + live 出片 ffprobe 实证。 |
 | **v12.271.0** | 2026-08-07 | `d56fd3c` | **🔬 grep 式测试锁收尾(3/4 转真行为断言)+ 抓出一条「因错误原因通过」的假绿**。接 v12.263(当时转了 2 处 Writer 侧),本版处理剩余批次。
 
 **转成功 3 处**:① `v12-168` TTS 语种链 —— 从 grep 三个字符串升级为**真跑**:mock 全局 fetch 跑 `generateVoiceover`,断言它**实际发出的请求体**带对 `language_boost`(9 语种逐个验 + 未知语种不注入的负例);并直接跑 `selectProviders` 验证 ja/ko/ru **真的不被 registry 滤掉**(那条 `supportedLanguages.length > 0` 过滤才是当年的病根)。② `v12-139` 禁 TTS 念稿冒充 BGM —— 让音乐接口真返回 500,断言 `generateMusic` **抛错**且**绝不返回音频 URL**、**不回落 TTS 端点**;并断言 `generateSpeechMusic` 方法**已不存在**(而非「没被调用」)。另**实证该测试真走到了网络层**(fetch 被调用 1 次),排除「无 key 提前抛错」的空转可能。③ `v12-203` music 端点 —— 改为**真调路由处理函数**,断言成功落 `type='music'` 资产 + 未登录 401。

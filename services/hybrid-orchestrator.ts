@@ -14,6 +14,7 @@ import { MinimaxService } from './minimax.service';
 import { VeoService, hasVeo } from './veo.service';
 import { MidjourneyService, hasMidjourney } from './midjourney.service';
 import { KlingService, hasKling } from './kling.service';
+import { HappyHorseService, getHappyHorseService } from '@/services/happyhorse.service'; // v12.272
 import { FalFluxService, hasFalFlux } from './fal-flux.service';
 import { ComfyUIService, hasComfyUI, hasComfyUIControlNet } from './comfyui.service';
 import { runWriter as runWriterAgent, type WriterAgentCtx } from './agents/writer-agent';
@@ -142,7 +143,9 @@ type ProgressCallback = (type: string, data: any) => void;
 // ═══════════════════════════════════════════
 // P2: 智能引擎路由 — 根据镜头类型自动选择最优引擎
 // ═══════════════════════════════════════════
-type VideoEngine = 'veo' | 'minimax' | 'kling';
+// v12.272:与 lib/engine-order.ts 的 VideoEngineName 保持同一集合 —— 两处此前各写各的,
+// 漏改任一处都会让新引擎「配置得上、永远派发不到」。
+type VideoEngine = 'veo' | 'minimax' | 'kling' | 'happyhorse';
 
 interface EngineRouteResult {
   primary: VideoEngine;
@@ -307,6 +310,7 @@ export class HybridOrchestrator {
   private veoService: VeoService | null;
   private mjService: MidjourneyService | null;
   private klingService: KlingService | null;
+  private happyhorseService: HappyHorseService | null; // v12.272
   private falFluxService: FalFluxService | null;
   private comfyuiService: ComfyUIService | null;
   private xverseService: XVerseService | null;
@@ -708,6 +712,7 @@ export class HybridOrchestrator {
     this.veoService = hasVeo() ? new VeoService() : null;
     this.mjService = hasMidjourney() ? new MidjourneyService() : null;
     this.klingService = hasKling() ? new KlingService() : null;
+    this.happyhorseService = getHappyHorseService(); // v12.272:无 key 返回 null,链序自动跳过
     this.falFluxService = hasFalFlux() ? new FalFluxService() : null;
     this.comfyuiService = hasComfyUI() ? new ComfyUIService() : null;
     this.xverseService = hasXVerse() ? new XVerseService() : null;
@@ -719,7 +724,7 @@ export class HybridOrchestrator {
     const minimaxLabel = this.minimaxService
       ? (minimaxCaps.length > 0 ? minimaxCaps.join('+') : 'TTS-ONLY')
       : 'OFF';
-    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}, XVerse: ${this.xverseService ? (isXVersePrimary() ? 'PRIMARY' : 'FALLBACK') : 'OFF'}`);
+    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, HappyHorse: ${this.happyhorseService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}, XVerse: ${this.xverseService ? (isXVersePrimary() ? 'PRIMARY' : 'FALLBACK') : 'OFF'}`);
 
     // v3.2 P1: 注册内置 image providers + 自动加载 IMAGE_PROVIDERS_DIR.
     // 异步 fire-and-forget — 不阻塞 orchestrator 创建.
@@ -3162,6 +3167,9 @@ ${shots.map((s, i) => {
       if (this.veoService) availableEngines.push('veo');
       if (this.minimaxService?.isVideoAvailable()) availableEngines.push('minimax');
       if (this.klingService) availableEngines.push('kling');
+      // v12.272:HappyHorse(阿里)—— 有 key 即登记;默认链序不含它,
+      // 需 VIDEO_ENGINE_ORDER 显式列出或用户显式选择才会打头(不改变既有用户的出片结果)。
+      if (this.happyhorseService) availableEngines.push('happyhorse');
 
       if (availableEngines.length > 0) {
         const route = routeVideoEngine(
@@ -3186,7 +3194,7 @@ ${shots.map((s, i) => {
 
         // v12.8.1: 引擎兜底链(含软熔断)走抽出来的纯控制流 runVideoEngineChain —— 可单测坐实「跳过冷却引擎」。
         //   每个引擎的具体调用(minimax/veo/kling 各自参数)留在 attempt 回调;控制流(跳过/试/校验/熔断/下一个)在 helper。
-        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
+        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : engine === 'happyhorse' ? 'HappyHorse 1.1(阿里)' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
         const _chain = await runVideoEngineChain(
           engineOrder,
           async (engine) => {
@@ -3209,6 +3217,15 @@ ${shots.map((s, i) => {
                 duration: 8,
                 aspectRatio: this.videoAspect(), // v12.14.0 横竖屏(竖屏 720x1280,不再默认 16:9)
                 referenceImages: veoRefs.length > 0 ? veoRefs : undefined,
+                onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+              });
+            } else if (engine === 'happyhorse' && this.happyhorseService) {
+              // v12.272:百炼专属异步端点(建任务→轮询),单次联合生成视频+音频。
+              // 首帧存在走 i2v,否则 t2v;时长按镜头 3~15s 夹取。
+              return await this.happyhorseService.generateVideo(enhancedPrompt, {
+                imageUrl: firstFrameUrl && firstFrameUrl.startsWith('http') ? firstFrameUrl : undefined,
+                aspectRatio: this.videoAspect() as any,
+                duration: shot?.duration,
                 onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
               });
             } else if (engine === 'kling' && this.klingService) {

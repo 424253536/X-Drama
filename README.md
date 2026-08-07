@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.271</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.272</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -89,7 +89,7 @@ Three views of the same engine. **Open on GitHub to watch them animate** — flo
 
 **Emotion-driven camera** — shots missing camera movement get one derived from story beats (hook→push-in, chase→handheld, reveal→zoom-in, farewell→pull-out, emotion temperature → push/orbit/crane). Even the Ken Burns degradation follows the intended move.
 
-**Engine matrix, honestly** — Veo · MiniMax (Hailuo) · Kling (official Beijing API) with a one-line env priority (`VIDEO_ENGINE_ORDER=kling,minimax,veo`), base64 first-frame channel for local assets, and an *honest* fallback chain: a failed shot becomes a labeled animatic, never a still image masquerading as video.
+**Engine matrix, honestly** — Veo · MiniMax (Hailuo) · Kling (official Beijing API) · **HappyHorse 1.1 (Alibaba, v12.272 — joint video+audio in one pass)** with a one-line env priority (`VIDEO_ENGINE_ORDER=kling,minimax,veo,happyhorse`), base64 first-frame channel for local assets, and an *honest* fallback chain: a failed shot becomes a labeled animatic, never a still image masquerading as video.
 
 **The quality loop** — ffprobe-powered film health report (aspect/duration/fps/bitrate/audio/degraded shots) per project *and* per series; batch re-render of degraded shots (2-way concurrent); a season-export health gate so no broken episode sneaks into the compilation; an engine weather bar so you know *before* you hit generate.
 
@@ -478,6 +478,7 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 **Optional engines** (graceful fallback when missing):
 - `MINIMAX_API_KEY` — image-01 / Hailuo-2.3 video / speech-2.8-hd TTS / music-2.6 BGM
 - `KELING_API_KEY` — Kling Master 4K + first-last-frame fusion + lip-sync
+- `HAPPYHORSE_API_KEY` (or reuse `VECTORENGINE_API_KEY`) — **HappyHorse 1.1** (Alibaba). Joint video+audio in a single pass; top-5 on both Artificial Analysis boards. Enable by listing it in `VIDEO_ENGINE_ORDER` (it is **not** in the default chain, so adding the key alone changes nothing for existing users). Live-verified 2026-08-07: 1080p h264 + aac, ~170s for a 3s clip. **Known limitation:** the aspect-ratio parameter was *not* honoured in our live test (asked 9:16, got 1920×1080); the exact field its gateway wants is still unconfirmed, so set `HAPPYHORSE_SIZE` (e.g. `720*1280`) if you need vertical, and don't put HappyHorse first in the chain for vertical drama until you've verified it yourself.
 - `VIDU_API_KEY` — Vidu Q3 (long-form 16s clips)
 - `VEO_API_KEY` — Veo 3.1-fast video fallback
 - `GROK_API_KEY` — xAI Grok Imagine 1.5 (T2V/I2V, native audio; BYO — 2026-06 image-to-video #1; auto-preferred when set)
