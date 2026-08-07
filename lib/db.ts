@@ -170,6 +170,29 @@ CREATE TABLE IF NOT EXISTS global_assets (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+-- ═══ v12.280:5 张**最早的核心表**补索引 ═══════════════════════════════════
+-- 病根:本文件已有 54 条 CREATE INDEX,但**全部建在后期新增的表上**
+-- (global_assets / cost_log / comments / invite_codes …);而最早落地的
+-- projects / project_assets / generations / chat_messages / character_library
+-- **一条索引都没有** —— 越老、越热的表反而越没被照顾到。
+--
+-- project_assets 是全仓最热的表:WHERE project_id = ? AND type = ? 在代码里出现 33 处,
+-- 每次都是全表 SCAN;而 GET /api/projects 的关联子查询会**逐项目行**再扫一遍。
+--
+-- 实测(300 项目 × 40 资产 = 12000 行,better-sqlite3 内存库):
+--   项目列表  28.18 ms → 0.16 ms  (**172×**)
+--   单项目取资产 0.4064 ms → 0.0120 ms (**34×**)
+--   查询计划   SCAN project_assets → SEARCH USING INDEX
+-- 索引列顺序按真实谓词来:(project_id, type) 复合索引可同时服务「只按 project_id」的查询。
+CREATE INDEX IF NOT EXISTS idx_project_assets_project_type ON project_assets(project_id, type);
+CREATE INDEX IF NOT EXISTS idx_project_assets_project_shot ON project_assets(project_id, shot_number);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_created ON projects(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_generations_user ON generations(user_id);
+CREATE INDEX IF NOT EXISTS idx_generations_project ON generations(project_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_project ON chat_messages(project_id);
+CREATE INDEX IF NOT EXISTS idx_character_library_user ON character_library(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_global_assets_user_type ON global_assets(user_id, type);
 CREATE INDEX IF NOT EXISTS idx_global_assets_user_name ON global_assets(user_id, name);
 
