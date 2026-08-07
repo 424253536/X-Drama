@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.275</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.276</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -17,7 +17,7 @@
   <a href="https://github.com/ChrisChen667788/wind-comic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ChrisChen667788/wind-comic/ci.yml?branch=main&label=CI&logo=github" alt="CI" /></a>
   <a href="https://github.com/ChrisChen667788/wind-comic/stargazers"><img src="https://img.shields.io/github/stars/ChrisChen667788/wind-comic?style=social" alt="GitHub stars" /></a>
-  <img src="https://img.shields.io/badge/Tests-3507%2F3507-2ea44f"  alt="3507 tests passing" />
+  <img src="https://img.shields.io/badge/Tests-3591%2F3591-2ea44f"  alt="3591 tests passing" />
   <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
 </p>
@@ -221,13 +221,22 @@ Beyond reference image hacks, we run each character's turnaround sheet through V
 ### 7. **Lipsync that actually works** (zh / en; needs a public video URL + audio ≥ 2s)
 Kling lip-sync API for talking heads, with Sync.so and Hailuo as auto-fallback. The pipeline strips dialogue from the prompt so the model only generates lip *motion*; we then sync the lips to the TTS audio in post. **Real-machine limits:** dialogue audio must be ≥ 2 seconds and the source video must be reachable at a public URL; ja/ko/ru currently degrade to no lip-sync (honest skip, surfaced in the engine-weather panel).
 
-### 8. **Conflict / reversal / cliffhanger pacing audit** (v2.21 P1.1)
-After Writer finishes, we score each shot 0-10 on a Chinese-conflict-word dictionary + detect emotional polarity reversals + cliffhanger keywords. If a vertical drama has <2 reversals or shot-1 conflict <5, you see a warning in the dedicated Pacing tab with actionable suggestions.
+### 8. **Conflict / reversal / cliffhanger pacing audit — v2** (v2.21 P1.1 → v12.275)
+After Writer finishes, we score each shot 0-10 on a Chinese-conflict-word dictionary + detect emotional polarity reversals + cliffhanger keywords.
+
+**v12.275 turned scoring into diagnosis.** An average score hides the difference between a story that *builds* and one that peaks in shot 1 — `[1,2,4,9]` and `[9,4,2,1]` both average 4. So v2 adds four things the average cannot see:
+
+- **Conflict-curve shape** — least-squares slope + peak position + peak prominence, classified as `escalating` / `flat` / `front-loaded` / `no-climax`.
+- **Drag-segment localisation** — names the exact shot range (e.g. "shots 3–5") where conflict flatlines, instead of reporting one global number.
+- **Opening density** — the first third is audited separately, because completion rate is decided there.
+- **Duration rhythm** — v1 never looked at `duration`; v2 flags both uniform-length monotony and long-take pile-ups.
+
+Every finding points at the shots to change. All pure functions over existing fields — **no extra LLM calls, no added cost**.
 
 ### 9. **Bring Your Own LLM** (v3.1.3)
 Every text-LLM call (Director / Writer / Vision / Audit) goes through one OpenAI-compatible `chat/completions` endpoint. Want to swap to DeepSeek-r1 / GPT-4o / Claude (via OpenRouter) / Qwen-Max / local Ollama? **Edit 3 lines in `.env`. Zero code change.** See [`docs/llm-providers.md`](docs/llm-providers.md) for the full matrix.
 
-### 10. **3507 tests, TypeScript strict, no fake "coming soon"s**
+### 10. **3591 tests, TypeScript strict, no fake "coming soon"s**
 Every feature listed above is in `main`, type-checked, unit-tested, and visible at `/projects/[id]` if you `npm install && npm run dev` right now.
 
 ---
@@ -257,7 +266,7 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 | BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌(它自己就是模型) | ❌ | ⚠️ 需改代码 | **✅ 12+ providers via .env** |
 | Open source | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | ✅ MIT | **✅ MIT** |
 | Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ✅ 对话式迭代编辑(招牌能力) | ✅ video-edit 端点 | **✅ + reference image upload** |
-| Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
+| Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ v2 (v12.275): shot score + reversal detection **plus** conflict-curve shape (escalating / flat / front-loaded / no-climax), drag-segment localisation to exact shot ranges, opening-density check, and duration-rhythm analysis — every finding names the shots to fix** |
 | Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ⚠️(对话式改片,非结构化卡点/情绪剪辑) | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
 | First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ | ✅ | ⚠️ | ✅ (I2V) | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
 | Multi-character face cast library (post-build editable) | ❌ | ✅ 主体库 | ✅ 角色管理 | ⚠️ | ⚠️ | ❌ | **✅ 3-slot cast + cross-shot subject_reference injection** |
@@ -493,7 +502,7 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 
 We're open to PRs. Two things matter most:
 1. **Don't break the multi-agent contracts.** Each agent has explicit input/output shapes — see `types/agents.ts`.
-2. **Tests gate everything.** Vitest 3507/3507 must stay green. Add tests for new lib/service files.
+2. **Tests gate everything.** Vitest 3591/3591 must stay green. Add tests for new lib/service files.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repo's contribution guide.
 
