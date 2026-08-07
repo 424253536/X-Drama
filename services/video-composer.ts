@@ -886,6 +886,10 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
   // v12.195:标准 SRT 在情绪调速/卡点/变速之前生成,时间轴用的是 ORIGINAL 时长 ——
   // durations[] 定稿后必须按终值重写此文件,否则慢放镜字幕提前消失(偏移可达 30%)。
   let srtResyncPath: string | null = null;
+  // v12.269:karaoke ASS 同样要在 durations 定稿 + xfade 时间轴算完后重写 —— 它此前**双重漂移**:
+  // ① 用 c.duration(ORIGINAL,未含情绪调速/卡点/变速);② cursor 纯累加(未减 xfade 转场重叠)。
+  // 存下路径与渲染参数,循环后按 clipStartSec 重建(与 SRT/配音/画面/打击音效同源)。
+  let assResync: { path: string; opts: { w: number; h: number; fontName: string; vertical: boolean; marginVRatio: number } } | null = null;
   try {
     const hasAnyDialogue = validClips.some((c) => (c?.dialogue || '').trim().length > 0);
     const cjkFontForSub = (await import('@/lib/text-control')).findCjkFont();
@@ -922,9 +926,11 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
         }
         if (lines.length > 0) {
           const { captionSafeBottomRatio } = await import('@/lib/caption-style');
-          const ass = buildKaraokeAss(lines, { w: canvasW, h: canvasH, fontName, vertical, marginVRatio: captionSafeBottomRatio(options.platform, vertical) });
+          const assOpts = { w: canvasW, h: canvasH, fontName, vertical, marginVRatio: captionSafeBottomRatio(options.platform, vertical) };
+          const ass = buildKaraokeAss(lines, assOpts);
           const assPath = path.join(tmpDir, 'subtitles.ass');
           fs.writeFileSync(assPath, ass, 'utf-8');
+          assResync = { path: assPath, opts: assOpts }; // v12.269:时间轴定稿后按压缩起点重写
           const escAss = assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
           subtitlesFilterFragment = `,subtitles='${escAss}'${fontDirFrag}`;
           console.log(`[Composer] 词级动效字幕(ASS karaoke)烧入: ${assPath} (font: ${cjkFont || 'system default'})`);
@@ -1247,6 +1253,31 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
     }
 
+    // v12.269:karaoke ASS 同法重写 —— 它此前是**双重漂移**(用 ORIGINAL 时长 + cursor 纯累加),
+    // 比 SRT 那条更严重:变速/卡点偏移 与 xfade 压缩位移 叠加。扫光 sweepSec 仍用 TTS 真实时长(不动)。
+    if (assResync) {
+      try {
+        const { buildKaraokeAss } = require('@/lib/ass-karaoke') as typeof import('@/lib/ass-karaoke');
+        const lines: Array<{ text: string; startSec: number; durSec: number; sweepSec?: number }> = [];
+        for (let k = 0; k < n; k++) {
+          const c = validClips[k];
+          if (!(c?.dialogue || '').trim()) continue;
+          const voDur = options.voiceoverDurations?.[c.shotNumber as number];
+          const gap = k < n - 1 ? clipStartSec[k + 1] - clipStartSec[k] : durations[k];
+          lines.push({
+            text: c.dialogue || '',
+            startSec: clipStartSec[k],
+            durSec: gap > 0 ? gap : durations[k], // 同 SRT 的 gap 退化保护
+            sweepSec: voDur && voDur > 0 ? voDur : undefined,
+          });
+        }
+        if (lines.length > 0) {
+          fs.writeFileSync(assResync.path, buildKaraokeAss(lines, assResync.opts), 'utf-8');
+          console.log('[Composer] v12.269 karaoke ASS 时间轴按 xfade 压缩后画面起点重写(消除双重漂移)');
+        }
+      } catch { /* 重写失败保留原字幕,不阻塞合成 */ }
+    }
+
     // v2.22 fix #2: 烧 CJK 字幕作 last step — 字幕在转场之后, 让所有片段 dialogue 都显示
     if (subtitlesFilterFragment) {
       // strip 开头的逗号 — subtitles filter 在 filter chain 里独立用 = 而不是 ,
@@ -1261,19 +1292,39 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
     // 使用 anullsrc 为每个视频片段生成匹配时长的静音音频
     // v12.29.0(P1 原生音画一体):nativeAudioShots 且真有音轨的镜用「成片自带音轨」,其余补静音。
     // clipHasNativeAudio[] 已在 Promise 外 ffprobe 算好(默认空集合 → 全 false → 与旧版逐字节一致)。
+    // v12.269 音画同步:concat 是首尾硬拼(段 i 落在 durations 纯累加位),**天然表达不了 xfade 重叠** ——
+    // 原生音轨若留在 concat 里,其声音比压缩后的画面晚 Σ effectiveTd(与配音同根同量)。
+    // 改法:concat 只当**静音床**(仍作 amix master 定总长),原生音轨改走 adelay 定位到 clipStartMs[i],
+    // 末端以 normalize=0 叠加 —— 既与画面/字幕/配音/打击音效同源,又不动既有电平。
+    // 默认 nativeAudioShots 为空 → clipHasNativeAudio 全 false → 与旧版逐字节一致(零回归)。
     for (let i = 0; i < n; i++) {
       const dur = durations[i] || 8;
-      if (clipHasNativeAudio[i]) {
-        // 取该片真音轨,裁到目标时长 + 归一 44100/stereo,与静音段格式一致供 concat
-        filters.push(`[${i}:a]atrim=0:${dur.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`);
-      } else {
-        filters.push(`anullsrc=r=44100:cl=stereo,atrim=0:${dur.toFixed(2)}[a${i}]`);
-      }
+      filters.push(`anullsrc=r=44100:cl=stereo,atrim=0:${dur.toFixed(2)}[a${i}]`);
     }
 
-    // 音频 concat
+    // 音频 concat(静音床)
     const audioInputLabels = Array.from({ length: n }, (_, i) => `[a${i}]`).join('');
     filters.push(`${audioInputLabels}concat=n=${n}:v=0:a=1[aconcat]`);
+
+    // v12.269:原生音轨镜按压缩后画面起点 adelay 定位(clipHasNativeAudio 已 ffprobe 证实确有音轨)
+    const nativeLabels: string[] = [];
+    for (let i = 0; i < n; i++) {
+      if (!clipHasNativeAudio[i]) continue;
+      const dur = durations[i] || 8;
+      const nd = clipStartMs[i] || 0;
+      const lbl = `na${nativeLabels.length}`;
+      filters.push(`[${i}:a]atrim=0:${dur.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS,adelay=${nd}|${nd}[${lbl}]`);
+      nativeLabels.push(`[${lbl}]`);
+    }
+    let nativeLabel = '';
+    if (nativeLabels.length === 1) {
+      nativeLabel = nativeLabels[0];
+    } else if (nativeLabels.length > 1) {
+      // 各镜原生音轨时间上互不重叠 → normalize=0 合并,避免被均摊压低
+      filters.push(`${nativeLabels.join('')}amix=inputs=${nativeLabels.length}:normalize=0:duration=longest:dropout_transition=0[namix]`);
+      nativeLabel = '[namix]';
+    }
+    if (nativeLabel) console.log(`[Composer] v12.269 原生音轨 ${nativeLabels.length} 镜按压缩后画面起点对齐(adelay)`);
 
     // 混合音频轨道：原始音频 + 配乐 + 配音
     let nextInputIdx = n;
@@ -1384,12 +1435,18 @@ export async function composeVideo(options: ComposeOptions): Promise<ComposeResu
       }
     }
 
+    // v12.269:有原生音轨时先出中间标签,再以 normalize=0 叠加 → 既有电平分毫不动;
+    // 无原生音轨(默认)时直接出 [outa],滤镜串与旧版逐字节一致。
+    const mixOut = nativeLabel ? '[amixed]' : '[outa]';
     if (audioMixCount > 1) {
       // v2.14 P1.2: 用 [aconcat] (concat 后的视频原音, 长度 = 总视频长度) 作 master, 而不是 shortest;
       // 否则 BGM 短于视频时整段视频会被截断 — 这是用户报"成片只到一半"的根因之一
-      filters.push(`${audioMixParts.join('')}amix=inputs=${audioMixCount}:duration=first:dropout_transition=2[outa]`);
+      filters.push(`${audioMixParts.join('')}amix=inputs=${audioMixCount}:duration=first:dropout_transition=2${mixOut}`);
     } else {
-      filters.push(`[aconcat]anull[outa]`);
+      filters.push(`[aconcat]anull${mixOut}`);
+    }
+    if (nativeLabel) {
+      filters.push(`[amixed]${nativeLabel}amix=inputs=2:duration=first:normalize=0:dropout_transition=0[outa]`);
     }
 
     // ─── v12.13.1 打击音效层(拳拳到肉)──────────────────────────────────────────
