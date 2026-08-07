@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.270</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.271</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -319,7 +319,7 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 - 视频**元数据须嵌入 AI 生成溯源信息**;
 - **三级分类备案** —— 一/二级须播出前取得省级及以上审核许可,无备案不得发行、不得参评。
 
-> **本项目当前状态(诚实披露)**:v12.222 已交付抖音直发强标 `aigc_info` + 出海打包结构化 AI 声明(未确认即 422)+ 成片角标,但成片角标**默认关闭且文本为英文 `AI-GENERATED`**,且**尚未写入元数据溯源字段** —— 距新规要求仍有缺口,已列为下一优先级。
+> **本项目当前状态(诚实披露)**:该办法约束的是**内容播出/发行方**,不是开源工具本身;本项目不运营内容,故不直接适用。工具侧已提供的手段:v12.222 的抖音直发强标 `aigc_info` + 出海打包结构化 AI 声明(未确认即 422)+ 成片角标(`AI_WATERMARK=1` 开启,文本可用 `AI_WATERMARK_TEXT` 覆盖为「AI创作」)。**尚未提供**:视频元数据溯源字段写入。**若你要把成片投放到中国大陆平台,请自行开启角标并按平台要求完成备案与标识** —— 合规责任在运营者一侧。
 
 ---
 
