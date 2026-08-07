@@ -163,12 +163,12 @@
 - 想用 Claude / DeepSeek / 通义 而不是 OpenAI 的开发者
 - 探索"多 Agent 协同"如何打败"超大模型"的研究者
 
-**vs 主流闭源工具** (阵容核验 2026-06-16):
-- Seedance 2.0 (字节) + HappyHorse-1.0 (阿里) 现占 Artificial Analysis arena 前二, 音画联合生成、API 已商用 (百炼/fal, 配 FAL_KEY 可 BYO) — 但都不烧中文字幕、不开源、单段为主
-- Veo 3.1 第三 (唯一原生 48kHz 对白音轨) / Kling 3.0 仍 top10 四席 (原生 4K/60fps/多语唇形) — 同样不烧中文字幕、不能自托管、无协作时间线
-- Runway Gen-4.5 已跌出 top10, 但工业级控制面最强 (运动笔刷 + GWM-1 世界模型); 中文适配弱 + 闭源 (Sora 2 已宣停服, 移出)
-- 我们的差异: 多 agent 管线 + 中文字幕烧入 + 开源 + 自托管 + 自带 LLM + 实时协作
-- **我们是: 多 Agent + 开源 + 中文优先 + 自部署 + 你自己的 LLM + 实时协作**
+**vs 主流闭源工具** (阵容核验 2026-08-07, 数值经独立二次复核):
+- **MiniMax H3 (Hailuo 3.0)** 7-31 发布、8-03 开放权重(排除美/欧/英/韩), 33B 全模态/2K/原生立体声 — T2V 带音频榜次席(Elo 1238)、视频编辑榜首; **Seedance 2.5** 7-31 发布, 单次原生 30 秒(当前最长)、4K 10bit、最多 50 参考输入
+- **Gemini Omni Flash** 仍居 T2V 带音频榜首(1244); **Kling 3.0** 短剧综合首选(原生 4K/最高 60fps/最长 15s/多语对白+口型, $0.084–0.112/s); **Veo 3.1** 企业安全牌(4K $0.60/s); **Wan 2.7** 最便宜带音频 API($0.10/s)
+- **⚠️ Sora 2 API 2026-09-24 停服**(消费端已下线), 勿再依赖
+- **🔴 首个同构开源竞品**: 港大 ViMax(MIT, 5.6k★, 12 Agent 全链) + OpenMontage(24k★, 无独立 UI) — 「开源」本身已非差异点
+- **我们的差异(逐项核对后)**: ViMax 无配音/TTS、无节奏审计、无 EDL/AAF、无协作; **截至 2026-08 全部已查竞品中无一同时具备「节奏审计 + EDL/AAF 剪辑线导出 + 开源自托管」** — 加中文字幕烧入、自带 LLM、实时协作时间线
 
 **为什么相信我们**:
 - 1711 个单测全过
@@ -206,9 +206,9 @@ Repo: github.com/ChrisChen667788/wind-comic
 
 **Target users**: Creators · marketing teams · AI builders · privacy-conscious deployments wanting local LLM · researchers studying multi-agent vs monolithic models
 
-**vs Competitors** (verified 2026-06-16): Seedance 2.0 + HappyHorse-1.0 now top-2 on Artificial Analysis arena (API live via Bailian/fal, BYO with FAL_KEY) · Veo 3.1 #3 (only native 48kHz dialogue) · Kling 3.0 (four top-10 slots, 4K/60fps/multilingual lip-sync) · Runway Gen-4.5 dropped out of top-10 but keeps the strongest control surface (motion brush + GWM-1) — all top-tier generation, none burn CJK subtitles · closed · no self-host → **We are multi-agent + open + Chinese-first + self-host + your LLM + real-time collab + smart editing**.
+**vs Competitors** (verified 2026-08-07, figures re-checked by an independent pass that overturned 4 of 8 high-risk claims): **MiniMax H3** (Jul 31; weights opened Aug 3, excl. US/EU/UK/KR) is #2 on text-to-video-with-audio (Elo 1238) and **#1 on video editing**; **Seedance 2.5** (Jul 31) does 30s in one native take at 4K 10-bit with up to 50 reference inputs; **Gemini Omni Flash** still leads T2V-with-audio (1244); **Kling 3.0** is the all-round short-drama pick (native 4K, up to 60fps, 15s, multilingual dialogue + lip-sync). **Sora 2's API shuts down 2026-09-24.** **The first structurally-comparable open-source rival has arrived** — HKU's ViMax (MIT, 5.6k★) and OpenMontage (24k★) — so open source alone is no longer the differentiator; but ViMax has no TTS, no pacing audit, no EDL/AAF export and no collaboration, and **as of 2026-08 no competitor we could find combines pacing audit + EDL/AAF export + open-source self-hosting.**
 
-**Trust signals**: 1711 vitest tests · TypeScript strict · 21 sprints (v2.0 → v3.1.3) · Honest self-audit in `docs/COMPETITIVE-GAP-2026-05.md`.
+**Trust signals**: 3537 vitest tests · TypeScript strict · 21 sprints (v2.0 → v3.1.3) · Honest self-audit in `docs/COMPETITIVE-GAP-2026-05.md`.
 
 ---
 

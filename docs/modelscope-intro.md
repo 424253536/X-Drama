@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/ChrisChen667788/wind-comic/main/assets/banner.png" alt="Wind Comic — One line of text. One finished short drama." width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic <sub><sup>v12.269</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic <sub><sup>v12.270</sup></sub></h1>
 
 <p align="center">
   <b>One sentence in. A finished short-form drama out — script, cast, storyboards, voiceover, timeline, mp4.</b><br/>
@@ -236,26 +236,32 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 
 ## 🥊 vs. competitors
 
-> 阵容核验 2026-07-24(Artificial Analysis 盲投竞技场):**格局易主 —— 谷歌 Gemini Omni Flash 登顶双榜**。它把 text/image/audio/video 统一进一个多模态架构(此前 Gemini 各模态分开再交给专用模型),并支持**对话式视频编辑**(自然语言迭代改片、保留不动的部分)。**带音频文生视频榜:Gemini Omni Flash 榜首(Elo 1245)** → Dreamina Seedance 2.0 720p(1227)→ Wan2.7-260612(1164)→ HappyHorse-1.1(1152)→ HappyHorse-1.0(1131);**图生视频带音频:Gemini Omni Flash(1200)** → Seedance 2.0 720p(1198)→ Grok Imagine 1.5(1118)→ HappyHorse-1.1(1110)→ Wan2.7(1099)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨的企业安全牌(4K);**Kling 3.0** 性价比冠军(~$0.50/clip,短剧首选,多语对白+lip sync);**Sora 2** 关停时间线不变(App 已下线、API 2026-09-24 关停,勿依赖)。**⭐ 我方 BYO 架构已可直接接住这波**:v12.238 起 `GEMINI_API_KEY` 一填即启用 Gemini 图像(Nano Banana)provider —— 竞品登顶反而成了本管线可调度的引擎,「引擎越强我们越强」。
+> 阵容核验 **2026-08-07**(Artificial Analysis 盲投竞技场,榜单数值经独立二次检索复核):**两周内又出两个重量级新品**。**① MiniMax H3(Hailuo 3.0)**:7-31 发布、**8-03 开放权重**(HuggingFace;授权排除美/欧/英/韩),33B 全模态单次生成、2K/24fps、原生立体声,**空降 T2V 带音频榜次席(Elo 1238)、I2V 第三(1190),并拿下「视频编辑(带音频)」榜首**。**② 字节 Seedance 2.5**:7-31 公开发布,**单次原生 30 秒**(当前最长)、原生 4K 10bit、最多 **50 个参考输入**、支持区域编辑。
+> **当前榜单** —— 带音频文生视频:Gemini Omni Flash(1244)→ **MiniMax H3(1238)** → Seedance 2.0 720p(1224)→ Wan 2.7(1161)→ HappyHorse-1.1(1148);带音频图生视频:**Seedance 2.0 720p(1198)** → Gemini Omni Flash(1191)→ MiniMax H3(1190)→ Grok Imagine 1.5(1114)→ HappyHorse-1.1(1111)。**Veo 3.1** 仍是画质/物理的企业安全牌(2025-10-15 公开预览,2026-01-13 更新加 4K 与原生 9:16 竖版;8s/次、可链式拼至 ~148s;$0.40/s 720p–1080p、4K $0.60/s、Fast $0.15/s);**Kling 3.0** 是短剧综合首选 —— **原生最高 4K / 最高 60fps / 最长 15s、最多 6 个连贯镜头,且自带原生音频**(中/英/日/韩/西 多语对白 + 口型同步),API 约 $0.084–0.112/s;**Wan 2.7** 是最便宜的带音频 API($0.10/s)。**⚠️ Sora 2 距 API 停服仅剩约 6 周(2026-09-24,消费端已于 4-26 下线),仍在其上开发的项目须立即迁移。**
+>
+> <sub>*本段 8 条高风险数值经独立二次检索复核,**4 条被推翻并已按订正值写入**(Kling 3.0 曾被误记为「1080p/10s/无原生音频」、Veo 3.1 发布日、Runway Gen-4.5 发布日、Gemini Omni Flash 定价)。榜单 Elo 为 2026-08-07 快照,随投票持续变动。*</sub>
+> **⭐ BYO 架构再次接住这波**:榜上模型基本都开放 API,填 key 即成为本管线可调度的引擎 —— **竞品越强,本管线越强**。
+
+> **🔴 首个同构开源竞品出现,「开源」不再是差异点本身。** 港大 **ViMax**(MIT,5.6k★,12 个专职 Agent:编剧/分镜师/角色提取/参考图选择 → 端到端出片)已覆盖「剧本→分镜→角色→视频」主干;另有 **OpenMontage**(24k★,MIT)以 Agent 技能包形式覆盖研究→脚本→资产→剪辑,但**无独立 UI**(依附 Claude Code/Cursor 等编程环境)。**诚实结论:差异化必须从「开源」下沉到「开源 + 制作层纵深」** —— 经逐项核对,ViMax **无配音/TTS、无节奏审计、无 EDL/AAF 剪辑线导出、无团队协作**;OpenMontage 无产品 UI、无原生角色一致性。**截至 2026-08,全部已查竞品(含闭源 SaaS)中,没有任何一个同时具备「节奏审计 + EDL/AAF 剪辑线导出 + 开源自托管」三项** —— 这才是当下真实的护城河边界。
 > **v12.214→244 双线推进**。**产品层**:GPT Image / Nano Banana(Gemini)接入插件式图像 provider 链(issue #11,社区 @flobo3 提议,`OPENAI_IMAGE_ENABLED` / `GEMINI_API_KEY` 门控、原生 i2i 接角色一致性契约);**多集连续生成补上「剧情记忆」**(第 N 集 Writer 注入前几集前情提要 + 承接纪律,对标红果/阅文的 60~100 集连续,此前各集独立成篇)。**平台/工程层**:六轮独立对抗复检把安全洞从 CRITICAL 到 LOW 全清(SSRF 逐跳重验重定向 + IPv6 全隧道变体 / serve-file 签名能力 URL / WebSocket 鉴权 / 预算护栏),并把反复踩的「改了守卫却没跟到消费方」这个病**固化成 CI 入库门禁**(`npm run gate:consumer`,零容忍,上线即抓到 2 个人肉复检漏掉的真 SSRF)。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
-| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Gemini Omni Flash | HappyHorse-1.1 | **Wind Comic** |
+| Capability | Veo 3.1 | Kling 3.0 | Seedance 2.5 | Gemini Omni Flash | MiniMax H3 | ViMax (open-source) | **Wind Comic** |
 |---|---|---|---|---|---|---|---|
-| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native | ⚠️ | ⚠️(单段生成,多镜叙事非强项) | ⚠️ (one clip) | **✅ 8-agent script→edit pipeline** |
-| Character consistency across shots | ✅ | ✅ | ✅ | ✅ reference | ✅ 多模态统一 | ✅ reference-to-video | **✅ cref + sref + 8-dim DNA + vision retry** |
-| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | **✅ Style Bible Frame** |
-| Native dialogue + SFX audio | ✅ | ✅ | ✅ | ⚠️ | ✅ 4 模态原生一体 | ✅ 单次生成即带音频 | **✅ per-character TTS + lip-sync** |
-| Real CJK subtitles (burned-in) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + PingFang burn** |
+| Multi-shot story from one prompt | ⚠️ | ✅ storyboard mode | ✅ multi-shot native, 30s single take | ⚠️(单段生成,多镜叙事非强项) | ⚠️ (4~15s single take) | ✅ 12-agent script→video | **✅ 8-agent script→edit pipeline** |
+| Character consistency across shots | ✅ | ✅ | ✅ up to 50 reference inputs | ✅ 多模态统一 | ✅ reference-to-video | ✅ character extractor agent | **✅ cref + sref + 8-dim DNA + vision retry** |
+| Style coherence locked | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | **✅ Style Bible Frame** |
+| Native dialogue + SFX audio | ✅ | ✅ 多语对白+口型 | ✅ | ✅ 4 模态原生一体 | ✅ 原生立体声 | ❌ 无配音模块 | **✅ per-character TTS + lip-sync** |
+| Real CJK subtitles (burned-in) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ libass + open-license CJK font burn** |
 | Vertical drama tropes | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ 12 templates + 9:16 default** |
 | Real-time multiplayer timeline | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Yjs CRDT + Y.Map locks + cursors** |
-| Self-hostable | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ Next.js + SQLite + Web Audio** |
-| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌ | ❌(它自己就是模型) | ❌ | **✅ 12+ providers via .env** |
-| Open source | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | **✅ MIT** |
+| Self-hostable | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重开放(排除美/欧/英/韩) | ✅ 本地部署 | **✅ Next.js + SQLite/Postgres** |
+| BYO LLM (OpenAI / Claude / DeepSeek / local) | ❌ | ❌ | ❌ | ❌(它自己就是模型) | ❌ | ⚠️ 需改代码 | **✅ 12+ providers via .env** |
+| Open source | ❌ | ❌ | ❌ | ❌ | ⚠️ 权重部分开放 | ✅ MIT | **✅ MIT** |
 | Per-shot regenerate with custom prompt | ⚠️ | ✅ | ⚠️ | ✅ motion brush | ✅ 对话式迭代编辑(招牌能力) | ✅ video-edit 端点 | **✅ + reference image upload** |
 | Pacing / conflict audit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ shot-level score + reversal detection** |
 | Smart editing (beat-snap + emotion pacing + one-instruction style) | ❌ | ❌ | ❌ | ❌ | ⚠️(对话式改片,非结构化卡点/情绪剪辑) | ❌ | **✅ beat-snap · emotion pacing · emphasis · transition aesthetics · "fast & hype/slow & lyrical" in one line (BYO LLM)** |
-| First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ (v1.5 only) | ⚠️ | ❌ | ⚠️ | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
+| First+last frame lock (image_tail cut-to-cut coherence) | ❌ | ✅ | ✅ | ⚠️ | ✅ (I2V) | ❌ | **✅ Kling FLF wired into main pipeline, per-shot tail-frame picker** |
 | Multi-character face cast library (post-build editable) | ❌ | ✅ 主体库 | ✅ 角色管理 | ⚠️ | ⚠️ | ❌ | **✅ 3-slot cast + cross-shot subject_reference injection** |
 | One-click localization (script + re-voice) | ❌ | ⚠️ dub only | ❌ | ❌ | ❌ | ❌ | **✅ 8-lang translate → apply → re-TTS, honest degradation** |
 | Royalty-free AI BGM per story | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ MiniMax music-2.6, style-prompt → project BGM** |
@@ -265,6 +271,57 @@ Every feature listed above is in `main`, type-checked, unit-tested, and visible 
 | Full-app i18n (zh/en/ja/ko/ru, all UI) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌(是模型不是 app) | ❌ | **✅ 5-language core UI, ~400 keys (component-level string cleanup ongoing)** |
 
 > Cells marked ⚠️ = the feature exists but in a limited / locked-down form (e.g. "you can only do this on a paid Pro tier through a UI panel").
+
+---
+
+## 💰 市场与商业价值(核验 2026-08-07)
+
+> 本节数据全部来自联网检索(艾媒、DataEye、克劳锐、前瞻、新华网、广电总局公开文件等),**含对本项目不利的事实**。我们认为写清楚赛道的真实经济结构,比堆一个漂亮的 TAM 更有用。
+
+### 赛道体量
+
+| 指标 | 数值 | 口径 |
+|---|---|---|
+| 中国微短剧市场 | **2025 年破 1000 亿元**(2024 为 504 亿,+35%) | 全年产值 |
+| 2026 预测 | 约 **1200 亿元**,月活维持 7.18 亿量级 | 多家机构一致预测 |
+| **AI 漫剧细分** | **2025 年 189.8 亿元,同比 +276%**;2030E 破 850 亿 | 艾媒咨询 |
+| AI 渗透率 | **2026 Q1 新上线 12.8 万部中约 12.2 万部有 AI 参与(>95%)** | AI 已是默认生产方式 |
+| 出海 | 2025 产值约 **$40 亿**,海外 App 双端内购 **$20.3 亿(+115%)**;中国玩家占全球约 80% | ReelShort $4.32 亿 / DramaBox 约 $3.7 亿 |
+
+### 降本:本管线对标的传统成本
+
+| | 传统真人微短剧 | AI 管线 |
+|---|---|---|
+| 单部成本 | **30–150 万元**(精品 150–300 万) | **2–30 万元**(纯 AI 漫剧 2–10 万) |
+| 周期 | 15–30 天 | 1–30 天 |
+| 团队 | 40 人以上剧组 | 3–10 人 |
+| 每分钟成本 | 约 1 万元 | **100–4000 元** |
+
+**综合降本 80–90%。** 极端案例《安徽小木匠》制作成本 2900 元、收益约 50 万元(ROI ≈ 170 倍)。
+
+### ⚠️ 但必须说清楚的三件事(这决定了本项目该卖什么)
+
+**① 制作只占总成本 7.5%,投流占 70–85%。** 前瞻网口径:平台广告投放 82.5%、制作 7.5%、演员 5%、剧本 1.5%。**这意味着「把制作成本再砍一半」对项目盈亏几乎无影响** —— 任何以「更便宜地出片」为唯一卖点的工具,价值天花板极低。
+
+**② 单位经济已经很薄。** CPM 从 2025 下半年约 60 元/千次跌到 **2026 年 15–30 元**;标准 ROI 仅 **1.03–1.07**(东南亚出海较优,1.2–1.5)。**约 90% 的 AI 短剧公司处于亏损**,AI 漫剧爆款率不足 **0.1%**,头部 5% 项目吞掉 70% 行业利润。
+
+**③ 平台正在给「纯 AI 生成」降权。** 2026 年抖音/爱奇艺/腾讯视频推出分级分账新政,**削减无真人出镜的全 AI 短剧保底资源**,转而扶持「真人 + AI 协作」。
+
+### 于是,本项目的价值主张必须是这三条(而不是「省钱」)
+
+1. **拉高成品率与质量下限,去够那 <0.1% 的爆款率。** 节奏/冲突审计、逐镜 Vision 质检与自动重生、角色一致性(DNA + 嵌入余弦)、发布预检 —— 都是在**减少废片**,而废片率才是这门生意的真实杀手。
+2. **能交付进专业剪辑线,支撑平台正在扶持的「真人+AI 协作」。** EDL / FCPXML / **真二进制 AAF**(MS-CFB,给 Avid)导出 —— AI 出的素材可以进人类剪辑师的工程,而不是只能整片直出。**这是当前全部已查竞品的共同空白。**
+3. **自托管 + 开源 + BYO key,服务 B 端代工与品牌定制。** 行业正从 C 端投流转向文旅/品牌定制 B 单(客单价数十万至百万级),这类客户对**数据不出私域**与**成本可控**有硬要求 —— 闭源 SaaS 天然做不到。
+
+### 🚨 合规:2026-09-01 起的硬门槛(距今不足 1 个月)
+
+广电总局《微短剧发展管理办法》**2026 年 9 月 1 日施行**:
+
+- AI 生成/辅助制作的微短剧,须在**每集显著位置**标注「AI创作」或「AI辅助制作」,**字体不得模糊缩小**;
+- 视频**元数据须嵌入 AI 生成溯源信息**;
+- **三级分类备案** —— 一/二级须播出前取得省级及以上审核许可,无备案不得发行、不得参评。
+
+> **本项目当前状态(诚实披露)**:v12.222 已交付抖音直发强标 `aigc_info` + 出海打包结构化 AI 声明(未确认即 422)+ 成片角标,但成片角标**默认关闭且文本为英文 `AI-GENERATED`**,且**尚未写入元数据溯源字段** —— 距新规要求仍有缺口,已列为下一优先级。
 
 ---
 
