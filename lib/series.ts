@@ -45,9 +45,40 @@ export function seriesEpisodeTitle(seriesTitle: string, n: number, epTitle?: str
   return ep ? `${base} 第${n}集 ${ep}` : `${base} 第${n}集`;
 }
 
+/**
+ * 单系列集数上限(v12.266:50 → 可配置,默认 200)。
+ * 旧硬编码 50 挡掉了红果/OiiOii 主流的 60~100 集体量;SERIES_MAX_EPISODES 可再调。
+ * 注意:AI 自动拆集(series-ai)仍限 50 —— 那是 LLM 单次可靠拆集的能力上限,
+ * 与本上限(完整分集剧本导入)是两回事。
+ */
+export function maxSeriesEpisodes(): number {
+  const n = Number(process.env.SERIES_MAX_EPISODES);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 200;
+}
+
+/**
+ * 每集喂给单集管线的 idea 字数上限(v12.266)。
+ * 旧值 2000 会把「完整分集剧本」静默砍掉大半(story-intake 按章拆集的单集常远超 2000);
+ * 对齐单集创作路径的 prompt-guardrails 创作任务上限 32000。
+ */
+export const EPISODE_IDEA_CAP = 32000;
+
+/**
+ * 构造某集喂给单集管线的 idea:前情 directive + 本集完整剧情(≤EPISODE_IDEA_CAP)。
+ * 纯函数(从 generate 路由抽出,便于直接断言"不再 2000 截断")。
+ */
+export function buildEpisodeIdea(
+  ep: { description?: string | null; title?: string | null },
+  directive?: string,
+): string {
+  const own = (ep.description || ep.title || '').slice(0, EPISODE_IDEA_CAP);
+  return directive ? `${directive}${own}` : own;
+}
+
 export function validateSeriesInput(episodes: EpisodeOutline[]): { ok: boolean; error?: string } {
   if (!Array.isArray(episodes) || episodes.length === 0) return { ok: false, error: '至少需要 1 集' };
-  if (episodes.length > 50) return { ok: false, error: '单系列最多 50 集' };
+  const max = maxSeriesEpisodes();
+  if (episodes.length > max) return { ok: false, error: `单系列最多 ${max} 集(SERIES_MAX_EPISODES 可调)` };
   if (episodes.some((e) => !e?.premise?.trim())) return { ok: false, error: '每集都需要 premise(剧情梗概)' };
   return { ok: true };
 }

@@ -56,6 +56,9 @@ export interface VideoGenerateInput {
   /** 调试用 label, 进调用日志方便定位. */
   label?: string;
 
+  /** 用户在创作页显式选择的 provider id；registry 命中时将其置于链首。 */
+  preferredProvider?: string;
+
   /**
    * v12.29.0(P1 原生音画一体):请求引擎**自带音频**(对白+音效),供后续跳过 TTS/对唇形.
    * 仅 supportsNativeAudio 的 provider honor;其余忽略(非原生引擎不受影响).

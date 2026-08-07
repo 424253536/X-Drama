@@ -239,11 +239,12 @@ export function signRequest(input: SignRequestInput): SignRequestOutput {
 
 /** 从环境变量读取凭证，便于 service 层调用 */
 export function getJimengCredentials() {
+  const baseUrl = process.env.JIMENG_BASE_URL || 'https://visual.volcengineapi.com';
   const accessKey = process.env.JIMENG_AK || '';
   const secretKey = process.env.JIMENG_SK || '';
   const region = process.env.JIMENG_REGION || 'cn-north-1';
   const service = process.env.JIMENG_SERVICE || 'cv';
-  return { accessKey, secretKey, region, service };
+  return { baseUrl, accessKey, secretKey, region, service };
 }
 
 export function hasJimengCredentials(): boolean {

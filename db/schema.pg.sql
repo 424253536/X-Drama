@@ -6,33 +6,33 @@ CREATE TABLE IF NOT EXISTS agent_workflows (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  graph_json TEXT NOT NULL,                      
+  graph_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS api_quota_alerts (
   id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,                       
+  provider TEXT NOT NULL,
   model TEXT DEFAULT '',
-  alert_type TEXT NOT NULL,                     
-  error_message TEXT,                           
+  alert_type TEXT NOT NULL,
+  error_message TEXT,
   first_seen_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,
   occurrence_count INTEGER NOT NULL DEFAULT 1,
-  acknowledged_at TEXT                          
+  acknowledged_at TEXT
 );
 CREATE TABLE IF NOT EXISTS api_usage_events (
   id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,                       
-  model TEXT NOT NULL DEFAULT '',               
-  method TEXT NOT NULL DEFAULT '',              
-  success INTEGER NOT NULL,                     
-  status_code INTEGER,                          
-  error_message TEXT,                           
-  duration_ms INTEGER NOT NULL DEFAULT 0,       
-  project_id TEXT,                              
-  user_id TEXT,                                 
-  est_cost_cny REAL DEFAULT 0,                  
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL DEFAULT '',
+  method TEXT NOT NULL DEFAULT '',
+  success INTEGER NOT NULL,
+  status_code INTEGER,
+  error_message TEXT,
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  project_id TEXT,
+  user_id TEXT,
+  est_cost_cny REAL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cases (
@@ -48,26 +48,26 @@ CREATE TABLE IF NOT EXISTS cases (
 );
 CREATE TABLE IF NOT EXISTS character_ip_grants (
   id TEXT PRIMARY KEY,
-  token_id TEXT NOT NULL,                        
-  grantee_id TEXT NOT NULL,                      
-  status TEXT NOT NULL DEFAULT 'pending',        
-  use_count INTEGER NOT NULL DEFAULT 0,          
-  message TEXT DEFAULT '',                       
+  token_id TEXT NOT NULL,
+  grantee_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  use_count INTEGER NOT NULL DEFAULT 0,
+  message TEXT DEFAULT '',
   created_at TEXT NOT NULL,
   decided_at TEXT
 );
 CREATE TABLE IF NOT EXISTS character_ip_tokens (
-  id TEXT PRIMARY KEY,                           
-  character_id TEXT NOT NULL,                    
-  owner_id TEXT NOT NULL,                        
-  name TEXT NOT NULL,                            
-  cover_url TEXT,                                
-  visibility TEXT NOT NULL DEFAULT 'private',    
-  license TEXT NOT NULL DEFAULT 'view',          
-  terms TEXT DEFAULT '',                         
-  royalty_cny REAL DEFAULT 0,                    
-  status TEXT NOT NULL DEFAULT 'active',         
-  use_count INTEGER NOT NULL DEFAULT 0,          
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  cover_url TEXT,
+  visibility TEXT NOT NULL DEFAULT 'private',
+  license TEXT NOT NULL DEFAULT 'view',
+  terms TEXT DEFAULT '',
+  royalty_cny REAL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  use_count INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -96,25 +96,25 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE TABLE IF NOT EXISTS comments (
   id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,                      
-  target_type TEXT NOT NULL,                     
-  target_id TEXT NOT NULL,                       
+  project_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
   author_user_id TEXT NOT NULL,
-  author_name TEXT NOT NULL,                     
-  author_avatar_url TEXT,                        
-  content TEXT NOT NULL,                         
-  mentions TEXT DEFAULT '[]',                    
-  parent_id TEXT,                                
+  author_name TEXT NOT NULL,
+  author_avatar_url TEXT,
+  content TEXT NOT NULL,
+  mentions TEXT DEFAULT '[]',
+  parent_id TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT,                               
-  deleted_at TEXT                                
+  updated_at TEXT,
+  deleted_at TEXT
 , attachments TEXT DEFAULT '[]');
 CREATE TABLE IF NOT EXISTS cost_log (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   project_id TEXT,
-  engine TEXT NOT NULL,                         
-  resolution TEXT NOT NULL,                     
+  engine TEXT NOT NULL,
+  resolution TEXT NOT NULL,
   duration_sec REAL NOT NULL DEFAULT 0,
   cost_cny REAL NOT NULL DEFAULT 0,
   metadata TEXT DEFAULT '{}',
@@ -133,72 +133,72 @@ CREATE TABLE IF NOT EXISTS generations (
 CREATE TABLE IF NOT EXISTS global_assets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  type TEXT NOT NULL,                           
+  type TEXT NOT NULL,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  tags TEXT NOT NULL DEFAULT '[]',              
+  tags TEXT NOT NULL DEFAULT '[]',
   thumbnail TEXT NOT NULL DEFAULT '',
-  visual_anchors TEXT NOT NULL DEFAULT '[]',    
-  embedding TEXT,                                
-  metadata TEXT NOT NULL DEFAULT '{}',          
-  referenced_by_projects TEXT NOT NULL DEFAULT '[]', 
+  visual_anchors TEXT NOT NULL DEFAULT '[]',
+  embedding TEXT,
+  metadata TEXT NOT NULL DEFAULT '{}',
+  referenced_by_projects TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS invite_codes (
-  code TEXT PRIMARY KEY,                        
-  source TEXT,                                  
-  status TEXT NOT NULL DEFAULT 'unused',        
+  code TEXT PRIMARY KEY,
+  source TEXT,
+  status TEXT NOT NULL DEFAULT 'unused',
   used_by_user_id TEXT,
   used_at TEXT,
   expires_at TEXT,
-  created_by TEXT NOT NULL,                     
+  created_by TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   recipient_user_id TEXT NOT NULL,
-  type TEXT NOT NULL,                            
+  type TEXT NOT NULL,
   source_user_id TEXT NOT NULL,
-  source_user_name TEXT NOT NULL,                
-  project_id TEXT,                               
-  comment_id TEXT,                               
-  preview TEXT,                                  
-  read_at TEXT,                                  
+  source_user_name TEXT NOT NULL,
+  project_id TEXT,
+  comment_id TEXT,
+  preview TEXT,
+  read_at TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pipeline_reruns (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   stage TEXT NOT NULL,
-  invalidates TEXT NOT NULL DEFAULT '[]',     
-  affected_asset_ids TEXT NOT NULL DEFAULT '[]', 
-  dispatched INTEGER NOT NULL DEFAULT 0,      
+  invalidates TEXT NOT NULL DEFAULT '[]',
+  affected_asset_ids TEXT NOT NULL DEFAULT '[]',
+  dispatched INTEGER NOT NULL DEFAULT 0,
   note TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS plugin_chain_events (
   id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,                            
-  mode TEXT NOT NULL,                            
-  outcome TEXT NOT NULL,                         
-  provider TEXT,                                 
-  latency_ms INTEGER,                            
-  error TEXT,                                    
+  kind TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  provider TEXT,
+  latency_ms INTEGER,
+  error TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS preview_history (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  idea TEXT NOT NULL,                           
+  idea TEXT NOT NULL,
   style TEXT NOT NULL DEFAULT '',
   aspect TEXT NOT NULL DEFAULT '16:9',
   image_url TEXT,
   video_url TEXT,
-  prompt TEXT,                                  
+  prompt TEXT,
   elapsed_ms INTEGER DEFAULT 0,
-  warnings TEXT DEFAULT '[]',                   
-  created_at TEXT NOT NULL                      
+  warnings TEXT DEFAULT '[]',
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS project_assets (
   id TEXT PRIMARY KEY,
@@ -243,12 +243,12 @@ CREATE TABLE IF NOT EXISTS project_quality_scores (
 );
 CREATE TABLE IF NOT EXISTS project_review_status (
   project_id TEXT PRIMARY KEY,
-  status TEXT NOT NULL DEFAULT 'draft',          
+  status TEXT NOT NULL DEFAULT 'draft',
   submitted_by_user_id TEXT,
   submitted_at TEXT,
   reviewed_by_user_id TEXT,
   reviewed_at TEXT,
-  review_note TEXT,                              
+  review_note TEXT,
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS project_share_tokens (
@@ -264,12 +264,12 @@ CREATE TABLE IF NOT EXISTS project_share_tokens (
 CREATE TABLE IF NOT EXISTS project_track_edits (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
-  track_type TEXT NOT NULL,                       
-  segment_key TEXT NOT NULL,                      
+  track_type TEXT NOT NULL,
+  segment_key TEXT NOT NULL,
   muted INTEGER NOT NULL DEFAULT 0,
-  start_offset_sec REAL,                          
-  duration_override_sec REAL,                     
-  custom_text TEXT,                               
+  start_offset_sec REAL,
+  duration_override_sec REAL,
+  custom_text TEXT,
   updated_at TEXT NOT NULL,
   UNIQUE(project_id, track_type, segment_key)
 );
@@ -287,13 +287,13 @@ CREATE TABLE IF NOT EXISTS shot_vision_audits (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   shot_number INTEGER NOT NULL,
-  score INTEGER NOT NULL,                        
-  verdict TEXT NOT NULL,                         
+  score INTEGER NOT NULL,
+  verdict TEXT NOT NULL,
   scene_match INTEGER,
   action_match INTEGER,
   mood_match INTEGER,
   composition INTEGER,
-  issues TEXT,                                   
+  issues TEXT,
   reasoning TEXT,
   created_at TEXT NOT NULL
 );
@@ -314,25 +314,25 @@ CREATE TABLE IF NOT EXISTS team_allocations (
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS team_invites (
-  token TEXT PRIMARY KEY,                      
+  token TEXT PRIMARY KEY,
   owner_user_id TEXT NOT NULL,
-  email TEXT NOT NULL,                         
-  role TEXT NOT NULL DEFAULT 'member',         
-  allocated INTEGER NOT NULL DEFAULT 0,        
-  status TEXT NOT NULL DEFAULT 'pending',      
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  allocated INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL,
-  accepted_by TEXT,                            
+  accepted_by TEXT,
   accepted_at TEXT
 );
 CREATE TABLE IF NOT EXISTS template_share_tokens (
-  token TEXT PRIMARY KEY,                       
-  asset_id TEXT NOT NULL,                       
-  owner_user_id TEXT NOT NULL,                  
-  view_count INTEGER NOT NULL DEFAULT 0,        
-  clone_count INTEGER NOT NULL DEFAULT 0,       
+  token TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  owner_user_id TEXT NOT NULL,
+  view_count INTEGER NOT NULL DEFAULT 0,
+  clone_count INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  expires_at TEXT                               
+  expires_at TEXT
 );
 CREATE TABLE IF NOT EXISTS usage_tracking (
   id TEXT PRIMARY KEY,
@@ -358,9 +358,9 @@ CREATE TABLE IF NOT EXISTS waitlist (
   email TEXT NOT NULL,
   purpose TEXT NOT NULL DEFAULT '',
   source TEXT,
-  status TEXT NOT NULL DEFAULT 'pending',       
+  status TEXT NOT NULL DEFAULT 'pending',
   approved_at TEXT,
-  invite_code TEXT,                             
+  invite_code TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS yjs_docs (
@@ -494,3 +494,23 @@ CREATE TABLE IF NOT EXISTS scheduled_publishes (
 );
 CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_due ON scheduled_publishes(status, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_scheduled_publishes_project ON scheduled_publishes(project_id, created_at);
+
+-- 用户自定义 API 渠道（api_key / secret_json 由应用层 AES-256-GCM 加密）
+CREATE TABLE IF NOT EXISTS api_channels (
+  id TEXT PRIMARY KEY,
+  channel_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  format TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  api_key TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 100,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  options_json TEXT NOT NULL DEFAULT '{}',
+  secret_json TEXT NOT NULL DEFAULT '',
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_api_channels_type_priority
+  ON api_channels(channel_type, enabled, priority, created_at);

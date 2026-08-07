@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!API_CONFIG.openai.apiKey && !(API_CONFIG.openai as any).creativeApiKey) {
-    return Response.json({ error: 'LLM 未配置, 无法生成分镜计划' }, { status: 422 });
+    return Response.json({ error: 'LLM 未配置:请在 API 路由台添加文本渠道或配置 OPENAI_API_KEY, 无法生成分镜计划' }, { status: 422 });
   }
 
   // v12.165:制作语言下达(languageDisplayName 转成母语名注入铁律,LLM 对母语名遵从度更高)

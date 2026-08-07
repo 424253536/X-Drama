@@ -11,7 +11,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HybridOrchestrator } from '@/services/hybrid-orchestrator';
 import { XVerseService } from '@/services/xverse.service';
-import { API_CONFIG } from '@/lib/config';
 import { AgentRole, type DirectorPlan } from '@/types/agents';
 
 const FAKE_PLAN: DirectorPlan = {
@@ -75,21 +74,16 @@ function buildMockScript(shotCount: number) {
 }
 
 describe('HybridOrchestrator × XVerse', () => {
-  // v10.6.3: model/fastModel 改为 getter(模型雷达免重启生效)→ 只快照/还原本测试实际改动的可写字段
-  const originalXverse = {
-    baseURL: API_CONFIG.xverse.baseURL,
-    enabled: API_CONFIG.xverse.enabled,
-    fallback: API_CONFIG.xverse.fallback,
-  };
-
+  // v10.6.3 起 xverse 配置全部是读 env 的 getter → 用 vi.stubEnv 驱动
   beforeEach(() => {
-    API_CONFIG.xverse.baseURL = 'http://localhost:8000/v1';
-    API_CONFIG.xverse.enabled = true;
-    API_CONFIG.xverse.fallback = true;
+    vi.unstubAllEnvs();
+    vi.stubEnv('XVERSE_BASE_URL', 'http://localhost:8000/v1');
+    vi.stubEnv('XVERSE_ENABLED', 'true');
+    vi.stubEnv('XVERSE_FALLBACK', 'true');
   });
 
   afterEach(() => {
-    Object.assign(API_CONFIG.xverse, originalXverse);
+    vi.unstubAllEnvs();
   });
 
   it('XVERSE_ENABLED=true 时 runWriter 直接走 XVerse 主路径', async () => {
@@ -144,8 +138,8 @@ describe('HybridOrchestrator × XVerse', () => {
   });
 
   it('XVERSE_ENABLED=false 但有 baseURL → 仅 fallback 模式，不直接走 XVerse', async () => {
-    API_CONFIG.xverse.enabled = false;
-    API_CONFIG.xverse.fallback = true;
+    vi.stubEnv('XVERSE_ENABLED', 'false');
+    vi.stubEnv('XVERSE_FALLBACK', 'true');
 
     const orchestrator = new HybridOrchestrator();
     const xverseSvc = new XVerseService();

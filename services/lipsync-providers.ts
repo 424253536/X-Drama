@@ -46,8 +46,8 @@ export interface LipSyncProvider {
 // ─── Kling lip-sync (原 LipSyncService) ──────────────────────────────────────
 class KlingLipSyncProvider implements LipSyncProvider {
   name: LipSyncProviderName = 'kling';
-  private apiKey = API_CONFIG.keling?.apiKey || '';
-  private baseURL = API_CONFIG.keling?.baseURL || '';
+  private get apiKey() { return API_CONFIG.keling?.apiKey || ''; }
+  private get baseURL() { return API_CONFIG.keling?.baseURL || ''; }
 
   isAvailable(): boolean {
     if (!this.apiKey || this.apiKey.startsWith('your_')) return false;
@@ -205,8 +205,8 @@ class SyncSoLipSyncProvider implements LipSyncProvider {
 // ─── Hailuo 2.5+ lip-sync (Minimax 自带) ────────────────────────────────────
 class HailuoLipSyncProvider implements LipSyncProvider {
   name: LipSyncProviderName = 'hailuo';
-  private apiKey = API_CONFIG.minimax?.apiKey || '';
-  private baseURL = API_CONFIG.minimax?.baseURL || '';
+  private get apiKey() { return API_CONFIG.minimax?.apiKey || ''; }
+  private get baseURL() { return API_CONFIG.minimax?.baseURL || ''; }
   private model = process.env.MINIMAX_LIPSYNC_MODEL || 'lipsync-01';
 
   isAvailable(): boolean {

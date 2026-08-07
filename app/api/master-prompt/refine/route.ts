@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (!v.ok) return Response.json({ error: v.userMessage, category: v.category }, { status: 400 });
 
   if (!API_CONFIG.openai.apiKey && !(API_CONFIG.openai as any).creativeApiKey) {
-    return Response.json({ error: 'LLM 未配置, 无法优化' }, { status: 422 });
+    return Response.json({ error: 'LLM 未配置:请在 API 路由台添加文本渠道或配置 OPENAI_API_KEY, 无法优化' }, { status: 422 });
   }
 
   const res = await callLLMWithFallback({

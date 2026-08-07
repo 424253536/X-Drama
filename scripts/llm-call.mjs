@@ -12,26 +12,42 @@ process.stdin.on('data', c => chunks.push(c));
 process.stdin.on('end', async () => {
   try {
     const input = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-    const { baseURL, apiKey, model, system, user, maxTokens = 4096, timeout = 150000 } = input;
+    const { baseURL, apiKey, model, format = 'openai', options = {}, system, user, maxTokens = 4096, timeout = 150000 } = input;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
 
     const startTime = Date.now();
-    const resp = await fetch(`${baseURL}/chat/completions`, {
+    const base = String(baseURL).replace(/\/+$/, '');
+    const endpoint = (path) => /\/v1$/i.test(base) && path.startsWith('/v1/') ? base + path.slice(3) : base + path;
+    const url = format === 'gemini'
+      ? `${base}/models/${encodeURIComponent(model)}:generateContent`
+      : format === 'anthropic' ? endpoint('/v1/messages') : endpoint('/v1/chat/completions');
+    const headers = format === 'gemini'
+      ? { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
+      : format === 'anthropic'
+        ? { 'x-api-key': apiKey, 'anthropic-version': options.anthropicVersion || '2023-06-01', 'Content-Type': 'application/json' }
+        : { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+    const body = format === 'gemini'
+      ? {
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: user }] }],
+          generationConfig: { maxOutputTokens: maxTokens },
+        }
+      : format === 'anthropic'
+        ? { model, system, messages: [{ role: 'user', content: user }], max_tokens: maxTokens }
+        : {
+            model,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+            max_tokens: maxTokens,
+          };
+    const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        max_tokens: maxTokens,
-      }),
+      headers,
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -45,10 +61,16 @@ process.stdin.on('end', async () => {
     }
 
     const data = await resp.json();
-    const content = data?.choices?.[0]?.message?.content || '';
+    const content = format === 'gemini'
+      ? (data?.candidates?.[0]?.content?.parts || []).map((part) => part?.text || '').join('')
+      : format === 'anthropic'
+        ? (data?.content || []).map((part) => part?.text || '').join('')
+        : data?.choices?.[0]?.message?.content || '';
     // v2.18.2: forward finish_reason — orchestrator 用它侦测截断 ('length' 表示撞 maxTokens)
-    const finishReason = data?.choices?.[0]?.finish_reason || '';
-    const usage = data?.usage || null;
+    const finishReason = format === 'gemini'
+      ? data?.candidates?.[0]?.finishReason || ''
+      : format === 'anthropic' ? data?.stop_reason || '' : data?.choices?.[0]?.finish_reason || '';
+    const usage = data?.usage || data?.usageMetadata || null;
     process.stdout.write(JSON.stringify({ ok: true, content, elapsed, finishReason, usage }));
     process.exit(0);
   } catch (e) {

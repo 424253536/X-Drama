@@ -135,11 +135,17 @@ export async function maxEpisodeNumber(seriesId: string, userId: string): Promis
 }
 
 // ── v12.181:series 级一致性锚点(跨集传播:角色图/styleBible/上集末帧)──
+// v12.266:扩展系列圣经(bible,Phase 0 通读全剧本产出的角色/场景/道具真源)+ 场景锚(sceneAnchors)。
+// 有圣经时 lockedCharacters 仅作无圣经旧数据的兼容回退,不再被每集覆盖(见 mergeSeriesAnchorOnEpisodeDone)。
 export interface SeriesAnchor {
   lockedCharacters?: Array<{ name: string; imageUrl: string; role?: string; cw?: number }>;
   styleAnchorUrl?: string;
   lastEpisodeEndFrame?: string;
   fromEpisode?: number;
+  /** v12.266 系列圣经:角色(不限 3)/场景/道具设定 + 设定图,跨集一致性唯一真源 */
+  bible?: import('@/lib/series-bible').SeriesBible;
+  /** v12.266 系列级场景锚(归一 location → 首图基线),每集 SceneAnchorRegistry 增量合并 */
+  sceneAnchors?: Array<{ location: string; description?: string; url: string }>;
 }
 
 export async function getSeriesAnchor(seriesId: string): Promise<SeriesAnchor | null> {

@@ -41,7 +41,9 @@ export async function POST(request: Request) {
   let autoSplit = false;
   if (episodes.length === 0 && typeof body?.premise === 'string' && body.premise.trim() && Number(body?.episodeCount) > 0) {
     const count = Number(body.episodeCount);
-    if (count < 1 || count > 50) return NextResponse.json({ error: '集数需在 1–50' }, { status: 400 });
+    // v12.266:AI 拆集仍限 50(LLM 单次可靠拆集的能力上限);完整分集剧本导入(episodes 数组)
+    // 走 validateSeriesInput 的可配置上限(默认 200),不受此限。
+    if (count < 1 || count > 50) return NextResponse.json({ error: 'AI 拆集集数需在 1–50;更多集请直接导入完整分集剧本(episodes 数组)' }, { status: 400 });
     try {
       const { splitSeriesIntoEpisodes } = await import('@/lib/series-ai');
       episodes = await splitSeriesIntoEpisodes(body.premise.trim().slice(0, 1000), count);

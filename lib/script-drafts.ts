@@ -68,7 +68,7 @@ export async function generateScriptDrafts(
   const style = (req.style || '').trim() || 'cinematic';
 
   if (!API_CONFIG.openai.apiKey) {
-    throw new Error('OPENAI_API_KEY 未配置, 无法生成草稿');
+    throw new Error('LLM 未配置:请在 API 路由台添加文本渠道或配置 OPENAI_API_KEY, 无法生成草稿');
   }
 
   const tempLadder = TEMPERATURE_LADDER.slice(0, count);

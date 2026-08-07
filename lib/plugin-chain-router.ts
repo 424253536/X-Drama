@@ -158,7 +158,14 @@ export async function withImagePlugin(
 
 async function tryVideoPlugin(input: VideoGenerateInput): Promise<PluginAttempt<string>> {
   const { dispatchVideoGenerate } = await import('./video-providers/registry');
-  const r = await dispatchVideoGenerate(input);
+  const { listRuntimeApiChannelsSync } = await import('./runtime-api-channels');
+  const r = await dispatchVideoGenerate(input, {
+    hasFirstFrame: !!input.firstFrameUrl,
+    hasLastFrame: !!input.lastFrameUrl,
+    hasSubjectReference: !!input.subjectReferences?.length,
+    durationSec: input.durationSec,
+    prefer: listRuntimeApiChannelsSync('video').length ? undefined : input.preferredProvider,
+  });
   if (!r.result) {
     const reasons = r.tried.map((t) => t.error).join(' | ').slice(0, 60);
     throw new Error(`video plugin chain empty / all-failed: ${reasons || 'no providers'}`);
@@ -171,7 +178,28 @@ export async function withVideoPlugin(
   fallback: () => Promise<string>,
   onProvider?: (provider?: string) => void, // v12.29.0(P1):回传真出片 provider id(供原生音画判定)
 ): Promise<string> {
-  return runWithPlugin('video', () => tryVideoPlugin(input), fallback, onProvider);
+  let modeOverride: PluginChainMode | undefined;
+  const rawMode = (process.env.PLUGIN_CHAIN_MODE || '').trim().toLowerCase();
+  const explicitlySet = rawMode === 'off' || rawMode === 'primary' || rawMode === 'shadow';
+  if (!explicitlySet && getPluginChainMode() === 'off') {
+    try {
+      const { selectProviders } = await import('./video-providers/registry');
+      const legacyIds = new Set(['veo', 'kling', 'minimax-video', 'vidu', 'mock-video']);
+      const available = selectProviders({
+        hasFirstFrame: !!input.firstFrameUrl,
+        hasLastFrame: !!input.lastFrameUrl,
+        hasSubjectReference: !!input.subjectReferences?.length,
+        durationSec: input.durationSec,
+        prefer: undefined,
+      });
+      const explicitlySelectedPlugin = !!input.preferredProvider
+        && available.some((provider) => provider.id === input.preferredProvider && !legacyIds.has(provider.id));
+      if (explicitlySelectedPlugin || available.some((provider) => !legacyIds.has(provider.id))) {
+        modeOverride = 'primary';
+      }
+    } catch { /* registry unavailable: preserve legacy path */ }
+  }
+  return runWithPlugin('video', () => tryVideoPlugin(input), fallback, onProvider, modeOverride);
 }
 
 // ─── TTS ──────────────────────────────────────────────────────────────────

@@ -133,8 +133,8 @@ function mockSvg(w: number, h: number, c1: string, c2: string, label: string): s
 
 // v10.4.0: MOCK_ENGINES=1 全封闭(hermetic)— 即使配了真 LLM key 也走 fallbackScript 模板路径
 // (零外部调用、确定性,journey e2e 与 CI 无 key 环境行为一致;媒体引擎由 mock provider 接管)
-const hasLLM = !!API_CONFIG.openai.apiKey && !API_CONFIG.openai.apiKey.startsWith('your_') && process.env.MOCK_ENGINES !== '1';
-const hasMinimax = !!API_CONFIG.minimax.apiKey && !API_CONFIG.minimax.apiKey.startsWith('your_');
+const hasLLM = () => !!API_CONFIG.openai.apiKey && !API_CONFIG.openai.apiKey.startsWith('your_') && process.env.MOCK_ENGINES !== '1';
+const hasMinimax = () => !!API_CONFIG.minimax.apiKey && !API_CONFIG.minimax.apiKey.startsWith('your_');
 
 // 进度回调类型
 type ProgressCallback = (type: string, data: any) => void;
@@ -703,8 +703,8 @@ export class HybridOrchestrator {
 
   constructor() {
     this.agents = new Map();
-    this.openai = hasLLM ? new OpenAI({ apiKey: API_CONFIG.openai.apiKey, baseURL: API_CONFIG.openai.baseURL, timeout: 180_000, maxRetries: 1 }) : null;
-    this.minimaxService = hasMinimax ? new MinimaxService() : null;
+    this.openai = hasLLM() ? new OpenAI({ apiKey: API_CONFIG.openai.apiKey, baseURL: API_CONFIG.openai.baseURL, timeout: 180_000, maxRetries: 1 }) : null;
+    this.minimaxService = hasMinimax() ? new MinimaxService() : null;
     this.veoService = hasVeo() ? new VeoService() : null;
     this.mjService = hasMidjourney() ? new MidjourneyService() : null;
     this.klingService = hasKling() ? new KlingService() : null;
@@ -907,9 +907,10 @@ export class HybridOrchestrator {
       const scriptPath = [cwd, 'scripts', 'llm-call.mjs'].join(path.sep);
 
       // v7.0: 单次尝试 (子进程). 失败返回 {ok:false,error}, 由下面的尝试链兜底.
-      const runAttempt = (a: { baseURL: string; apiKey: string; model: string }) => new Promise<any>((resolve) => {
+      const runAttempt = (a: { baseURL: string; apiKey: string; model: string; format?: string; options?: Record<string, unknown> }) => new Promise<any>((resolve) => {
         const input = JSON.stringify({
           baseURL: a.baseURL, apiKey: a.apiKey, model: a.model,
+          format: a.format || 'openai', options: a.options || {},
           system: finalSystem, user: finalUser, maxTokens, timeout: LLM_TIMEOUT,
         });
         const child = execFile('node', [scriptPath], {
@@ -3372,6 +3373,11 @@ ${shots.map((s, i) => {
           durationSec: 8,
           nativeAudio: wantNativeAudio || undefined,
           spokenDialogue: wantNativeAudio ? scriptDialogue : undefined,
+          preferredProvider: videoProvider === 'keling'
+            ? 'kling'
+            : videoProvider === 'minimax'
+              ? 'minimax-video'
+              : videoProvider,
           label: `shot-${board.shotNumber}`,
         },
         legacyVideoGen,

@@ -36,33 +36,27 @@ describe('safeJSONParse', () => {
 // ────────────────────────────────────────────
 
 describe('hasXVerse / isXVersePrimary', () => {
-  const originalEnabled = API_CONFIG.xverse.enabled;
-  const originalFallback = API_CONFIG.xverse.fallback;
-  const originalUrl = API_CONFIG.xverse.baseURL;
-
   beforeEach(() => {
-    API_CONFIG.xverse.enabled = originalEnabled;
-    API_CONFIG.xverse.fallback = originalFallback;
-    API_CONFIG.xverse.baseURL = originalUrl;
+    vi.unstubAllEnvs();
   });
 
   it('enabled=true → 始终可用', () => {
-    API_CONFIG.xverse.enabled = true;
+    vi.stubEnv('XVERSE_ENABLED', 'true');
     expect(hasXVerse()).toBe(true);
     expect(isXVersePrimary()).toBe(true);
   });
 
   it('enabled=false 但有 baseURL + fallback → 仅 fallback 可用', () => {
-    API_CONFIG.xverse.enabled = false;
-    API_CONFIG.xverse.fallback = true;
-    API_CONFIG.xverse.baseURL = 'http://localhost:8000/v1';
+    vi.stubEnv('XVERSE_ENABLED', 'false');
+    vi.stubEnv('XVERSE_FALLBACK', 'true');
+    vi.stubEnv('XVERSE_BASE_URL', 'http://localhost:8000/v1');
     expect(hasXVerse()).toBe(true);
     expect(isXVersePrimary()).toBe(false);
   });
 
   it('fallback=false 且未启用 → 完全不可用', () => {
-    API_CONFIG.xverse.enabled = false;
-    API_CONFIG.xverse.fallback = false;
+    vi.stubEnv('XVERSE_ENABLED', 'false');
+    vi.stubEnv('XVERSE_FALLBACK', 'false');
     expect(hasXVerse()).toBe(false);
   });
 });
@@ -80,12 +74,13 @@ function makeChildErr(error: string) {
 
 describe('XVerseService.chat', () => {
   beforeEach(() => {
-    API_CONFIG.xverse.baseURL = 'http://localhost:8000/v1';
-    API_CONFIG.xverse.enabled = true;
+    vi.unstubAllEnvs();
+    vi.stubEnv('XVERSE_BASE_URL', 'http://localhost:8000/v1');
+    vi.stubEnv('XVERSE_ENABLED', 'true');
   });
 
   it('未配置 baseURL 时返回 ok=false', async () => {
-    API_CONFIG.xverse.baseURL = '';
+    vi.stubEnv('XVERSE_BASE_URL', '');
     const svc = new XVerseService();
     const r = await svc.chat('sys', 'user');
     expect(r.ok).toBe(false);
@@ -141,8 +136,9 @@ describe('XVerseService.chat', () => {
 
 describe('XVerseService.writeScript', () => {
   beforeEach(() => {
-    API_CONFIG.xverse.baseURL = 'http://localhost:8000/v1';
-    API_CONFIG.xverse.enabled = true;
+    vi.unstubAllEnvs();
+    vi.stubEnv('XVERSE_BASE_URL', 'http://localhost:8000/v1');
+    vi.stubEnv('XVERSE_ENABLED', 'true');
   });
 
   it('Two-Pass 流程：Pass1 规划 + Pass2 JSON', async () => {

@@ -312,6 +312,26 @@ describe('SeedanceService.submitTask (mocked fetch)', () => {
     expect(parsed.prompt).toBe('test prompt');
   });
 
+  it('自定义火山格式 Base URL 时按中转站 Host 和路径签名', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ Result: { task_id: 'PROXY_TASK' } }), { status: 200 }),
+    );
+
+    const svc = new SeedanceService({
+      ...FAKE_CREDS,
+      baseUrl: 'https://volc-proxy.example.com/gateway/cv',
+    });
+    await svc.submitTask({ prompt: 'proxy test' });
+
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      'https://volc-proxy.example.com/gateway/cv?Action=CVSync2AsyncSubmitTask&Version=2022-08-31',
+    );
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Host).toBe('volc-proxy.example.com');
+    expect(headers.Authorization).toContain('SignedHeaders=content-type;host;x-content-sha256;x-date');
+  });
+
   it('HTTP 非 2xx 时抛错', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),

@@ -7,8 +7,17 @@
  */
 
 import { API_CONFIG } from './config';
+import { listRuntimeApiChannelsSync } from './runtime-api-channels';
 
-export interface LLMAttempt { baseURL: string; apiKey: string; model: string; label: string; }
+export interface LLMAttempt {
+  baseURL: string;
+  apiKey: string;
+  model: string;
+  label: string;
+  format?: 'openai' | 'gemini' | 'anthropic';
+  channelId?: string;
+  options?: Record<string, string | number | boolean>;
+}
 
 /**
  * 构建尝试链: 主 (创意=DeepSeek / 通用=主网关) → MiniMax 全局兜底. 纯函数, 可单测.
@@ -16,13 +25,23 @@ export interface LLMAttempt { baseURL: string; apiKey: string; model: string; la
  * 适合"快草稿/润色basic"; 默认 false 用 creativeModel (deepseek-v4-pro, 质量优先).
  */
 export function buildLLMAttempts(useCreative: boolean, cfg: any = API_CONFIG.openai, fast = false): LLMAttempt[] {
+  const runtimeChannels = listRuntimeApiChannelsSync('text');
+  const runtimeAttempts: LLMAttempt[] = runtimeChannels.map((channel) => ({
+    baseURL: channel.baseUrl.replace(/\/+$/, ''),
+    apiKey: channel.apiKey,
+    model: channel.model,
+    label: `${channel.name} · P${channel.priority}`,
+    format: channel.format as LLMAttempt['format'],
+    channelId: channel.id,
+    options: channel.options,
+  }));
   const creativeModel = fast
     ? (cfg.creativeFastModel || cfg.creativeModel || cfg.model)
     : (cfg.creativeModel || cfg.model);
   const primary = useCreative
     ? { baseURL: cfg.creativeBaseURL || cfg.baseURL, apiKey: cfg.creativeApiKey || cfg.apiKey, model: creativeModel, label: fast ? '创意·DeepSeek快' : '创意·DeepSeek' }
     : { baseURL: cfg.baseURL, apiKey: cfg.apiKey, model: cfg.model, label: '通用' };
-  const out: LLMAttempt[] = [];
+  const out: LLMAttempt[] = [...runtimeAttempts];
   if (primary.apiKey) out.push(primary);
   // v12.61.0 P0-2:同网关备用模型 —— 主模型 429/503 时先切同网关这些健康模型(秒级、同 key),
   // 再落慢的 MiniMax 兜底(推理模型 40-100s)。与 primary 同 base/key、跳过同名/重复。
@@ -62,6 +81,99 @@ export function stripThink(s: string): string {
  */
 export function isTransientLLMError(msg: string): boolean {
   return /too busy|rate.?limit|\b429\b|\b500\b|\b502\b|\b503\b|\b504\b|overload|temporarily|try again|service unavailable|繁忙|过载|稍后/i.test(msg || '');
+}
+
+function endpoint(baseURL: string, path: string): string {
+  const base = baseURL.replace(/\/+$/, '');
+  if (/\/v1$/i.test(base) && path.startsWith('/v1/')) return base + path.slice(3);
+  return base + path;
+}
+
+export interface LLMAttemptExecution {
+  ok: boolean;
+  content?: string;
+  error?: string;
+  status?: number;
+  finishReason?: string;
+  usage?: unknown;
+}
+
+export async function executeLLMAttempt(
+  attempt: LLMAttempt,
+  input: {
+    system: string;
+    user: string;
+    maxTokens: number;
+    temperature?: number;
+    jsonMode?: boolean;
+    signal?: AbortSignal;
+  },
+): Promise<LLMAttemptExecution> {
+  const format = attempt.format || 'openai';
+  let url: string;
+  let headers: Record<string, string>;
+  let body: Record<string, unknown>;
+
+  if (format === 'gemini') {
+    url = `${attempt.baseURL.replace(/\/+$/, '')}/models/${encodeURIComponent(attempt.model)}:generateContent`;
+    headers = { 'Content-Type': 'application/json', 'x-goog-api-key': attempt.apiKey };
+    body = {
+      systemInstruction: { parts: [{ text: input.system }] },
+      contents: [{ role: 'user', parts: [{ text: input.user }] }],
+      generationConfig: {
+        maxOutputTokens: input.maxTokens,
+        ...(input.temperature != null ? { temperature: input.temperature } : {}),
+        ...(input.jsonMode ? { responseMimeType: 'application/json' } : {}),
+      },
+    };
+  } else if (format === 'anthropic') {
+    url = endpoint(attempt.baseURL, '/v1/messages');
+    headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': attempt.apiKey,
+      'anthropic-version': String(attempt.options?.anthropicVersion || '2023-06-01'),
+    };
+    body = {
+      model: attempt.model,
+      system: input.system,
+      messages: [{ role: 'user', content: input.user }],
+      max_tokens: input.maxTokens,
+      ...(input.temperature != null ? { temperature: input.temperature } : {}),
+    };
+  } else {
+    url = endpoint(attempt.baseURL, '/v1/chat/completions');
+    headers = { Authorization: `Bearer ${attempt.apiKey}`, 'Content-Type': 'application/json' };
+    body = {
+      model: attempt.model,
+      messages: [{ role: 'system', content: input.system }, { role: 'user', content: input.user }],
+      max_tokens: input.maxTokens,
+      ...(input.temperature != null ? { temperature: input.temperature } : {}),
+      ...(input.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    };
+  }
+
+  const response = await fetch(url, {
+    method: 'POST', headers, body: JSON.stringify(body), signal: input.signal,
+  });
+  const payload = await response.json().catch(() => null);
+  const content = format === 'gemini'
+    ? (payload?.candidates?.[0]?.content?.parts || []).map((part: any) => part?.text || '').join('')
+    : format === 'anthropic'
+      ? (payload?.content || []).map((part: any) => part?.text || '').join('')
+      : payload?.choices?.[0]?.message?.content || '';
+  const finishReason = format === 'gemini'
+    ? payload?.candidates?.[0]?.finishReason
+    : format === 'anthropic'
+      ? payload?.stop_reason
+      : payload?.choices?.[0]?.finish_reason;
+  if (response.ok && content) {
+    return { ok: true, content: stripThink(content), status: response.status, finishReason, usage: payload?.usage || payload?.usageMetadata };
+  }
+  return {
+    ok: false,
+    status: response.status,
+    error: payload?.error?.message || payload?.message || `LLM ${response.status}`,
+  };
 }
 
 export interface LLMCallOpts {
@@ -114,26 +226,19 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
       const ctl = new AbortController();
       const tm = setTimeout(() => ctl.abort(), timeoutMs);
       try {
-        const body: Record<string, any> = {
-          model: a.model,
-          messages: [{ role: 'system', content: opts.system }, { role: 'user', content: opts.user }],
-          max_tokens: opts.maxTokens ?? 4096,
-        };
-        if (opts.temperature != null) body.temperature = opts.temperature;
-        if (opts.jsonMode) body.response_format = { type: 'json_object' };
-        const r = await fetch(`${a.baseURL}/chat/completions`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${a.apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+        const r = await executeLLMAttempt(a, {
+          system: opts.system,
+          user: opts.user,
+          maxTokens: opts.maxTokens ?? 4096,
+          temperature: opts.temperature,
+          jsonMode: opts.jsonMode,
           signal: ctl.signal,
         });
         clearTimeout(tm);
-        const j = await r.json().catch(() => null);
-        const content = stripThink(j?.choices?.[0]?.message?.content || '');
-        if (r.ok && content) {
-          return { ok: true, content, model: a.model, usedFallback: i > 0, attemptsTried: tried };
+        if (r.ok && r.content) {
+          return { ok: true, content: r.content, model: a.model, usedFallback: i > 0, attemptsTried: tried };
         }
-        lastErr = j?.error?.message || `LLM ${r.status}`;
+        lastErr = r.error || `LLM ${r.status || 'error'}`;
         // v12.127:403/402 + 配额文案 → 标记该网关破产(同 host 后续尝试整段跳过)
         if (r.status === 402 || r.status === 403 || isOutOfCreditsError(lastErr)) markGatewayOutOfCredits(a.baseURL);
         console.warn(`[llm-client] ${tag} 失败: ${lastErr}`);

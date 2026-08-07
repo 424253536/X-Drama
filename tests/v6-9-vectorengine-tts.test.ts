@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mapVoiceToOpenAI } from '@/lib/tts-providers/vectorengine-tts';
+import { mapVoiceToOpenAI, openAITTSUrl, volcengineTTSUrl } from '@/lib/tts-providers/vectorengine-tts';
 
 /**
  * v12.229 更新:原两条断言锁的是「女声一律 nova / 男声一律 onyx」——
@@ -26,5 +26,20 @@ describe('v6.9 · mapVoiceToOpenAI', () => {
     expect(mapVoiceToOpenAI('')).toBe('alloy');
     expect(mapVoiceToOpenAI(undefined)).toBe('alloy');
     expect(mapVoiceToOpenAI('robot')).toBe('alloy');
+  });
+});
+
+describe('openAITTSUrl', () => {
+  it('supports New API bases with or without /v1', () => {
+    expect(openAITTSUrl('https://new-api.test/v1')).toBe('https://new-api.test/v1/audio/speech');
+    expect(openAITTSUrl('https://new-api.test')).toBe('https://new-api.test/v1/audio/speech');
+  });
+});
+
+describe('volcengineTTSUrl', () => {
+  it('supports proxy bases at the host, API version, or full endpoint level', () => {
+    expect(volcengineTTSUrl('https://volc-tts.test')).toBe('https://volc-tts.test/api/v1/tts');
+    expect(volcengineTTSUrl('https://volc-tts.test/api/v1')).toBe('https://volc-tts.test/api/v1/tts');
+    expect(volcengineTTSUrl('https://volc-tts.test/api/v1/tts')).toBe('https://volc-tts.test/api/v1/tts');
   });
 });

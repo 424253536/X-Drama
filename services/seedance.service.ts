@@ -1,11 +1,11 @@
 /**
- * 即梦视频生成服务 (Seedance 2.0 via 火山引擎 CV 官方 API)
+ * 即梦视频生成服务 (Seedance 2.0 via 火山引擎 CV 格式)
  *
  * 对应 v2.0 Sprint 0 D3。
  *
  * 架构说明：
  * - 使用 `services/jimeng-signer.ts` 生成 Volc4 签名
- * - 走火山引擎官方接口 `visual.volcengineapi.com`
+ * - 默认走火山引擎官方接口，也可通过 `JIMENG_BASE_URL` 接入同格式中转站
  * - 异步任务流：`CVSync2AsyncSubmitTask` → 轮询 `CVSync2AsyncGetResult`
  *
  * 本期支持：
@@ -19,6 +19,7 @@
  * 如果接口失败（例如账户未开通 CV 服务），会抛出明确错误由上层降级到 Vidu/Kling。
  *
  * 环境变量：
+ *   JIMENG_BASE_URL 火山 CV 格式接口地址，默认 https://visual.volcengineapi.com
  *   JIMENG_AK       火山引擎 Access Key ID
  *   JIMENG_SK       火山引擎 Secret Access Key
  *   JIMENG_REGION   默认 cn-north-1
@@ -112,8 +113,7 @@ const REQ_KEY_MAP = {
   edit: 'jimeng_vgfm_edit_l10',
 };
 
-const HOST = 'visual.volcengineapi.com';
-const PATH = '/';
+const DEFAULT_BASE_URL = 'https://visual.volcengineapi.com';
 const API_VERSION = '2022-08-31';
 const SUBMIT_ACTION = 'CVSync2AsyncSubmitTask';
 const RESULT_ACTION = 'CVSync2AsyncGetResult';
@@ -149,13 +149,36 @@ export class SeedanceService {
   private secretKey: string;
   private region: string;
   private service: string;
+  private baseUrl: string;
 
-  constructor(creds?: { accessKey: string; secretKey: string; region?: string; service?: string }) {
+  constructor(creds?: { accessKey: string; secretKey: string; region?: string; service?: string; baseUrl?: string }) {
     const c = creds ?? getJimengCredentials();
     this.accessKey = c.accessKey;
     this.secretKey = c.secretKey;
     this.region = c.region || 'cn-north-1';
     this.service = c.service || 'cv';
+    this.baseUrl = c.baseUrl || DEFAULT_BASE_URL;
+  }
+
+  private actionEndpoint(action: string) {
+    let url: URL;
+    try {
+      url = new URL(this.baseUrl);
+    } catch {
+      throw new Error('[Seedance] JIMENG_BASE_URL is not a valid URL');
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('[Seedance] JIMENG_BASE_URL must use http:// or https://');
+    }
+    url.hash = '';
+    url.searchParams.set('Action', action);
+    url.searchParams.set('Version', API_VERSION);
+    return {
+      url: url.toString(),
+      host: url.host,
+      path: url.pathname || '/',
+      query: Object.fromEntries(url.searchParams.entries()),
+    };
   }
 
   // ──────────────────────────────────────────────
@@ -256,12 +279,13 @@ export class SeedanceService {
 
     const { reqKey, body } = this.buildPayload(options);
     const bodyStr = JSON.stringify(body);
+    const endpoint = this.actionEndpoint(SUBMIT_ACTION);
 
     const signed = signRequest({
       method: 'POST',
-      host: HOST,
-      path: PATH,
-      query: { Action: SUBMIT_ACTION, Version: API_VERSION },
+      host: endpoint.host,
+      path: endpoint.path,
+      query: endpoint.query,
       headers: { 'content-type': 'application/json' },
       body: bodyStr,
       accessKey: this.accessKey,
@@ -270,16 +294,15 @@ export class SeedanceService {
       service: this.service,
     });
 
-    const url = `https://${HOST}${PATH}?Action=${SUBMIT_ACTION}&Version=${API_VERSION}`;
     console.log(`[Seedance] Submit ${reqKey} (resolution=${options.resolution ?? '720p'}, duration=${options.duration ?? 5}s)`);
 
     const res = await fetchWithTimeout(
-      url,
+      endpoint.url,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Host: HOST,
+          Host: endpoint.host,
           'X-Date': signed.xDate,
           'X-Content-Sha256': signed.headers['x-content-sha256'],
           Authorization: signed.authorization,
@@ -316,12 +339,13 @@ export class SeedanceService {
 
     const body = { req_key: reqKey, task_id: taskId };
     const bodyStr = JSON.stringify(body);
+    const endpoint = this.actionEndpoint(RESULT_ACTION);
 
     const signed = signRequest({
       method: 'POST',
-      host: HOST,
-      path: PATH,
-      query: { Action: RESULT_ACTION, Version: API_VERSION },
+      host: endpoint.host,
+      path: endpoint.path,
+      query: endpoint.query,
       headers: { 'content-type': 'application/json' },
       body: bodyStr,
       accessKey: this.accessKey,
@@ -330,15 +354,13 @@ export class SeedanceService {
       service: this.service,
     });
 
-    const url = `https://${HOST}${PATH}?Action=${RESULT_ACTION}&Version=${API_VERSION}`;
-
     const res = await fetchWithTimeout(
-      url,
+      endpoint.url,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Host: HOST,
+          Host: endpoint.host,
           'X-Date': signed.xDate,
           'X-Content-Sha256': signed.headers['x-content-sha256'],
           Authorization: signed.authorization,

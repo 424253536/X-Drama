@@ -15,7 +15,7 @@ export const NATIVE_AUDIO_ENGINES = ['grok-imagine', 'seedance', 'veo', 'kling',
 
 /** 全局开关:env NATIVE_AV=1 开启(项目级开关可后续叠加)。 */
 export function nativeAudioEnabled(): boolean {
-  return process.env.NATIVE_AV === '1';
+  return ['1', 'true'].includes((process.env.NATIVE_AV || '').toLowerCase());
 }
 
 /** provider id(含 veo / kling-flf / minimax-video 等变体)是否属于原生音频引擎。 */

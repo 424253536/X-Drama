@@ -58,13 +58,51 @@ export class VeoService {
   private format: 'unified' | 'openai';
   /** 模型级 fallback 链 — 主模型失败时依次尝试 */
   private fallbackModels: string[];
+  private overrideConfig?: {
+    apiKey: string;
+    baseURL: string;
+    model: string;
+    format: 'unified' | 'openai';
+    fallbackModels?: string[];
+  };
 
-  constructor() {
+  constructor(config?: {
+    apiKey: string;
+    baseURL: string;
+    model: string;
+    format: 'unified' | 'openai';
+    fallbackModels?: string[];
+  }) {
+    this.apiKey = '';
+    this.baseURL = '';
+    this.model = '';
+    this.format = 'unified';
+    this.fallbackModels = [];
+    this.overrideConfig = config;
+    this.refreshConfig();
+  }
+
+  private refreshConfig(): void {
+    if (this.overrideConfig) {
+      this.apiKey = this.overrideConfig.apiKey;
+      this.baseURL = this.overrideConfig.baseURL.replace(/\/+$/, '');
+      this.model = this.overrideConfig.model;
+      this.format = this.overrideConfig.format;
+      this.fallbackModels = this.overrideConfig.fallbackModels || [];
+      return;
+    }
     this.apiKey = API_CONFIG.veo.apiKey;
-    this.baseURL = API_CONFIG.veo.baseURL;
+    this.baseURL = API_CONFIG.veo.baseURL.replace(/\/+$/, '');
     this.model = API_CONFIG.veo.model || 'veo3.1';
     this.format = (API_CONFIG.veo.format as 'unified' | 'openai') || 'unified';
     this.fallbackModels = (API_CONFIG.veo as any).fallbackModels || [];
+  }
+
+  private apiUrl(path: string): string {
+    if (/\/v1$/i.test(this.baseURL) && path.startsWith('/v1/')) {
+      return this.baseURL + path.slice(3);
+    }
+    return this.baseURL + path;
   }
 
   /** 判断一个错误是不是 transient 的"整池饱和",值得换一个模型再试 */
@@ -88,9 +126,12 @@ export class VeoService {
       aspectRatio?: string; // v12.14.0 横竖屏:'16:9'|'9:16'|'1:1'
       style?: string;
       referenceImages?: string[];
+      nativeAudio?: boolean;
       onProgress?: ProgressCallback;
     }
   ): Promise<string> {
+    // 网页 API 路由台支持热更新，不能继续使用构造时缓存的 key/base/model。
+    this.refreshConfig();
     if (!this.apiKey || this.apiKey.startsWith('your_')) {
       throw new Error('VEO_API_KEY is not configured');
     }
@@ -121,7 +162,9 @@ export class VeoService {
     for (let i = 0; i < modelChain.length; i++) {
       const m = modelChain[i];
       // sora 系走 openai 格式, veo 系走 unified 格式 (qingyuntop 的实际路由)
-      const fmt: 'unified' | 'openai' = m.toLowerCase().startsWith('sora') ? 'openai' : 'unified';
+      const fmt: 'unified' | 'openai' = originalFormat === 'openai' || m.toLowerCase().startsWith('sora')
+        ? 'openai'
+        : 'unified';
       this.model = m;
       this.format = fmt;
 
@@ -185,7 +228,7 @@ export class VeoService {
   private async createTaskUnified(
     prompt: string,
     imageUrl: string,
-    options?: { duration?: number; resolution?: string; aspectRatio?: string; referenceImages?: string[] }
+    options?: { duration?: number; resolution?: string; aspectRatio?: string; referenceImages?: string[]; nativeAudio?: boolean }
   ): Promise<string> {
     const body: Record<string, any> = {
       model: this.model,
@@ -206,6 +249,7 @@ export class VeoService {
       body.size = options.resolution;
     }
     if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
+    if (options?.nativeAudio) body.generate_audio = true;
 
     // 使用场景图/分镜图作为 first_frame_image（锁第一帧构图）
     const primaryImage = imageUrl && !imageUrl.startsWith('data:') && imageUrl.startsWith('http') ? imageUrl : '';
@@ -238,7 +282,7 @@ export class VeoService {
       console.log(`[Veo3.1] Multi-ref bundle: first_frame=1 + refs=${uniqueRefs.length} (total ${1 + uniqueRefs.length} images)`);
     }
 
-    const response = await fetchWithTimeout(`${this.baseURL}/v1/video/create`, {
+    const response = await fetchWithTimeout(this.apiUrl('/v1/video/create'), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -265,7 +309,7 @@ export class VeoService {
   private async createTaskOpenAI(
     prompt: string,
     imageUrl: string,
-    options?: { duration?: number; aspectRatio?: string }
+    options?: { duration?: number; aspectRatio?: string; referenceImages?: string[]; nativeAudio?: boolean }
   ): Promise<string> {
     const body: Record<string, any> = {
       model: this.model,
@@ -275,7 +319,20 @@ export class VeoService {
       size: veoSizeFromAspect(options?.aspectRatio),
     };
 
-    const response = await fetchWithTimeout(`${this.baseURL}/v1/videos`, {
+    // New API 对 Seedance 常在 OpenAI /v1/videos 外形上扩展这些字段。
+    // 非 Seedance 模型不附加，保持标准 OpenAI 视频请求兼容性。
+    if (this.model.toLowerCase().includes('seedance')) {
+      if (imageUrl && /^https?:\/\//.test(imageUrl)) {
+        body.first_frame_image = imageUrl;
+        body.image = imageUrl;
+      }
+      const refs = (options?.referenceImages || []).filter((url) => /^https?:\/\//.test(url)).slice(0, 9);
+      if (refs.length) body.reference_images = refs;
+      if (options?.aspectRatio) body.aspect_ratio = options.aspectRatio;
+      if (options?.nativeAudio) body.generate_audio = true;
+    }
+
+    const response = await fetchWithTimeout(this.apiUrl('/v1/videos'), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -338,7 +395,7 @@ export class VeoService {
 
   private async queryTaskUnified(taskId: string): Promise<VeoQueryResponse> {
     const response = await fetchWithTimeout(
-      `${this.baseURL}/v1/video/query?id=${encodeURIComponent(taskId)}`,
+      `${this.apiUrl('/v1/video/query')}?id=${encodeURIComponent(taskId)}`,
       {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${this.apiKey}` },
@@ -354,7 +411,7 @@ export class VeoService {
 
   private async queryTaskOpenAI(taskId: string): Promise<VeoQueryResponse> {
     const response = await fetchWithTimeout(
-      `${this.baseURL}/v1/videos/${encodeURIComponent(taskId)}`,
+      `${this.apiUrl('/v1/videos')}/${encodeURIComponent(taskId)}`,
       {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${this.apiKey}` },

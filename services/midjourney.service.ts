@@ -1,8 +1,8 @@
 // Midjourney is consumed via any OpenAI/MJ-compatible aggregator.
 // Set MJ_BASE_URL to your provider (e.g. https://api.vectorengine.ai, https://api.qingyuntop.top).
 // Key read from MJ_API_KEY; falls back to a safe default base URL.
-const MJ_BASE_URL = process.env.MJ_BASE_URL || 'https://api.vectorengine.ai';
-const MJ_API_KEY = process.env.MJ_API_KEY || '';
+const mjBaseURL = () => process.env.MJ_BASE_URL || 'https://api.vectorengine.ai';
+const mjApiKey = () => process.env.MJ_API_KEY || '';
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -40,7 +40,7 @@ export class MidjourneyService {
   public onProgress?: MJProgressCallback;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || MJ_API_KEY;
+    this.apiKey = apiKey || mjApiKey();
   }
 
   /**
@@ -86,7 +86,7 @@ export class MidjourneyService {
     console.log(`[MJ] Submit imagine: ${fullPrompt.slice(0, 120)}...`);
 
     // ── Step 1: 提交 imagine 任务 → 获取四宫格 ──
-    const response = await fetchWithTimeout(`${MJ_BASE_URL}/mj/submit/imagine`, {
+    const response = await fetchWithTimeout(`${mjBaseURL()}/mj/submit/imagine`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -133,7 +133,7 @@ export class MidjourneyService {
     const content = `${imagineTaskId} U${index}`;
     console.log(`[MJ] Simple-change: ${content}`);
 
-    const response = await fetchWithTimeout(`${MJ_BASE_URL}/mj/submit/simple-change`, {
+    const response = await fetchWithTimeout(`${mjBaseURL()}/mj/submit/simple-change`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -161,7 +161,7 @@ export class MidjourneyService {
    */
   private async upscaleViaAction(imagineTaskId: string, index: 1 | 2 | 3 | 4): Promise<string> {
     // 先获取 imagine 任务的 buttons
-    const taskRes = await fetchWithTimeout(`${MJ_BASE_URL}/mj/task/${imagineTaskId}/fetch`, {
+    const taskRes = await fetchWithTimeout(`${mjBaseURL()}/mj/task/${imagineTaskId}/fetch`, {
       headers: { 'Authorization': `Bearer ${this.apiKey}` },
     }, 15_000);
 
@@ -182,7 +182,7 @@ export class MidjourneyService {
 
     console.log(`[MJ] Action upscale: customId=${upscaleButton.customId.slice(0, 50)}...`);
 
-    const actionRes = await fetchWithTimeout(`${MJ_BASE_URL}/mj/submit/action`, {
+    const actionRes = await fetchWithTimeout(`${mjBaseURL()}/mj/submit/action`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -212,7 +212,7 @@ export class MidjourneyService {
     for (let i = 0; i < maxAttempts; i++) {
       await sleep(5000);
 
-      const response = await fetchWithTimeout(`${MJ_BASE_URL}/mj/task/${taskId}/fetch`, {
+      const response = await fetchWithTimeout(`${mjBaseURL()}/mj/task/${taskId}/fetch`, {
         headers: { 'Authorization': `Bearer ${this.apiKey}` },
       }, 15_000);
 
@@ -259,5 +259,5 @@ export class MidjourneyService {
 }
 
 export function hasMidjourney(): boolean {
-  return !!MJ_API_KEY && !MJ_API_KEY.startsWith('your_');
+  return !!mjApiKey() && !mjApiKey().startsWith('your_');
 }

@@ -72,6 +72,45 @@ async function probeGateway(id: string, label: string, baseUrl: string, key?: st
   return { ...base, ...cls, balance, latencyMs: Date.now() - t0 };
 }
 
+function openAIModelsUrl(baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return /\/v1$/i.test(base) ? `${base}/models` : `${base}/v1/models`;
+}
+
+async function probeMediaGateway(
+  id: string,
+  label: string,
+  kind: ProviderKind,
+  baseUrl: string,
+  key?: string,
+): Promise<ProviderHealth> {
+  const base = { id, label, kind, baseUrl };
+  if (isPlaceholder(key)) return { ...base, status: 'not_configured', detail: '未设置 API Key' };
+  const t0 = Date.now();
+  const result = await timedFetch(openAIModelsUrl(baseUrl), {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  return { ...base, ...classifyHttp(result), latencyMs: Date.now() - t0 };
+}
+
+function probeSeedanceDirect(): ProviderHealth {
+  const base = {
+    id: 'seedance-volcengine',
+    label: 'Seedance 火山引擎格式',
+    kind: 'video' as ProviderKind,
+    baseUrl: process.env.JIMENG_BASE_URL || 'https://visual.volcengineapi.com',
+  };
+  const ak = process.env.JIMENG_AK;
+  const sk = process.env.JIMENG_SK;
+  if (isPlaceholder(ak) && isPlaceholder(sk)) {
+    return { ...base, status: 'not_configured', detail: '未设置 JIMENG_AK / JIMENG_SK' };
+  }
+  if (isPlaceholder(ak) || isPlaceholder(sk)) {
+    return { ...base, status: 'misconfigured', detail: 'JIMENG_AK 与 JIMENG_SK 必须成对配置' };
+  }
+  return { ...base, status: 'ok', detail: 'Volc4 凭据已配置；生成任务时执行真实签名验证' };
+}
+
 /** 可选/未接入的 provider — 仅看 key 是否配置, 不打网络. */
 function optionalProvider(id: string, label: string, kind: ProviderKind, key?: string): ProviderHealth | null {
   if (!isPlaceholder(key)) return null; // 已配置的会单独探测
@@ -98,6 +137,7 @@ export async function GET(request: NextRequest) {
   const creativeKey = process.env.CREATIVE_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
   const fbBase = process.env.LLM_FALLBACK_BASE_URL || 'https://api.minimaxi.com/v1';
   const fbKey = process.env.LLM_FALLBACK_API_KEY || process.env.MINIMAX_API_KEY;
+  const openAIImageEnabled = ['1', 'true'].includes((process.env.OPENAI_IMAGE_ENABLED || '').toLowerCase());
 
   const probes = await Promise.all([
     probeChatLLM('primary-llm', `通用 LLM · ${process.env.OPENAI_MODEL || '?'}`, process.env.OPENAI_BASE_URL || 'https://api.minimaxi.com/v1', process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'claude-sonnet-4-6'),
@@ -106,6 +146,39 @@ export async function GET(request: NextRequest) {
     probeMinimaxTTS(),
     probeGateway('qingyuntop', 'qingyuntop 网关 (Vidu/聚合视频)', process.env.QINGYUNTOP_BASE_URL || 'https://api.qingyuntop.top', process.env.QINGYUNTOP_API_KEY),
     probeGateway('vectorengine', 'vectorengine 网关 (补全: TTS/MJ/Kling/图像)', veBase, veKey),
+    probeMediaGateway(
+      'openai-image',
+      `OpenAI / New API 图像 · ${process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1'}`,
+      'image',
+      process.env.OPENAI_IMAGE_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+      openAIImageEnabled ? (process.env.OPENAI_IMAGE_API_KEY || process.env.OPENAI_API_KEY) : undefined,
+    ),
+    probeMediaGateway(
+      'video-gateway',
+      `视频网关 · ${process.env.VEO_MODEL || 'veo3.1-pro'}`,
+      'video',
+      process.env.VEO_BASE_URL || 'https://api.qingyuntop.top',
+      process.env.VEO_API_KEY,
+    ),
+    process.env.TTS_API_FORMAT === 'volcengine'
+      ? Promise.resolve<ProviderHealth>({
+          id: 'tts-gateway',
+          label: '火山引擎 TTS',
+          kind: 'tts',
+          baseUrl: process.env.TTS_BASE_URL || 'https://openspeech.bytedance.com',
+          status: !isPlaceholder(process.env.TTS_API_KEY) && !!process.env.TTS_APP_ID ? 'ok' : 'not_configured',
+          detail: !isPlaceholder(process.env.TTS_API_KEY) && !!process.env.TTS_APP_ID
+            ? 'App ID 与访问令牌已配置'
+            : '需配置 TTS_API_KEY 与 TTS_APP_ID',
+        })
+      : probeMediaGateway(
+          'tts-gateway',
+          `OpenAI / New API 配音 · ${process.env.TTS_MODEL || process.env.VE_TTS_MODEL || 'gpt-4o-mini-tts'}`,
+          'tts',
+          process.env.TTS_BASE_URL || process.env.VECTORENGINE_BASE_URL || 'https://api.vectorengine.ai',
+          process.env.TTS_API_KEY || process.env.VECTORENGINE_API_KEY || process.env.KELING_API_KEY,
+        ),
+    Promise.resolve(probeSeedanceDirect()),
   ]);
 
   // 未接入的可选 provider (仅提示)

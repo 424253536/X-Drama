@@ -10,8 +10,9 @@
  */
 import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '../../../auth/lib';
-import { listSeriesEpisodesFull, setEpisodeStatus } from '@/lib/repos/series-repo';
-import { selectGeneratableEpisodes } from '@/lib/series';
+import { listSeriesEpisodesFull, setEpisodeStatus, getSeriesAnchor } from '@/lib/repos/series-repo';
+import { selectGeneratableEpisodes, buildEpisodeIdea } from '@/lib/series';
+import { pickEpisodeCharacters } from '@/lib/series-bible';
 import { buildSeriesRecap, buildRecapDirective } from '@/lib/series-recap';
 import { runPool } from '@/lib/season-orchestrator';
 
@@ -48,21 +49,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const b = await assertBudget({ userId, pendingCostCny: targets.length * estimatePipelineCostCny({}) });
   if (!b.allow) return NextResponse.json({ error: b.guard.message, code: 'budget_exceeded', guard: b.guard }, { status: 402 });
 
+  // v12.266:Phase 0 系列圣经(若已生成)—— 按集动态选角的真源;无圣经走旧的 shell 继承路径。
+  const seriesAnchor = await getSeriesAnchor(id).catch(() => null);
+  const bible = seriesAnchor?.bible;
+
   // 每集 → CreatePipelineInput(premise 作创意 + 继承锚点一致性资产)
   const inputFor = (ep: typeof targets[number]) => {
     // v12.244:多集连续 —— 给本集 Writer 注入前几集前情提要(取自全部集 all 的前序 description,
     // 无先后依赖),让剧本真正承接而非各集独立成篇。第 1 集无前情 → directive 为空 → 零影响。
     const recap = buildSeriesRecap(all, ep.episode_number);
     const directive = buildRecapDirective(recap);
-    const ownIdea = (ep.description || ep.title || '').slice(0, 2000);
+    // v12.266:完整分集剧本不再 2000 截断(旧值把按章拆集的完整剧本静默砍掉大半),
+    // 上限对齐单集创作路径的 32000(EPISODE_IDEA_CAP)。
+    // v12.266:圣经按集动态选角 —— 匹配本集出场角色挑 ≤3 个注入(引擎参考图硬上限);
+    // 解决"全剧固定锁 3 个 → 第 5 集才登场的角色无锚"。无圣经/无匹配 → 沿用 shell 继承。
+    const bibleChars = pickEpisodeCharacters(bible, ep.description || '', ep.episode_number);
     return {
-    idea: directive ? `${directive}${ownIdea}` : ownIdea,
+    idea: buildEpisodeIdea(ep, directive),
     seriesRecap: recap || undefined, // 也单独透传,供管线/展示需要时用
     projectId: ep.id,
     aspect: ep.aspect || '16:9',
     style: ep.style_id || undefined,
     primaryCharacterRef: ep.primary_character_ref || undefined,
-    lockedCharacters: parseArr(ep.locked_characters),
+    lockedCharacters: bibleChars.length ? bibleChars : parseArr(ep.locked_characters),
     enableGates: false,
     language, // v12.165:整季统一制作语言
     };

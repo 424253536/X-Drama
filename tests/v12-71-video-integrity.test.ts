@@ -8,7 +8,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const FF = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg');
+const FF = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'integ-'));
 const goodMp4 = path.join(tmp, 'good.mp4');
 const junkMp4 = path.join(tmp, 'junk.mp4');

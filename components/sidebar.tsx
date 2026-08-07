@@ -7,7 +7,7 @@ import { useAuth } from '@/components/auth-provider';
 import {
   SquaresFour, Kanban, Sparkle, BookOpen, User,
   SignOut, CaretLeft, CaretRight, Package, PenNib, MagicWand, FilmReel, CreditCard, Scroll, Palette, UsersThree, Pulse, Lightning, ChartLineUp, Stack, Queue, FilmSlate,
-  Storefront, FlowArrow, Brain, UserCircle, MusicNotes, GridFour, ChatText,
+  Storefront, FlowArrow, Brain, UserCircle, MusicNotes, GridFour, ChatText, Keyhole,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 
@@ -43,6 +43,7 @@ const navItems = [
   { href: '/dashboard/profile', label: '账户', icon: User },
   // v6.5: 团队工作区 — 主账号按成员分配积分额度
   { href: '/dashboard/team', label: '团队', icon: UsersThree },
+  { href: '/dashboard/api-config', label: 'API 配置', icon: Keyhole },
   // v6.7: API 健康仪表盘 — 一眼看各网关欠费/掉线
   { href: '/dashboard/health', label: 'API 健康', icon: Pulse },
   // v9.3.2: 用量与成本可观测 — 引擎花费 / 每日趋势 / 预算环 / 配额告警

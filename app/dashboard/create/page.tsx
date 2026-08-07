@@ -39,6 +39,7 @@ import { listSupportedLanguages } from '@/lib/language-detect';
 import { saveCreatePrefs, loadCreatePrefs } from '@/lib/create-prefs';
 import { LanguagePicker } from '@/components/create/language-picker';
 import { getSystemLanguage } from '@/lib/system-language';
+import { getToken } from '@/lib/auth';
 
 // Pika-style art presets with visual indicators and color themes
 const stylePresets = [
@@ -322,7 +323,10 @@ export default function DashboardCreatePage() {
       saveCreatePrefs({ style, aspect, cameraDefault, editStyle, scriptLanguage, sketchLock });
       const response = await fetch('/api/create-stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        },
         body: JSON.stringify({
           idea: sanitizedIdea, videoProvider, style, duration, aspect, projectId,
           templateId: selectedTemplate?.id,
@@ -343,7 +347,10 @@ export default function DashboardCreatePage() {
           sketchLock: sketchLock || undefined,
         }),
       });
-      if (!response.ok) throw new Error('创作失败');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || body?.message || `创作失败（HTTP ${response.status}）`);
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -1023,9 +1030,10 @@ export default function DashboardCreatePage() {
 
           {createMode === 'pro' && <div>
             <Eyebrow>Engine · 视频引擎</Eyebrow>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
               {[
-                { id: 'veo', label: 'Veo 3.1', sub: 'cinematic · slow' },
+                { id: 'veo', label: '视频网关', sub: 'Veo / Seedance · New API' },
+                { id: 'seedance', label: 'Seedance', sub: '火山格式 · 原生音画' },
                 { id: 'minimax', label: 'Minimax', sub: 'balanced · fast' },
                 { id: 'keling', label: '可灵 AI', sub: '官方API · 已接入' }, // v12.157:key 已接,别名在 engine-order 归一
               ].map((v) => (

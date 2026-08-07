@@ -9,6 +9,7 @@
 import { registerTTSProvider } from './registry';
 import type { TTSGenerateInput } from './types';
 import { VOICE_CATALOG } from '@/lib/character-studio';
+import { randomUUID } from 'crypto';
 
 /**
  * 项目内 voiceId (narrator_male_cn 等) → OpenAI tts voice. 纯函数, 可单测.
@@ -32,43 +33,127 @@ export function mapVoiceToOpenAI(voiceId?: string): string {
   return 'alloy';
 }
 
-function veCreds(): { key: string; base: string } {
-  const key = process.env.VECTORENGINE_API_KEY || process.env.KELING_API_KEY || '';
-  const base = process.env.VECTORENGINE_BASE_URL || process.env.KELING_BASE_URL || 'https://api.vectorengine.ai';
-  return { key, base };
+type TTSApiFormat = 'openai' | 'volcengine';
+
+function ttsFormat(): TTSApiFormat {
+  return process.env.TTS_API_FORMAT === 'volcengine' ? 'volcengine' : 'openai';
+}
+
+function ttsCreds(): { key: string; base: string; format: TTSApiFormat } {
+  const format = ttsFormat();
+  const key = process.env.TTS_API_KEY
+    || process.env.VECTORENGINE_API_KEY
+    || process.env.KELING_API_KEY
+    || '';
+  const defaultBase = format === 'volcengine'
+    ? 'https://openspeech.bytedance.com'
+    : 'https://api.vectorengine.ai';
+  const base = process.env.TTS_BASE_URL
+    || process.env.VECTORENGINE_BASE_URL
+    || process.env.KELING_BASE_URL
+    || defaultBase;
+  return { key, base: base.replace(/\/+$/, ''), format };
+}
+
+export function openAITTSUrl(base: string): string {
+  const normalized = base.replace(/\/+$/, '');
+  return /\/v1$/i.test(normalized)
+    ? `${normalized}/audio/speech`
+    : `${normalized}/v1/audio/speech`;
+}
+
+export function volcengineTTSUrl(base: string): string {
+  const normalized = base.replace(/\/+$/, '');
+  if (/\/api\/v1\/tts$/i.test(normalized)) return normalized;
+  if (/\/api\/v1$/i.test(normalized)) return `${normalized}/tts`;
+  return `${normalized}/api/v1/tts`;
+}
+
+function durationFor(text: string): number {
+  return Math.max(1, Math.ceil((text || '').length / 4.5));
+}
+
+async function generateOpenAITTS(input: TTSGenerateInput, key: string, base: string) {
+  const model = process.env.TTS_MODEL || process.env.VE_TTS_MODEL || 'gpt-4o-mini-tts';
+  const res = await fetch(openAITTSUrl(base), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      input: input.text,
+      voice: mapVoiceToOpenAI(input.voiceId),
+      response_format: 'mp3',
+      ...(input.speed ? { speed: input.speed } : {}),
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`OpenAI/New API TTS ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (!buf.length) throw new Error('OpenAI/New API TTS: empty audio');
+  return buf;
+}
+
+async function generateVolcengineTTS(input: TTSGenerateInput, token: string, base: string) {
+  const appId = process.env.TTS_APP_ID || '';
+  if (!appId) throw new Error('火山 TTS: TTS_APP_ID 未配置');
+  const voice = input.voiceId?.startsWith('BV') ? input.voiceId : (process.env.TTS_VOICE || 'BV001_streaming');
+  const res = await fetch(volcengineTTSUrl(base), {
+    method: 'POST',
+    headers: { Authorization: `Bearer;${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      app: {
+        appid: appId,
+        token,
+        cluster: process.env.TTS_CLUSTER || 'volcano_tts',
+      },
+      user: { uid: 'qfmanju' },
+      audio: {
+        voice_type: voice,
+        encoding: 'mp3',
+        speed_ratio: input.speed || 1,
+        volume_ratio: input.volume || 1,
+        pitch_ratio: input.pitch || 1,
+      },
+      request: {
+        reqid: randomUUID(),
+        text: input.text,
+        text_type: 'plain',
+        operation: 'query',
+      },
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const payload = await res.json().catch(() => null) as { code?: number; message?: string; data?: string } | null;
+  if (!res.ok || payload?.code !== 3000 || !payload.data) {
+    throw new Error(`火山 TTS ${res.status}: ${payload?.message || `code=${payload?.code ?? 'unknown'}`}`);
+  }
+  const base64 = payload.data.includes(',') ? payload.data.slice(payload.data.indexOf(',') + 1) : payload.data;
+  const buf = Buffer.from(base64, 'base64');
+  if (!buf.length) throw new Error('火山 TTS: empty audio');
+  return buf;
 }
 
 registerTTSProvider({
   id: 'vectorengine-tts',
-  name: 'vectorengine TTS (gpt-4o-mini-tts)',
+  name: 'OpenAI / New API / Volcengine TTS',
   priority: 50, // < minimax-tts(100) → 主路径; minimax 兜底
   supportsEmotion: false,
   supportsCloning: false,
   supportsStreaming: false,
   maxTextLen: 4000,
   supportedLanguages: [], // 任意语言
-  available: () => !!(process.env.VECTORENGINE_API_KEY || process.env.KELING_API_KEY),
+  available: () => {
+    const { key, format } = ttsCreds();
+    return !!key && (format !== 'volcengine' || !!process.env.TTS_APP_ID);
+  },
   async generate(input: TTSGenerateInput) {
-    const { key, base } = veCreds();
-    if (!key) throw new Error('vectorengine TTS: no key');
-    const model = process.env.VE_TTS_MODEL || 'gpt-4o-mini-tts';
-    const res = await fetch(`${base}/v1/audio/speech`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        input: input.text,
-        voice: mapVoiceToOpenAI(input.voiceId),
-        response_format: 'mp3',
-        ...(input.speed ? { speed: input.speed } : {}),
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) throw new Error(`vectorengine TTS ${res.status}: ${(await res.text()).slice(0, 100)}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) throw new Error('vectorengine TTS: empty audio');
+    const { key, base, format } = ttsCreds();
+    if (!key) throw new Error('TTS: no key');
+    const buf = format === 'volcengine'
+      ? await generateVolcengineTTS(input, key, base)
+      : await generateOpenAITTS(input, key, base);
     const audioUrl = `data:audio/mpeg;base64,${buf.toString('base64')}`;
-    const duration = Math.max(1, Math.ceil((input.text || '').length / 4.5)); // 中文 ~4.5 字/秒
+    const duration = durationFor(input.text);
     return {
       audioUrl,
       duration,
@@ -78,4 +163,4 @@ registerTTSProvider({
   },
 });
 
-if (process.env.NODE_ENV !== 'test') console.log('[TTSProviders] vectorengine-tts registered (gpt-4o-mini-tts, primary)');
+if (process.env.NODE_ENV !== 'test') console.log('[TTSProviders] OpenAI/New API/Volcengine TTS registered');

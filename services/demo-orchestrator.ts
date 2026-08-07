@@ -2,8 +2,8 @@ import {
   Agent, AgentRole, DirectorPlan, Script, Storyboard, VideoClip, Character
 } from '@/types/agents';
 
-// Check if real API keys are configured
-const hasOpenAI = process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('your_');
+// Read on every request so dashboard changes take effect without restarting.
+const hasOpenAI = () => !!process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('your_');
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -242,5 +242,5 @@ export class DemoOrchestrator {
 }
 
 export function isDemoMode(): boolean {
-  return !hasOpenAI;
+  return !hasOpenAI();
 }

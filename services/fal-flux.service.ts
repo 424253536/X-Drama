@@ -13,7 +13,6 @@
 
 import { API_CONFIG } from '@/lib/config';
 
-const FAL_KEY = process.env.FAL_KEY || '';
 const FAL_BASE_URL = 'https://queue.fal.run';
 
 /** 带超时的 fetch —— 防止 API 无响应时无限挂起 */
@@ -24,7 +23,7 @@ function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000): P
 }
 
 export function hasFalFlux(): boolean {
-  return !!FAL_KEY && !FAL_KEY.startsWith('your_');
+  return !!API_CONFIG.fal.apiKey && !API_CONFIG.fal.apiKey.startsWith('your_');
 }
 
 interface FalFluxOptions {
@@ -72,7 +71,7 @@ export class FalFluxService {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || FAL_KEY;
+    this.apiKey = apiKey || API_CONFIG.fal.apiKey;
   }
 
   /**

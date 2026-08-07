@@ -15,7 +15,8 @@ describe('v12.17.0 · validateSeriesInput', () => {
   it('空/缺 premise/超 50 集 → 拒;合法 → 过', () => {
     expect(validateSeriesInput([]).ok).toBe(false);
     expect(validateSeriesInput([{ premise: '' }]).ok).toBe(false);
-    expect(validateSeriesInput(Array.from({ length: 51 }, () => ({ premise: 'x' }))).ok).toBe(false);
+    // v12.266:上限 50 → 可配置默认 200(完整分集剧本导入需 60~100 集),超默认上限仍拒
+    expect(validateSeriesInput(Array.from({ length: 201 }, () => ({ premise: 'x' }))).ok).toBe(false);
     expect(validateSeriesInput([{ premise: '主角觉醒' }]).ok).toBe(true);
   });
 });

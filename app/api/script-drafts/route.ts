@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
   if (!API_CONFIG.openai.apiKey) {
     return NextResponse.json(
-      { error: 'OPENAI_API_KEY 未配置, 无法生成草稿' },
+      { error: 'LLM 未配置:请在 API 路由台添加文本渠道或配置 OPENAI_API_KEY, 无法生成草稿' },
       { status: 422 },
     );
   }

@@ -373,6 +373,27 @@ CREATE TABLE IF NOT EXISTS model_overrides (
   prev_value TEXT,
   updated_at TEXT NOT NULL
 );
+
+-- 用户自定义 API 渠道。api_key / secret_json 均由应用层 AES-256-GCM 加密；
+-- priority 数字越小越先调用，同类型渠道失败后自动切换下一个。
+CREATE TABLE IF NOT EXISTS api_channels (
+  id TEXT PRIMARY KEY,
+  channel_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  format TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  api_key TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 100,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  options_json TEXT NOT NULL DEFAULT '{}',
+  secret_json TEXT NOT NULL DEFAULT '',
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_api_channels_type_priority
+  ON api_channels(channel_type, enabled, priority, created_at);
 `);
 
 // Safe ALTER TABLE — add columns if missing

@@ -160,7 +160,10 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
     // ── v12.181:跨集一致性注入 —— 本集属于系列且调用方未显式锁角时,从 series_anchors 读
     // 前集沉淀(角色图/styleBible/上集末帧),对标「一处设定全剧同步」。显式传参永远优先。
+    // v12.266:系列圣经(Phase 0)为真源 —— 有圣经时按"本集出场谁"动态选角(≤3,引擎硬上限),
+    // 并把系列级场景锚下发为本集 scene-anchor 资产(编排器启动时自动 seed)、道具设定图挂构图参考。
     let seriesIdOfProject: string | null = null;
+    let seriesPropRefs: string[] = [];
     try {
       const proj0 = await getProject(projectId);
       seriesIdOfProject = (proj0 as any)?.series_id || null;
@@ -168,10 +171,35 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         const { getSeriesAnchor } = await import('@/lib/repos/series-repo');
         const anchor = await getSeriesAnchor(seriesIdOfProject);
         if (anchor) {
-          if ((!lockedCharacters || lockedCharacters.length === 0) && anchor.lockedCharacters?.length) {
-            orchestrator.setLockedCharacters(anchor.lockedCharacters as any);
-            send('status', { message: `🔗 跨集一致性:继承系列角色锚 ${anchor.lockedCharacters.map((c) => c.name).join('、')}(来自第 ${anchor.fromEpisode ?? '?'} 集)` });
+          const { pickEpisodeCharacters, bibleSceneAnchorEntries, biblePropRefs, mergeSceneAnchorEntries } =
+            await import('@/lib/series-bible');
+          const epNum = typeof (proj0 as any)?.episode_number === 'number' ? (proj0 as any).episode_number : null;
+          if (!lockedCharacters || lockedCharacters.length === 0) {
+            // 圣经选角优先(按本集剧情匹配出场);无圣经 → 旧路径继承上集角色锚
+            const bibleChars = pickEpisodeCharacters(anchor.bible, idea || '', epNum);
+            if (bibleChars.length) {
+              orchestrator.setLockedCharacters(bibleChars as any);
+              send('status', { message: `📖 系列圣经:本集选角 ${bibleChars.map((c) => c.name).join('、')}(共 ${anchor.bible?.characters.length ?? 0} 位长期角色)` });
+            } else if (anchor.lockedCharacters?.length) {
+              orchestrator.setLockedCharacters(anchor.lockedCharacters as any);
+              send('status', { message: `🔗 跨集一致性:继承系列角色锚 ${anchor.lockedCharacters.map((c) => c.name).join('、')}(来自第 ${anchor.fromEpisode ?? '?'} 集)` });
+            }
           }
+          // 系列级场景锚(圣经场景设定图 + 前集沉淀)→ 写为本集 scene-anchor 资产,
+          // 编排器 runStoryboard 启动时从该资产 seed → 同 location 全系列同一张基线图。
+          const seriesSceneEntries = mergeSceneAnchorEntries(bibleSceneAnchorEntries(anchor.bible), anchor.sceneAnchors);
+          if (seriesSceneEntries.length) {
+            const { listAssetsByType, upsertAsset } = await import('@/lib/repos/asset-repo');
+            const own = (await listAssetsByType(projectId, 'scene-anchor'))
+              .flatMap((r) => { try { return (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)?.entries || []; } catch { return []; } });
+            await upsertAsset({
+              projectId, type: 'scene-anchor', name: 'scene-anchors',
+              data: { entries: mergeSceneAnchorEntries(seriesSceneEntries, own) }, // 系列基线优先
+            });
+            send('status', { message: `🏙️ 系列场景锚:${seriesSceneEntries.length} 个地点将全系列复用同一基线图` });
+          }
+          // 道具设定图 → 低优先构图参考(与多参道具元素同通道,后面合并进 setSceneReferences)
+          seriesPropRefs = biblePropRefs(anchor.bible);
           if (anchor.styleAnchorUrl) orchestrator.setStyleAnchorUrl?.(anchor.styleAnchorUrl);
           if (anchor.lastEpisodeEndFrame && !previewSeedImage) {
             orchestrator.setPreviewSeedImage?.(anchor.lastEpisodeEndFrame);
@@ -232,7 +260,9 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
     }
 
     // v9.4.6 收尾: 多参「场景/道具」元素 → 分镜构图附加参考(低优先, 不挤占角色/画风锚)
-    const boundSceneRefs = [...elementBinding.sceneImages, ...elementBinding.propImages].filter(isHttpRef);
+    // v12.266: 系列圣经的道具设定图并入同通道(已在圣经层校验 http/serve-file,不再 isHttpRef 过滤;
+    // 用户显式上传的元素排前面,优先级更高)
+    const boundSceneRefs = [...elementBinding.sceneImages, ...elementBinding.propImages].filter(isHttpRef).concat(seriesPropRefs);
     if (boundSceneRefs.length) {
       orchestrator.setSceneReferences(boundSceneRefs);
       send('status', { message: `多参:${boundSceneRefs.length} 个场景/道具元素已挂为构图参考` });
@@ -860,27 +890,32 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
     // ── v12.181:跨集一致性写回 —— 本集完成后把角色锚/styleBible/末帧沉淀到 series_anchors,
     // 下一集(queue/inline 双路径都走本函数)启动时自动继承。失败不阻塞收尾。
+    // v12.266:改走 mergeSeriesAnchorOnEpisodeDone —— 有圣经时角色锚**不被本集覆盖**(圣经真源,
+    // 防长系列群像漂移);并把本集新登记的场景锚增量并回系列(最早集基线优先)。
     try {
       const projRow = await getProject(projectId);
       const sid = (projRow as any)?.series_id;
       if (sid) {
         const { setSeriesAnchor, getSeriesAnchor } = await import('@/lib/repos/series-repo');
         const { listAssetsByType } = await import('@/lib/repos/asset-repo');
+        const { mergeSeriesAnchorOnEpisodeDone } = await import('@/lib/series-bible');
         const charRows = await listAssetsByType(projectId, 'character');
         const chars = charRows.slice(0, 3).map((r) => {
           let urls: string[] = []; try { urls = JSON.parse(r.media_urls || '[]'); } catch { /* ignore */ }
           const d = (() => { try { return r.data ? JSON.parse(r.data) : {}; } catch { return {}; } })();
           return { name: r.name, imageUrl: r.persistent_url || urls[0] || '', role: d.role || 'lead', cw: d.cw || 100 };
         }).filter((c) => c.name && c.imageUrl);
+        const sceneEntries = (await listAssetsByType(projectId, 'scene-anchor'))
+          .flatMap((r) => { try { return (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)?.entries || []; } catch { return []; } });
         const prev = (await getSeriesAnchor(sid)) || {};
         const epRow = (projRow as any)?.episode_number;
-        await setSeriesAnchor(sid, {
-          lockedCharacters: chars.length ? chars : prev.lockedCharacters,
-          styleAnchorUrl: (orchestrator as any).styleAnchorImageUrl || prev.styleAnchorUrl,
-          lastEpisodeEndFrame: (videos as any[])?.length ? undefined : prev.lastEpisodeEndFrame, // 末帧提取重,P3 再接 extractLastFrame
-          fromEpisode: typeof epRow === 'number' ? epRow : prev.fromEpisode,
-        });
-        send('status', { message: `🔗 系列锚点已更新(角色 ${chars.length} 位,供后续集继承)` });
+        await setSeriesAnchor(sid, mergeSeriesAnchorOnEpisodeDone(prev, {
+          characters: chars,
+          styleAnchorUrl: (orchestrator as any).styleAnchorImageUrl || undefined,
+          episodeNumber: typeof epRow === 'number' ? epRow : null,
+          sceneEntries,
+        }));
+        send('status', { message: `🔗 系列锚点已更新(${prev.bible ? '圣经真源,角色锚不覆盖' : `角色 ${chars.length} 位`};场景锚 ${sceneEntries.length} 条并入)` });
       }
     } catch (e) { console.warn('[SeriesAnchor] 写回失败(不阻塞):', e instanceof Error ? e.message.slice(0, 60) : e); }
 

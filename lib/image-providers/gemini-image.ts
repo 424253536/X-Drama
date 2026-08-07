@@ -90,7 +90,7 @@ export function hasGeminiImage(env: NodeJS.ProcessEnv = process.env): boolean {
   // (priority 55 在链首)并产生费用。现在允许用 GEMINI_IMAGE_ENABLED=0 明确关掉;
   // 默认仍随 key 启用(它是专用图像 key 的可能性高,且 issue #11 的用户就是冲这个来的),
   // 但注册时会打印一行日志把「已接管图像链」这件事说清楚,不做静默改道。
-  if (env.GEMINI_IMAGE_ENABLED === '0') return false;
+  if (['0', 'false'].includes((env.GEMINI_IMAGE_ENABLED || '').toLowerCase())) return false;
   return !!env.GEMINI_API_KEY;
 }
 

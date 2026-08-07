@@ -9,6 +9,14 @@ export async function register() {
     const { initSentry } = await import('@/lib/telemetry');
     await initSentry();
 
+    // 网页保存的 API 渠道在服务启动时恢复。密钥从数据库解密后仅写入当前进程
+    // 环境，不会返回给浏览器。
+    try {
+      const { loadRuntimeApiChannelsIntoEnv } = await import('@/lib/runtime-api-channels');
+      const n = await loadRuntimeApiChannelsIntoEnv();
+      if (n) console.log(`[ApiChannels] ${n} enabled channel(s) restored`);
+    } catch { /* 首次建库时序 */ }
+
     // v10.6.3: 模型雷达覆盖重放 —— 扫描采用过的模型 ID 写回 process.env,
     // config.ts 的模型 getter 即读到(DB 覆盖优先于 .env 默认,它是用户显式动作)。
     try {

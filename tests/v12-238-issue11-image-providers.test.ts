@@ -56,6 +56,7 @@ describe('v12.238 GPT Image provider', () => {
     expect(hasGptImage({ OPENAI_API_KEY: 'sk-x' } as any)).toBe(false);
     expect(hasGptImage({ OPENAI_IMAGE_ENABLED: '1' } as any)).toBe(false); // 有开关没 key 也不行
     expect(hasGptImage({ OPENAI_IMAGE_ENABLED: '1', OPENAI_API_KEY: 'sk-x' } as any)).toBe(true);
+    expect(hasGptImage({ OPENAI_IMAGE_ENABLED: 'true', OPENAI_IMAGE_API_KEY: 'sk-image' } as any)).toBe(true);
   });
 });
 

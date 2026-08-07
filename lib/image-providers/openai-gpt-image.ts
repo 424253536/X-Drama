@@ -66,14 +66,14 @@ export function extractGptImageUrl(data: unknown): string {
 export function hasGptImage(env: NodeJS.ProcessEnv = process.env): boolean {
   // 显式开关优先:很多用户的 OPENAI_BASE_URL 指向只做文本的聚合网关,贸然把图像请求打过去
   // 会白白 404/400 拖慢整条链。所以默认关,设 OPENAI_IMAGE_ENABLED=1 才入链。
-  if (env.OPENAI_IMAGE_ENABLED !== '1') return false;
+  if (!['1', 'true'].includes((env.OPENAI_IMAGE_ENABLED || '').toLowerCase())) return false;
   // v12.239(第五轮复检 · 我自己 v12.238 写的凭据错投):此处原为
   // `!!(env.OPENAI_API_KEY || env.CREATIVE_API_KEY)`,而 generate() 里的 base 只认
   // OPENAI_IMAGE_BASE_URL/OPENAI_BASE_URL、**不认 CREATIVE_BASE_URL** ——
   // 于是只配了 CREATIVE_API_KEY(DeepSeek 等第二 LLM 的 key)的用户,
   // 会把那把密钥当 Bearer 发到 api.openai.com。**密钥必须和它配套的 host 一起用**,
   // 不能只借 key 不借 base。现在只认 OPENAI_API_KEY。
-  return !!env.OPENAI_API_KEY;
+  return !!(env.OPENAI_IMAGE_API_KEY || env.OPENAI_API_KEY);
 }
 
 registerImageProvider({
@@ -86,7 +86,8 @@ registerImageProvider({
   async generate(input: ImageGenerateInput) {
     const env = process.env;
     const base = (env.OPENAI_IMAGE_BASE_URL || env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    const key = env.OPENAI_API_KEY || ''; // v12.239:不再回落 CREATIVE_API_KEY(见 hasGptImage 注释)
+    const key = env.OPENAI_API_KEY || '';
+    const imageKey = env.OPENAI_IMAGE_API_KEY || key;
     const body = buildGptImageRequest(input, env);
 
     const controller = new AbortController();
@@ -95,7 +96,7 @@ registerImageProvider({
       const r = await fetch(`${base}/images/generations`, {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${imageKey}` },
         body: JSON.stringify(body),
       });
       if (!r.ok) {

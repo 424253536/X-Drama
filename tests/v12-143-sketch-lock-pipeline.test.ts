@@ -22,7 +22,8 @@ describe('v12.143 · 全片草图锁接线', () => {
   it('create-stream 透传 + 创作页开关(默认关)', () => {
     const api = fs.readFileSync('app/api/create-stream/route.ts', 'utf-8');
     expect(api).toContain('sketchLock: sketchLock === true');
-    const ui = fs.readFileSync('app/dashboard/create/page.tsx', 'utf-8');
+    // 统一行尾再断言 —— Windows 工作区可能是 CRLF
+    const ui = fs.readFileSync('app/dashboard/create/page.tsx', 'utf-8').replace(/\r\n/g, '\n');
     expect(ui).toContain('useState(false);\n');
     expect(ui).toContain('sketchLock: sketchLock || undefined');
     expect(ui).toContain('分镜草图锁');

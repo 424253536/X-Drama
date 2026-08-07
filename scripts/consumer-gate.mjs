@@ -11,16 +11,19 @@
  * 这个门禁负责让**下一次新代码**当场被拦下。
  */
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // 本文件由 tsx 运行(见 package.json 的 gate:consumer),因此可以直接 import TS 源。
 // 注:早先试过 node + register('tsx/esm'),Node 25 已移除该用法 —— 项目里其他 TS 脚本
 // (pg:migrate / s3:smoke)也都是直接用 tsx 跑的,保持一致。
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const { runConsumerGate } = await import(path.join(ROOT, 'lib/consumer-gate/scan.ts'));
-const { partition, writeBaseline, BASELINE_PATH } = await import(path.join(ROOT, 'lib/consumer-gate/baseline.ts'));
-const { RUNTIME_ONLY_GAPS } = await import(path.join(ROOT, 'lib/consumer-gate/contracts.ts'));
+// v12.266:动态 import 必须走 file:// URL —— Windows 上裸绝对路径('D:\...')会被 ESM loader
+// 当成协议 'd:' 拒载(ERR_UNSUPPORTED_ESM_URL_SCHEME),门禁在 Windows 开发机上一直起不来。
+const importTs = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
+const { runConsumerGate } = await importTs('lib/consumer-gate/scan.ts');
+const { partition, writeBaseline, BASELINE_PATH } = await importTs('lib/consumer-gate/baseline.ts');
+const { RUNTIME_ONLY_GAPS } = await importTs('lib/consumer-gate/contracts.ts');
 
 const args = process.argv.slice(2);
 const violations = runConsumerGate(ROOT);

@@ -10,6 +10,7 @@
 
 import { registerVideoProvider } from './registry';
 import type { VideoGenerateInput } from './types';
+import '@/lib/video-providers/runtime-channels';
 import '@/lib/mock-providers'; // v10.4.0: mock 三件套常驻注册(MOCK_ENGINES=1 才 available)
 
 // ─── Lazy service factories — 启动不预热, 第一次调时实例化 ─────────────────
@@ -60,13 +61,10 @@ async function getGrok() {
   return grokSvc;
 }
 
-let seedanceSvc: any = null;
 async function getSeedance() {
-  if (seedanceSvc) return seedanceSvc;
   const m = await import('@/services/seedance.service');
   if (!(m as any).hasSeedance?.()) return null;
-  seedanceSvc = new (m as any).SeedanceService();
-  return seedanceSvc;
+  return new (m as any).SeedanceService();
 }
 
 let ltxSvc: any = null;
@@ -100,12 +98,16 @@ registerVideoProvider({
   async generate(input: VideoGenerateInput) {
     const svc = await getVeo();
     if (!svc) throw new Error('Veo service unavailable');
-    const url = await svc.generateVideo(input.firstFrameUrl || '', input.prompt, {
+    const prompt = input.nativeAudio && input.spokenDialogue
+      ? `${input.prompt}. Spoken line (voice this aloud): "${input.spokenDialogue}"`
+      : input.prompt;
+    const url = await svc.generateVideo(input.firstFrameUrl || '', prompt, {
       duration: input.durationSec,
       resolution: input.resolution,
       aspectRatio: input.aspectRatio, // v12.14.0 横竖屏
       style: input.style,
       referenceImages: input.referenceImages,
+      nativeAudio: input.nativeAudio,
       onProgress: input.onProgress,
     });
     if (!url) throw new Error('Veo returned empty url');
