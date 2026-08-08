@@ -31,7 +31,26 @@ import { impactSfxNode } from '@/lib/impact-sfx'; // v12.13.1 打击音效程序
 import os from 'os';
 import https from 'https';
 import http from 'http';
-import { execSync } from 'child_process';
+import { execSync, exec as _execCb } from 'child_process';
+import { promisify } from 'util';
+
+/**
+ * v12.282:async shell 执行器 —— 替代 async 函数体内的 `execSync`。
+ *
+ * 病根实测:`execSync` 会**冻住整个 Node 事件循环**。用 10ms 心跳定时器量过 ——
+ * 一次仅 2 秒黑屏视频的 ffmpeg 调用期间,**心跳触发次数为 0**(定时器一次都没跑),
+ * 改 `execFile + await` 后同样的活儿有 9 次心跳、最大停顿 12ms。
+ * 真实文字卡(1080p + 模糊背景 + CJK drawtext)要好几秒 —— 自托管多人实例上,
+ * 一个人合成会让**所有人的请求与 SSE 全部卡死**,而自托管正是本项目的卖点之一。
+ *
+ * 保留 shell 形式(而非 execFile 数组参数):这些命令带 `2>"…"` 重定向与已转义的引号,
+ * 换成参数数组要重写全部拼接逻辑,风险大于收益。shell 下依然是子进程异步执行,
+ * 事件循环不再被占住 —— 这才是本版要解决的问题。
+ */
+const execAsync = promisify(_execCb);
+async function sh$(cmd: string): Promise<void> {
+  await execAsync(cmd, { maxBuffer: 32 * 1024 * 1024 });
+}
 
 // ═══ 设置 ffmpeg 可执行文件路径 ═══
 // Turbopack 在 server bundle 时会把 ffmpeg-static 的路径重写为
@@ -529,7 +548,7 @@ export async function attachTextCard(
   const bg = opts.bg ?? 'blur';
   const ff = resolvedFFmpegPath;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'txtcard-'));
-  const sh = (cmd: string) => execSync(cmd, { stdio: 'pipe' });
+  const sh = sh$; // v12.282:async 化 —— 原为 execSync,会冻住事件循环
 
   try {
     let titleFile: string | undefined;
@@ -544,14 +563,14 @@ export async function attachTextCard(
     if (bg === 'blur') {
       const bgPng = path.join(tmpDir, 'bg.png');
       const seek = position === 'start' ? '-ss 0.2' : '-sseof -0.3';
-      sh(`"${ff}" -y -v error ${seek} -i "${mainVideoPath}" -frames:v 1 "${bgPng}"`);
+      await sh(`"${ff}" -y -v error ${seek} -i "${mainVideoPath}" -frames:v 1 "${bgPng}"`);
       cardInputArgs = `-loop 1 -t ${dur} -i "${bgPng}"`;
     } else {
       cardInputArgs = `-f lavfi -t ${dur} -i "color=c=${opts.solidColor || '0x1A1015'}:s=${opts.w}x${opts.h}"`;
     }
     // 2) 渲染卡片(静音轨,便于与成片 concat a=1)
     const cardPath = path.join(tmpDir, 'card.mp4');
-    sh(`"${ff}" -y -v error ${cardInputArgs} -f lavfi -i anullsrc=r=44100:cl=stereo -vf "${vf}" -shortest -r 24 -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k "${cardPath}"`);
+    await sh(`"${ff}" -y -v error ${cardInputArgs} -f lavfi -i anullsrc=r=44100:cl=stereo -vf "${vf}" -shortest -r 24 -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a 128k "${cardPath}"`);
 
     // 3) concat(重编码归一);position 决定卡在前(hook)还是在后(CTA)
     const outputDir = opts.outputDir || path.join(process.cwd(), 'data', 'composed');
@@ -567,7 +586,7 @@ export async function attachTextCard(
       `[0:a]aresample=44100,aformat=channel_layouts=stereo[a0];[1:a]aresample=44100,aformat=channel_layouts=stereo[a1];` +
       `[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]` +
       (renorm ? `;${buildLoudnormFilter('[a]', '[anorm]')}` : '');
-    sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "${renorm ? '[anorm]' : '[a]'}" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a ${audioBitrateForPlatform(undefined)} -movflags +faststart "${outputPath}"`);
+    await sh(`"${ff}" -y -v error -i "${first}" -i "${second}" -filter_complex "${fc}" -map "[v]" -map "${renorm ? '[anorm]' : '[a]'}" -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -c:a aac -b:a ${audioBitrateForPlatform(undefined)} -movflags +faststart "${outputPath}"`);
     console.log(`[Card] ${position === 'start' ? 'Hook 片头卡' : '片尾卡'}已拼接 → ${outputPath}`);
     return { outputPath, appended: true };
   } finally {
@@ -1717,7 +1736,7 @@ export async function applyTwoPassLoudnorm(inputPath: string): Promise<boolean> 
   // 第一遍:测量(-f null,读 stderr JSON)
   let stderr = '';
   try {
-    execSync(`"${ff}" -hide_banner -i "${inputPath}" -af "${buildLoudnormMeasureFilter()}" -f null - 2>"${inputPath}.ln.log"`, { stdio: 'pipe' });
+    await sh$(`"${ff}" -hide_banner -i "${inputPath}" -af "${buildLoudnormMeasureFilter()}" -f null - 2>"${inputPath}.ln.log"`);
   } catch { /* -f null 正常退出码非 0 也无妨,日志已落 */ }
   try { stderr = fs.readFileSync(`${inputPath}.ln.log`, 'utf-8'); } catch { /* ignore */ }
   try { fs.unlinkSync(`${inputPath}.ln.log`); } catch { /* ignore */ }
@@ -1726,7 +1745,7 @@ export async function applyTwoPassLoudnorm(inputPath: string): Promise<boolean> 
   // 第二遍:linear 应用(视频流 copy,只重编码音频)
   const tmp = `${inputPath}.2pass.mp4`;
   try {
-    execSync(`"${ff}" -y -hide_banner -v error -i "${inputPath}" -af "${buildLoudnormApplyFilter(measured)}" -c:v copy -c:a aac -movflags +faststart "${tmp}"`, { stdio: 'pipe' });
+    await sh$(`"${ff}" -y -hide_banner -v error -i "${inputPath}" -af "${buildLoudnormApplyFilter(measured)}" -c:v copy -c:a aac -movflags +faststart "${tmp}"`);
     fs.renameSync(tmp, inputPath);
     console.log(`[Loudnorm-2pass] EBU R128 双遍归一完成(measured_I=${measured.input_i})`);
     return true;
