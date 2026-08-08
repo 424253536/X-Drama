@@ -386,6 +386,8 @@ export class HybridOrchestrator {
   // vision API 抽 8 维 (eye/jaw/nose/mouth/hair style/hair color/skin/signature outfit),
   // 拼成短 prompt block, 在每个该角色出场的 shot 里追加. 与 cref/sref 双锁.
   private characterDnaMap: Map<string, import('@/lib/character-dna').CharacterDna> = new Map();
+  /** v12.286:最近一次视觉漂移检测结果(供质检报告/前端读取;未开启嵌入则恒为 null) */
+  public driftReport: import('@/lib/drift-detect').DriftResult | null = null;
 
   /**
    * v12.2.1 从 project_assets(type='character-dna')预载上次抽好的 DNA → 合并进 characterDnaMap。
@@ -2795,6 +2797,46 @@ ${shots.map((s, i) => {
     await Promise.all(workers);
 
     const rendered = orderedResults.filter((r): r is Storyboard => r !== null);
+
+    // ── v12.286:视觉漂移检测接进主管线 ──────────────────────────────────────
+    // 病根:`detectDriftOutliers` 全仓**只被手动端点 /drift-check 调用**,主管线一次都不跑 ——
+    // 用户必须自己想起来去点一下才知道哪镜跑偏了,等于这个能力对正常出片流程不存在。
+    //
+    // 默认零成本:`hasImageEmbeddingKey()` 要求**显式配 IMAGE_EMBED_MODEL**(多模态嵌入端点),
+    // 没配就整段跳过 —— 不给未开启的用户增加任何 API 调用或耗时。
+    // 本版只做**检测 + 落账 + 推送**,不自动重生:自动重生要按漂移分反复重跑镜头,
+    // 成本与失控风险都高,留给用户在看到结果后自行决定(诚实边界,不假装做了)。
+    try {
+      const { hasImageEmbeddingKey, embedImage } = await import('@/lib/asset-embedding');
+      if (hasImageEmbeddingKey() && rendered.length >= 2) {
+        const { detectDriftOutliers } = await import('@/lib/drift-detect');
+        const embeddings: Array<{ shotNumber: number; vector: number[] }> = [];
+        for (const sb of rendered) {
+          const url = (sb as any)?.imageUrl;
+          if (!url || !/^https?:\/\//.test(url)) continue;
+          const emb = await embedImage(url);
+          if (emb?.vector) embeddings.push({ shotNumber: (sb as any).shotNumber, vector: emb.vector });
+        }
+        const drift = detectDriftOutliers(embeddings);
+        if (drift.available) {
+          this.driftReport = drift;
+          this.emit('driftCheck', drift);
+          if (drift.outliers.length > 0) {
+            this.emit('agentTalk', {
+              role: AgentRole.STORYBOARD,
+              text: `⚠️ 视觉漂移检测:第 ${drift.outliers.join('、')} 镜与全片风格偏离较大(平均漂移 ${drift.meanDrift.toFixed(2)}),建议重生这几镜`,
+            });
+            this.qualityLedger.push({
+              shot: drift.outliers[0],
+              kind: 'visual-drift',
+              detail: `漂移镜 ${drift.outliers.join(',')};全片平均漂移 ${drift.meanDrift.toFixed(3)}`,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Drift] 漂移检测失败(非阻塞):', e instanceof Error ? e.message.slice(0, 80) : e);
+    }
 
     this.update(AgentRole.STORYBOARD, { status: 'completed', progress: 100, output: rendered });
     this.emit('agentTalk', {
