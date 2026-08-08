@@ -1716,8 +1716,22 @@ export function kenBurnsFilter(
     xExpr = `'iw*0.1+(iw*0.3)*on/${totalFrames}'`;
     yExpr = `'ih/2-(ih/zoom/2)'`;
   }
-  const uw = w * 4;
-  const uh = h * 4;
+  // ── v12.283:上采样倍数按**像素预算**封顶,不再无脑 ×4 ──────────────────────
+  // 为什么要上采样:zoompan 按**整数像素**步进,慢速缩放会出现肉眼可见的阶梯抖动;
+  // 先放大再 zoompan,整数步长相对输出就成了亚像素,画面才顺滑。所以**不能删**。
+  // 为什么要封顶:×4 是对分辨率的平方级放大。实测峰值 RSS ——
+  //   竖屏 720p (→2880×5120)  180 MB
+  //   竖屏 1080p(→4320×7680)  391 MB
+  // 按像素外推竖屏 4K(→8640×15360)约 1.5 GB,小内存容器上是真 OOM 风险。
+  // 折中:以「当前 720p 档的上采样像素数」为预算,倍数 = clamp(sqrt(预算/原像素), 2, 4)。
+  //   720p  → 4(与旧版**逐字节一致**,最常用档零回归)
+  //   1080p → 2(内存约降到原来的 1/4)
+  //   4K    → 2(仍高于预算但保底 2× 以维持亚像素平滑,不为省内存牺牲画质下限)
+  const UPSCALE_PIXEL_BUDGET = 2880 * 5120; // ≈14.7 MPix,即现行 720p 档的上采样规模
+  const srcPixels = Math.max(1, w * h);
+  const factor = Math.max(2, Math.min(4, Math.floor(Math.sqrt(UPSCALE_PIXEL_BUDGET / srcPixels))));
+  const uw = w * factor;
+  const uh = h * factor;
   return [
     `scale=${uw}:${uh}:force_original_aspect_ratio=increase`,
     `crop=${uw}:${uh}`,

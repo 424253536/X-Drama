@@ -1,9 +1,9 @@
 # Wind Comic · 完整版本历史 (VERSIONS)
 
-> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.282**)
+> 多智能体 AI 短剧/漫剧生成流水线。本文件汇总从首个公开版本 (v2.12.0) 到当前 (**v12.283**)
 > 的全部版本信息。每条含发布日期 + commit + 关键交付。详细验收数据见 `ROADMAP.md`。
 >
-> 截至 **v12.282**:**vitest 3649 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
+> 截至 **v12.283**:**vitest 3658 全绿,tsc 0 错误**(SQLite/Postgres 双驱动)。v12.218 起进入「加固路线图」(对抗尽调 P0→收官,详见 `docs/ROADMAP-hardening-v12.218.md`)。
 >
 > 仓库:https://github.com/ChrisChen667788/wind-comic
 
@@ -210,6 +210,27 @@
 | **v10.5.2** | 2026-06-11 | `1f767d7` | **首页定位改版:hero 改卖制作台(生成层 = BYO 当下最强引擎)**:① 四语 hero 文案换防 —— 旧「三段式升格把故事搬上银幕」(生成叙事)→ 新「**AI 短剧制作台 · 不止生成**」+「节奏审计 · 质量门禁 · 角色锁脸一致性 · AAF/EDL 进剪辑线 · 团队协作 — 把『能出片』变成『能交付』」(竞品分析三次得出的护城河结论正式上首页)。② CTA 下新增**引擎 chips 行**(i18n 键 heroEngines 四语):「生成层 · 接入当下最强引擎(BYO Key)」+ Veo 3.1 / Kling 3.0 / Seedance 2.0 / Runway Gen-4.5,源码带 **⭐常驻刷新位注释**(每次同步联网核实更新,与 README 表/MARKETING/profile 同步)。③ **竞品整轮联网核验(2026-06-11)**:四引擎仍为生产可用第一梯队;新信号 **HappyHorse-1.0(阿里,2026-04)连续两轮核验占 Artificial Analysis arena 前二** → README 表头加带日期核验注记(公开 BYO API 成熟后入列;不编造能力格 —— 表列阵容未动故 MARKETING/profile 文案本轮无需改)。hero chips 不放 HappyHorse:BYO API 可用性未证,放了违反「诚实 UI」。**验收**:lighthouse 基线→改版后(同 prod build 流程):**perf 72→90(LCP 5.4s→3.6s,视频加载时序方差利好;关键是零退化)、a11y 98/bp 96/seo 100 全持平** ✓;新文案过竞品核验 ✓。验证:**tsc 0 + vitest 2196 + playwright 52 passed + 2 skipped**。 |
 | **v10.5.3** | 2026-06-11 | `f526a0f` | **创作工坊首跑三步引导 + 简易/专业开关(认知过载 P1 收口)**:① **零依赖 coach marks**(`first-run-guide.tsx`):首跑(localStorage 无标记)按「写创意 → 选风格 → ROLL」三步走 —— 页面元素挂 `data-guide` 锚点,半透明遮罩 + 目标琥珀描边 + 就近气泡卡(空间不足自动翻转,目标缺失/jsdom 居中兜底);完成/跳过落标记不再弹;**a11y 纪律延续**:气泡 role=dialog + 复用 `useFocusTrap`(Tab 圈内循环、Escape=跳过、焦点归还)。② **埋点闭环**(验收「首跑完成率可埋点」):新 `ui_events` 表 + repo(事件名白名单正则)+ `POST /api/telemetry/ui-event`(匿名可记、IP 限流 60/min);引导发 shown/step2/step3/completed/skipped —— **完成率 = completed/shown 一条 SQL 可查**。③ **简易/专业开关**(localStorage 记忆):**默认 pro = 与现状逐像素一致(验收条款,老用户零惊吓)**;简易模式只留主干(创意/画风/时长画幅/试拍/ROLL),隐藏模板库、锁脸、多参货架、引擎选择、运镜、风格库、草稿对比五块高级面板。④ journey/a11y spec 预置引导完成标记(防遮罩挡操作/污染 axe 基线)。**验收**(e2e/first-run-guide.spec ×2):首跑三步走完 → 落标记 → ROLL 可达 → **completed 计数 +1 落库** → 刷新不再弹 ✓;简易隐高级/专业=现状/刷新记忆 ✓。验证:**tsc 0 + vitest 2202(+6:埋点仓库 2 + 引导组件 4)+ playwright 54 passed + 4 skipped**。 |
 | **v10.5.4** | 2026-06-12 | `a89b006` | **留存面:继续创作卡 + 周报 digest(阶段十八 B 收官)**:① **「继续创作」卡**(dashboard 顶部)—— 纯函数核心 `lib/next-step.ts`:`pickContinueProject`(优先级 active>draft>最近更新)+ `suggestNextStep`(按状态给建议:draft 区分有无剧本草稿/active 指任务队列/completed 推审计与 EDL/AAF 导出);**空项目态整卡不渲染(验收条款)**,接口失败静默(留存增强非关键路径)。② **周报 digest(复用既有通知系统)**:无应用内 cron → **懒 digest** —— `GET /api/notifications` 时 fire-and-forget 检查:距上次周报 ≥7 天且本周有创作活动(新建/完成计数)→ `createNotification(type=weekly_digest, 来源「青枫周报」)` 落库 + `emitNotification` 走 SSE 实时进铃铛;**7 天幂等一条、零活动不发空周报**。③ 铃铛特判:非 mention 类型原本一律渲染「回复了你」→ 周报会变「青枫周报 回复了你」,type 联合扩 weekly_digest + 动词置空(preview 即正文)。**验收**(e2e/retention.spec ×2):dashboard 渲染继续创作卡 ✓;清旧周报 → 拉通知 → **weekly_digest 入通知中心**(轮询落库 + 列表可见 + 二次拉取幂等仍 1 条)✓。**排雷**:journey 在重复全量跑下被堆积任务占满双槽位 → ROLL 前加**显式排空等待**(独立 300s 预算,槽位空闲才开拍),全量 56 passed 复绿。验证:**tsc 0 + vitest 2212(+10:next-step 4 / digest 4 / 卡片 3,合并计)+ playwright 56 passed + 6 skipped**。**阶段十八 B(激活与定位)全部交付:演示工程 → 一把 key 分级 → 首页改卖制作台 → 首跑引导 → 留存面。** |
+| **v12.283.0** | 2026-08-08 | `9883646` | **🎚️ Ken Burns 上采样按像素预算封顶 —— 4K 出片耗时降 2.6×**。
+
+**先说清为什么不能删上采样**:`zoompan` 按**整数像素**步进,慢速缩放会有肉眼可见的阶梯抖动;先放大再 zoompan,整数步长相对输出就成了亚像素,画面才顺滑。所以问题不在「有没有上采样」,而在「无脑 ×4」是对分辨率的**平方级**放大。
+
+**⚠️ 诚实修正审计的定性**:审计报的是「4× 上采样在高分辨率下会 OOM 杀死 ffmpeg」。我实测下来 —— **内存确实涨,但没到会被杀死的程度,且封顶带来的内存收益远小于按像素推算的预期**:
+
+| 场景 | 峰值 RSS | 耗时 |
+|---|---|---|
+| 竖屏 720p(→2880×5120) | 180 MB | — |
+| 竖屏 1080p ×4(→4320×7680) | 391 MB | — |
+| 竖屏 1080p ×2(封顶后) | 317 MB | — |
+| **竖屏 4K ×4**(→8640×15360) | **1.39 GB** | **3906 ms** |
+| **竖屏 4K ×2**(封顶后) | **1.08 GB** | **1521 ms** |
+
+内存只降 **1.3×**(大头是 ffmpeg 基线与 x264 编码器,不是上采样缓冲);**真正的收益在耗时 —— 4K 降 2.6×**。本版按实测口径写,不沿用「OOM 风险」这个定性。
+
+**改法**:以「现行 720p 档的上采样规模」(2880×5120 ≈ 14.7 MPix)为预算,倍数 = `clamp(sqrt(预算 / 原像素), 2, 4)`。**720p 仍是 ×4,与旧版逐字节一致**(最常用档零回归);1080p/4K 降到 ×2。**下限保底 2×** —— 不为省内存把亚像素平滑砍到 1× 而让抖动回来。
+
+**测试**(+9):倍数区间/零回归/极小尺寸不炸,以及**滤镜链结构不变**(scale→crop→zoompan→format、输出仍为原始 w×h、**crop 与 scale 尺寸必须一致**——一个封顶另一个没封会直接裁错画面)。
+
+**验收**:tsc 0 + 全量 **3658/3658**(436 文件,+9)+ 门禁零违规 + live ffmpeg 实测。 |
 | **v12.282.0** | 2026-08-08 | `d694716` | **⚡ 出片热路径的 `execSync` 改 async —— 事件循环不再被冻死(附:测试当场抓出我漏的一个 `await`)**。
 
 **病根与实测**:`attachTextCard`(3 次 ffmpeg)与 `applyTwoPassLoudnorm`(2 次)都是 **async 函数**,却在体内用 `execSync` 同步阻塞。用 10ms 心跳定时器量了一次仅 2 秒黑屏视频的 ffmpeg 调用:
