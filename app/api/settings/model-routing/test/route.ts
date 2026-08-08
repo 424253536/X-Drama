@@ -23,7 +23,7 @@ function authorized(request: NextRequest): boolean {
 
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ message: '无权执行测试' }, { status: 403 });
-  const body = await request.json() as { gatewayId?: string; gatewayModelId?: string };
+  const body = await request.json() as { gatewayId?: string; gatewayModelId?: string; workload?: 'probe' | 'director' };
   const startedAt = Date.now();
   try {
     if (body.gatewayModelId) {
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       if (!route) return NextResponse.json({ message: '渠道模型不存在' }, { status: 404 });
       let detail = '';
       if (route.profile.mediaType === 'text') {
+        const directorWorkload = body.workload === 'director';
         const format = route.protocol === 'gemini-generate-content'
           ? 'gemini'
           : route.protocol === 'anthropic-messages'
@@ -44,13 +45,47 @@ export async function POST(request: NextRequest) {
           format,
           options: route.protocolOptions as Record<string, string | number | boolean>,
         }, {
-          system: 'Reply with OK only.',
-          user: 'ping',
-          maxTokens: 8,
-          signal: AbortSignal.timeout(Math.min(route.gateway.timeoutMs, 30_000)),
+          system: directorWorkload
+            ? (await import('@/lib/mckee-skill')).getDirectorSystemPrompt()
+            : '你是 API 连通性测试助手。必须输出 JSON。',
+          user: directorWorkload
+            ? '请为一个 30 秒竖屏短剧生成导演方案：一名夜班图书管理员发现一本会记录未来事件的书，并决定阻止即将发生的火灾。只输出完整 JSON。'
+            : '返回一个包含 ok=true、message="pipeline-ready"、items=[1,2,3] 的 JSON 对象。',
+          maxTokens: directorWorkload ? 16_384 : 256,
+          jsonMode: true,
+          signal: AbortSignal.timeout(directorWorkload ? 300_000 : Math.min(route.gateway.timeoutMs, 120_000)),
         });
         if (!result.ok) throw new Error(result.error || `HTTP ${result.status || 'error'}`);
-        detail = `文本模型响应正常 · ${result.status || 200}`;
+        if (!directorWorkload && !/pipeline-ready|"ok"\s*:\s*true/i.test(result.content || '')) {
+          throw new Error(`文本模型未返回预期内容: ${(result.content || '').slice(0, 160)}`);
+        }
+        if (directorWorkload && (result.content || '').trim().length < 100) {
+          throw new Error(`导演工作负载响应过短: ${(result.content || '').slice(0, 160)}`);
+        }
+        detail = directorWorkload
+          ? `导演工作负载生成正常 · ${result.status || 200} · ${result.content?.length || 0} 字符`
+          : `文本生成正常 · ${result.status || 200}`;
+      } else if (route.profile.mediaType === 'image') {
+        const { generateImageWithRuntimeRoute } = await import('@/lib/image-providers/runtime-channels');
+        const { runScheduledModelRoute } = await import('@/lib/model-route-scheduler');
+        const imageUrl = await runScheduledModelRoute(route, () => generateImageWithRuntimeRoute(route, {
+          prompt: 'A clean cinematic test frame of a red paper lantern on a dark wooden table, no text, no watermark.',
+          aspectRatio: '1:1',
+          label: 'API 路由台实际生图测试',
+        }));
+        if (!imageUrl) throw new Error('图像模型没有返回图片');
+        detail = `实际图像生成正常 · ${imageUrl.startsWith('data:') ? '内嵌图像' : '图像 URL 已返回'}`;
+      } else if (route.profile.mediaType === 'video') {
+        const { generateVideoWithRuntimeRoute } = await import('@/lib/video-providers/runtime-channels');
+        const result = await generateVideoWithRuntimeRoute(route, {
+          prompt: 'A red paper lantern gently sways in a quiet studio, locked camera, cinematic light, no text.',
+          durationSec: 5,
+          resolution: '480p',
+          aspectRatio: '16:9',
+          label: 'API 路由台实际视频生成测试',
+        });
+        if (!result.videoUrl) throw new Error('视频模型没有返回视频');
+        detail = `实际视频生成正常 · ${result.upstreamId ? `任务 ${result.upstreamId}` : '视频 URL 已返回'}`;
       } else {
         const response = await fetch(endpoint(route.gateway.baseUrl, '/v1/models'), {
           headers: { Authorization: `Bearer ${route.gateway.apiKey}` },

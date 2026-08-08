@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { activeOrchestrators } from '../route';
+import { activeOrchestrators } from '@/lib/create-pipeline';
 import { emitGateResolve } from '@/lib/event-bus';
 import { requireProjectAccess } from '@/lib/auth-guard';
 

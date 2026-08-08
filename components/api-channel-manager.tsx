@@ -134,6 +134,19 @@ function formatJson(value: Record<string, unknown>): string {
   return JSON.stringify(value || {}, null, 2);
 }
 
+async function readJsonResponse<T = Record<string, any>>(response: Response): Promise<T> {
+  const raw = await response.text();
+  if (!raw) return {} as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const detail = response.status === 404
+      ? '接口未找到，请重启服务后重试'
+      : response.ok ? '接口返回了无效响应' : '接口请求失败';
+    throw new Error(`${detail}（HTTP ${response.status}）`);
+  }
+}
+
 function StatusDot({ enabled }: { enabled: boolean }) {
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${enabled ? 'bg-emerald-400' : 'bg-zinc-600'}`} />;
 }
@@ -188,7 +201,7 @@ export function ApiChannelManager() {
     setLoading(true);
     try {
       const response = await fetch('/api/settings/model-routing', { headers: requestHeaders(), cache: 'no-store' });
-      const body = await response.json();
+      const body = await readJsonResponse<RoutingState & { message?: string }>(response);
       if (!response.ok) throw new Error(body.message || '读取模型路由失败');
       applyState(body);
       setSelectedGatewayId((current) => current && body.gateways.some((item: ApiGatewayView) => item.id === current)
@@ -217,7 +230,7 @@ export function ApiChannelManager() {
       const response = await fetch('/api/settings/model-routing', {
         method, headers: requestHeaders(true), body: JSON.stringify(payload),
       });
-      const body = await response.json();
+      const body = await readJsonResponse(response);
       if (!response.ok) throw new Error(body.message || '操作失败');
       applyState(body);
       setMessage({ type: 'success', text: success });
@@ -407,7 +420,7 @@ export function ApiChannelManager() {
       const response = await fetch('/api/settings/model-routing/test', {
         method: 'POST', headers: requestHeaders(true), body: JSON.stringify(target),
       });
-      const body = await response.json();
+      const body = await readJsonResponse(response);
       if (!response.ok || !body.ok) throw new Error(body.detail || body.message || '测试失败');
       setTests((current) => ({ ...current, [key]: { ok: true, text: body.detail || '连接正常' } }));
       await load();
@@ -426,7 +439,7 @@ export function ApiChannelManager() {
       const response = await fetch('/api/settings/model-routing/sync', {
         method: 'POST', headers: requestHeaders(true), body: JSON.stringify({ gatewayId: selectedGatewayId }),
       });
-      const body = await response.json();
+      const body = await readJsonResponse<SyncResult & { message?: string }>(response);
       if (!response.ok) throw new Error(body.message || '同步失败');
       setSyncResult(body);
       setMessage({ type: 'success', text: `已读取 ${body.modelIds.length} 个模型 ID；同步结果不会自动启用模型。` });
@@ -537,7 +550,7 @@ export function ApiChannelManager() {
                 <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
                   <div>
                     <div className="text-xs font-semibold">{MEDIA_TYPES.find((item) => item.id === activeMedia)?.label}模型映射</div>
-                    <div className="mt-0.5 text-[10px] text-[var(--soft)]">一个渠道可绑定多个模型；优先级按逻辑模型分别计算</div>
+                    <div className="mt-0.5 text-[10px] text-[var(--soft)]">一个渠道可绑定多个模型；同一可选模型可在多个渠道间按优先级故障转移</div>
                   </div>
                   <button type="button" onClick={() => openNewModel()}
                     className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[11px] hover:bg-white/5">
@@ -586,7 +599,7 @@ export function ApiChannelManager() {
                           <div className="mt-1 truncate text-[9px] text-[var(--soft)]">{data.protocols[activeMedia]?.find((item) => item.id === model.protocol)?.label || model.protocol}</div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <IconButton title="测试模型" onClick={() => void testTarget({ gatewayModelId: model.id }, `m:${model.id}`)}>{result && result.ok === undefined ? <CircleNotch size={14} className="animate-spin" /> : <Pulse size={14} />}</IconButton>
+                          <IconButton title="实际调用模型（会产生一次调用）" onClick={() => void testTarget({ gatewayModelId: model.id }, `m:${model.id}`)}>{result && result.ok === undefined ? <CircleNotch size={14} className="animate-spin" /> : <Pulse size={14} />}</IconButton>
                           <IconButton title={model.status === 'active' ? '停用映射' : '启用映射'} tone={model.status === 'active' ? 'active' : 'normal'} onClick={() => void toggleModel(model)}><Power size={14} /></IconButton>
                           <IconButton title="编辑映射" onClick={() => openEditModel(model)}><PencilSimple size={14} /></IconButton>
                           <IconButton title="删除映射" tone="danger" onClick={() => void removeModel(model)}><Trash size={14} /></IconButton>
@@ -604,9 +617,9 @@ export function ApiChannelManager() {
       <div className="border-t border-[var(--border)]">
         <div className="flex items-end justify-between gap-3 px-4 py-4 sm:px-5">
           <div>
-            <div className="text-[10px] font-semibold tracking-[0.14em] text-[var(--primary)]">LOGICAL MODEL CATALOG</div>
-            <h3 className="mt-1 text-sm font-semibold">逻辑模型目录</h3>
-            <p className="mt-1 text-[10px] text-[var(--soft)]">同一逻辑模型跨多个 NewAPI 渠道只向用户展示一次。</p>
+            <div className="text-[10px] font-semibold tracking-[0.14em] text-[var(--primary)]">USER MODEL CATALOG</div>
+            <h3 className="mt-1 text-sm font-semibold">可选模型目录</h3>
+            <p className="mt-1 text-[10px] text-[var(--soft)]">同一模型在多个 NewAPI 渠道中只向用户展示一次，并按优先级调用。</p>
           </div>
           <span className="text-[10px] text-[var(--muted)]">{data.profiles.length} 个模型</span>
         </div>
@@ -614,7 +627,7 @@ export function ApiChannelManager() {
           <table className="w-full min-w-[760px] border-collapse text-left">
             <thead className="text-[9px] tracking-wider text-[var(--soft)]">
               <tr>
-                <th className="px-5 py-2.5 font-medium">逻辑模型</th>
+                <th className="px-5 py-2.5 font-medium">可选模型</th>
                 <th className="px-3 py-2.5 font-medium">类型</th>
                 <th className="px-3 py-2.5 font-medium">任务角色</th>
                 <th className="px-3 py-2.5 font-medium">路由</th>
@@ -632,11 +645,11 @@ export function ApiChannelManager() {
                     <td className="max-w-[260px] px-3 py-3 text-[10px] text-[var(--muted)]">{profile.taskKinds.join(' · ')}</td>
                     <td className="px-3 py-3 tabular-nums">{routeCount} 个启用映射</td>
                     <td className="px-3 py-3 text-[10px] text-[var(--muted)]">{profile.routePolicy === 'pinned' ? '固定渠道' : '优先级故障转移'}</td>
-                    <td className="px-5 py-3"><div className="flex justify-end gap-1"><IconButton title="编辑逻辑模型" onClick={() => openEditProfile(profile)}><PencilSimple size={14} /></IconButton><IconButton title="删除逻辑模型" tone="danger" onClick={() => void removeProfile(profile)}><Trash size={14} /></IconButton></div></td>
+                    <td className="px-5 py-3"><div className="flex justify-end gap-1"><IconButton title="编辑可选模型" onClick={() => openEditProfile(profile)}><PencilSimple size={14} /></IconButton><IconButton title="删除可选模型" tone="danger" onClick={() => void removeProfile(profile)}><Trash size={14} /></IconButton></div></td>
                   </tr>
                 );
               })}
-              {data.profiles.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-xs text-[var(--soft)]">逻辑模型会在添加第一个渠道模型时创建</td></tr>}
+              {data.profiles.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-xs text-[var(--soft)]">添加第一个渠道模型时会创建可选模型</td></tr>}
             </tbody>
           </table>
         </div>
@@ -673,15 +686,15 @@ export function ApiChannelManager() {
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               {!modelForm.id && (
-                <label className="flex items-center justify-between rounded-md border border-[var(--border)] px-3 py-2.5 sm:col-span-2"><span><span className="block text-xs">创建新的逻辑模型</span><span className="mt-0.5 block text-[9px] text-[var(--soft)]">关闭后可绑定另一个渠道已经创建的同一逻辑模型</span></span><input type="checkbox" checked={modelForm.createProfile} onChange={(event) => setModelForm({ ...modelForm, createProfile: event.target.checked })} className="h-4 w-4 accent-[var(--primary)]" /></label>
+                <label className="flex items-center justify-between rounded-md border border-[var(--border)] px-3 py-2.5 sm:col-span-2"><span><span className="block text-xs">新建一个可选模型</span><span className="mt-0.5 block text-[9px] text-[var(--soft)]">关闭后可将该渠道绑定到已存在的同一个可选模型</span></span><input type="checkbox" checked={modelForm.createProfile} onChange={(event) => setModelForm({ ...modelForm, createProfile: event.target.checked })} className="h-4 w-4 accent-[var(--primary)]" /></label>
               )}
               {modelForm.createProfile ? (
                 <>
-                  <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">逻辑模型 Key</span><input value={modelForm.modelKey} onChange={(event) => setModelForm({ ...modelForm, modelKey: event.target.value })} placeholder="seedance-2.0-720p" className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 font-mono text-xs outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">平台模型标识（不是 API Key）</span><input value={modelForm.modelKey} onChange={(event) => setModelForm({ ...modelForm, modelKey: event.target.value })} placeholder="seedance-2.0-720p" className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 font-mono text-xs outline-none focus:border-[var(--primary)]" /><span className="mt-1 block text-[9px] text-[var(--soft)]">同一模型在不同渠道填写相同标识，前台只显示一个模型选项。</span></label>
                   <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">用户看到的名称</span><input value={modelForm.displayName} onChange={(event) => setModelForm({ ...modelForm, displayName: event.target.value })} placeholder="Seedance 2.0 720P" className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 text-xs outline-none focus:border-[var(--primary)]" /></label>
                 </>
               ) : (
-                <label className="block sm:col-span-2"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">绑定逻辑模型</span><select value={modelForm.modelProfileId} disabled={!!modelForm.id} onChange={(event) => setModelForm({ ...modelForm, modelProfileId: event.target.value })} className="h-10 w-full rounded-md border border-[var(--border)] bg-[#111113] px-3 text-xs outline-none disabled:opacity-55">{activeProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.displayName} · {profile.modelKey}</option>)}</select></label>
+                <label className="block sm:col-span-2"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">绑定已有可选模型</span><select value={modelForm.modelProfileId} disabled={!!modelForm.id} onChange={(event) => setModelForm({ ...modelForm, modelProfileId: event.target.value })} className="h-10 w-full rounded-md border border-[var(--border)] bg-[#111113] px-3 text-xs outline-none disabled:opacity-55">{activeProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.displayName} · {profile.modelKey}</option>)}</select></label>
               )}
               <label className="block sm:col-span-2"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">该渠道的真实模型 ID</span><input value={modelForm.upstreamModelId} onChange={(event) => setModelForm({ ...modelForm, upstreamModelId: event.target.value })} placeholder="NewAPI /v1/models 返回的模型 ID" className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 font-mono text-xs outline-none focus:border-[var(--primary)]" /></label>
               <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">接口协议</span><select value={modelForm.protocol} onChange={(event) => setModelForm({ ...modelForm, protocol: event.target.value })} className="h-10 w-full rounded-md border border-[var(--border)] bg-[#111113] px-3 text-xs outline-none">{data.protocols[modelForm.mediaType]?.map((protocol) => <option key={protocol.id} value={protocol.id}>{protocol.label}</option>)}</select></label>
@@ -704,14 +717,14 @@ export function ApiChannelManager() {
       )}
 
       {profileForm && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="编辑逻辑模型">
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="编辑可选模型">
           <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-[var(--border)] bg-[#121214] shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[#121214] px-5 py-4">
-              <div><div className="text-[10px] tracking-wider text-[var(--primary)]">LOGICAL MODEL PROFILE</div><h3 className="mt-1 text-base font-semibold">编辑逻辑模型</h3></div>
+              <div><div className="text-[10px] tracking-wider text-[var(--primary)]">USER MODEL PROFILE</div><h3 className="mt-1 text-base font-semibold">编辑可选模型</h3></div>
               <IconButton title="关闭" onClick={() => setProfileForm(null)}><X size={16} /></IconButton>
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
-              <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">modelKey（创建后不可修改）</span><input value={profileForm.modelKey} disabled className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 font-mono text-xs opacity-60" /></label>
+              <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">平台模型标识（创建后不可修改，非 API Key）</span><input value={profileForm.modelKey} disabled className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 font-mono text-xs opacity-60" /></label>
               <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">用户看到的名称</span><input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 text-xs outline-none focus:border-[var(--primary)]" /></label>
               <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">状态</span><select value={profileForm.status} onChange={(event) => setProfileForm({ ...profileForm, status: event.target.value as Status })} className="h-10 w-full rounded-md border border-[var(--border)] bg-[#111113] px-3 text-xs"><option value="active">启用</option><option value="disabled">停用</option><option value="revoked">撤销</option></select></label>
               <label className="block"><span className="mb-1.5 block text-[11px] text-[var(--muted)]">显示顺序</span><input type="number" min={1} max={9999} value={profileForm.sortOrder} onChange={(event) => setProfileForm({ ...profileForm, sortOrder: Number(event.target.value) })} className="h-10 w-full rounded-md border border-[var(--border)] bg-black/20 px-3 text-xs outline-none focus:border-[var(--primary)]" /></label>
@@ -737,7 +750,7 @@ export function ApiChannelManager() {
               <JsonField label="访问策略 JSON" value={profileForm.accessPolicy} onChange={(value) => setProfileForm({ ...profileForm, accessPolicy: value })} />
               <div className="sm:col-span-2"><JsonField label="调用限制 JSON" value={profileForm.limits} onChange={(value) => setProfileForm({ ...profileForm, limits: value })} /></div>
             </div>
-            <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[var(--border)] bg-[#121214] px-5 py-4"><button type="button" onClick={() => setProfileForm(null)} className="h-9 rounded-md px-3 text-xs text-[var(--muted)] hover:bg-white/5">取消</button><button type="button" onClick={() => void saveProfile()} disabled={busy === 'save'} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 text-xs font-semibold text-[#17130a] disabled:opacity-40">{busy === 'save' && <CircleNotch size={13} className="animate-spin" />}保存逻辑模型</button></div>
+            <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[var(--border)] bg-[#121214] px-5 py-4"><button type="button" onClick={() => setProfileForm(null)} className="h-9 rounded-md px-3 text-xs text-[var(--muted)] hover:bg-white/5">取消</button><button type="button" onClick={() => void saveProfile()} disabled={busy === 'save'} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 text-xs font-semibold text-[#17130a] disabled:opacity-40">{busy === 'save' && <CircleNotch size={13} className="animate-spin" />}保存可选模型</button></div>
           </div>
         </div>
       )}

@@ -91,7 +91,7 @@ async function generateVolcengineBearer(route: RuntimeModelRoute, input: VideoGe
   }
 }
 
-async function generateMappedVideo(route: RuntimeModelRoute, input: VideoGenerateInput) {
+export async function generateVideoWithRuntimeRoute(route: RuntimeModelRoute, input: VideoGenerateInput) {
   if (route.protocol === 'volcengine-video-bearer') {
     return generateVolcengineBearer(route, input);
   }
@@ -132,6 +132,11 @@ async function generateMappedVideo(route: RuntimeModelRoute, input: VideoGenerat
     if (submittedTaskId) {
       throw new Error(`REMOTE_TASK_CREATED ${submittedTaskId}: ${error instanceof Error ? error.message : String(error)}`);
     }
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::|\/)/i.test(route.gateway.baseUrl)
+      && /\b401\b|invalid_api_key|无效的令牌/i.test(message)) {
+      throw new Error('本地 Agnes 接口可达，但 Agnes 调用上游时使用的 API Key 无效。请在 Agnes 进程配置 AGNES_API_KEYS/AGNES_API_KEY，或把真实 Agnes Key 填入该视频渠道的 API Key。');
+    }
     throw error;
   }
   if (!videoUrl) throw new Error('没有视频 URL');
@@ -152,7 +157,7 @@ registerVideoProvider({
   async generate(input) {
     if (input.modelKey) {
       const routes = resolveModelRoutesSync(input.modelKey, 'video', input.taskKind || 'video.default');
-      const result = await runModelRouteChain(routes, (route) => generateMappedVideo(route, input), {
+      const result = await runModelRouteChain(routes, (route) => generateVideoWithRuntimeRoute(route, input), {
         operation: 'video.generate', taskKind: input.taskKind || 'video.default',
         projectId: input.projectId, userId: input.userId,
         requestParameters: {

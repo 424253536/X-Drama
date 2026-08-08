@@ -1,14 +1,11 @@
 import { NextRequest } from 'next/server';
 import { nanoid } from 'nanoid';
-import { runCreatePipeline, activeOrchestrators, type CreatePipelineInput } from '@/lib/create-pipeline';
+import { runCreatePipeline, type CreatePipelineInput } from '@/lib/create-pipeline';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // v10.4.1: 流水线本体移至 lib/create-pipeline(可被请求内联或队列 worker 调用)。
-// gate / rerun / regenerate 路由仍从本模块 import 注册表 → re-export 保持路径不变。
-export { activeOrchestrators };
-
 export async function POST(request: NextRequest) {
   const {
     idea: rawIdea, videoProvider, style, duration, aspect, projectId: clientProjectId, isPreset,

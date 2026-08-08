@@ -38,6 +38,101 @@ async function saveChatMessage(projectId: string, agentRole: string, role: 'user
   }
 }
 
+function parseJson<T>(value: unknown, fallback: T): T {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return (parsed ?? fallback) as T;
+  } catch { return fallback; }
+}
+
+async function loadProjectChatContext(projectId: string, requestedRole: string) {
+  const project = await getDbDriver().get<{
+    title: string; status: string; model_selections_json: string | null;
+  }>(
+    'SELECT title, status, model_selections_json FROM projects WHERE id = ?',
+    [projectId],
+  );
+  const rows = await getDbDriver().query<{
+    type: string; name: string; data: string; media_urls: string | null; shot_number: number | null;
+  }>(
+    `SELECT type, name, data, media_urls, shot_number FROM project_assets
+     WHERE project_id = ? AND type IN ('script', 'character', 'scene', 'storyboard', 'video')
+     ORDER BY type, shot_number`,
+    [projectId],
+  );
+  const byType = (type: string) => rows.filter((row) => row.type === type);
+  const scriptRow = byType('script')[0];
+  const scriptData = scriptRow ? parseJson<any>(scriptRow.data, {}) : undefined;
+  const characters = byType('character').map((row) => ({ name: row.name, data: parseJson(row.data, {}) }));
+  const scenes = byType('scene').map((row) => ({ name: row.name, ...parseJson<Record<string, unknown>>(row.data, {}) }));
+  const storyboards = byType('storyboard').map((row) => ({
+    name: row.name, shotNumber: row.shot_number, ...parseJson<Record<string, unknown>>(row.data, {}),
+  }));
+  const videos = byType('video').map((row) => {
+    const data = parseJson<Record<string, any>>(row.data, {});
+    const mediaUrls = parseJson<string[]>(row.media_urls, []);
+    return { name: row.name, shotNumber: row.shot_number, data, mediaUrls };
+  });
+  const completedVideos = videos.filter((video) =>
+    video.mediaUrls.some((url) => /^(https?:|\/api\/serve-file)/.test(url)),
+  );
+
+  let activeAgent: any = null;
+  try {
+    const { activeOrchestrators } = await import('@/lib/create-pipeline');
+    const orchestrator = activeOrchestrators.get(projectId);
+    const agents = orchestrator?.getAllAgents() || [];
+    activeAgent = agents.find((agent) => agent.role === requestedRole)
+      || agents.find((agent) => ['working', 'thinking'].includes(agent.status));
+  } catch { /* inline runtime may be on another instance */ }
+
+  const lastVideoError = await getDbDriver().get<{ error_summary: string | null }>(
+    `SELECT error_summary FROM ai_model_calls
+     WHERE project_id = ? AND task_kind = 'video.default' AND state IN ('failed', 'uncertain')
+     ORDER BY created_at DESC LIMIT 1`,
+    [projectId],
+  ).catch(() => null);
+  const videoCallStats = await getDbDriver().get<{ completed: number; failed: number }>(
+    `SELECT
+       SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END) AS completed,
+       SUM(CASE WHEN state IN ('failed', 'uncertain') THEN 1 ELSE 0 END) AS failed
+     FROM ai_model_calls WHERE project_id = ? AND task_kind = 'video.default'`,
+    [projectId],
+  ).catch(() => null);
+  const selections = parseJson<Record<string, string>>(project?.model_selections_json, {});
+  const expectedVideos = Array.isArray(scriptData?.shots) && scriptData.shots.length > 0
+    ? scriptData.shots.length
+    : storyboards.length;
+  const completedVideoCount = Math.min(
+    expectedVideos || Number.MAX_SAFE_INTEGER,
+    Math.max(completedVideos.length, Number(videoCallStats?.completed) || 0),
+  );
+  const assetFailureCount = videos.filter((video) => video.data?.status === 'error' || video.data?.status === 'failed').length;
+
+  return {
+    projectTitle: project?.title,
+    scriptData,
+    characters,
+    scenes,
+    storyboards,
+    videos,
+    modelKey: selections['text.default'] || selections['text.creative'],
+    progressSnapshot: {
+      projectStatus: project?.status || '处理中',
+      expectedVideos,
+      completedVideos: completedVideoCount,
+      animaticVideos: completedVideos.filter((video) => video.data?.isAnimatic).length,
+      failedVideos: assetFailureCount,
+      failedAttempts: Number(videoCallStats?.failed) || 0,
+      activeRole: activeAgent?.role,
+      activeStatus: activeAgent?.status,
+      activeTask: activeAgent?.currentTask,
+      activeProgress: typeof activeAgent?.progress === 'number' ? activeAgent.progress : undefined,
+      lastError: lastVideoError?.error_summary || undefined,
+    },
+  };
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
   // v12.230(鉴权复扫收口):v12.218「鉴权总修」只修了对抗报告点名的端点,未系统复扫
@@ -79,8 +174,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       try {
         let chatService: any;
+        const projectContext = await loadProjectChatContext(projectId, agentRole);
+        const demoMode = isDemoMode() && !projectContext.modelKey;
 
-        if (isDemoMode()) {
+        if (demoMode) {
           const { DemoChatService } = await import('@/services/agent-chat.service');
           chatService = new DemoChatService();
         } else {
@@ -93,10 +190,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const context = {
           projectId,
           chatHistory,
+          ...projectContext,
         };
 
         // 记录用户消息（非 demo 模式）
-        if (!isDemoMode()) {
+        if (!demoMode) {
           await saveChatMessage(projectId, agentRole, 'user', message);
         }
 
@@ -109,7 +207,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // 记录助手回复
-        if (!isDemoMode() && assistantReply.trim()) {
+        if (!demoMode && assistantReply.trim()) {
           await saveChatMessage(projectId, agentRole, 'assistant', assistantReply);
         }
       } catch (error) {

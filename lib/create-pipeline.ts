@@ -467,6 +467,16 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       send('plan', plan);
     } catch (e) {
       console.error('[Stream] Director failed:', e);
+      if (modelSelections?.['text.default'] || modelSelections?.['text.creative']) {
+        const message = e instanceof Error ? e.message : String(e);
+        send('error', {
+          code: 'TEXT_MODEL_FAILED', stage: 'director', retryable: true,
+          userMsg: `导演文本模型调用失败: ${message}`,
+          message: `导演文本模型调用失败: ${message}`,
+        });
+        try { await updateProjectById(projectId, { status: 'failed' }); } catch {}
+        return;
+      }
       send('status', { message: '导演分析出错，使用默认计划...' });
     }
 
@@ -540,6 +550,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       orchestrator.setWriterScript(script);
     } catch (e) {
       console.error('[Stream] Writer failed:', e);
+      if (modelSelections?.['text.default'] || modelSelections?.['text.creative']) throw e;
       send('status', { message: '编剧创作出错，继续下一步...' });
     }
 
@@ -619,6 +630,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         return result;
       } catch (e) {
         console.error('[Stream] Character Designer failed:', e);
+        if (modelSelections?.['image.default']) throw e;
         send('status', { message: '角色设计出错，继续下一步...' });
         return [] as any[];
       }
@@ -675,6 +687,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         return result;
       } catch (e) {
         console.error('[Stream] Scene Designer failed:', e);
+        if (modelSelections?.['image.default']) throw e;
         send('status', { message: '场景设计出错，继续下一步...' });
         return [] as any[];
       }
@@ -689,6 +702,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         characters = gateResult.editedData;
         send('characters', characters);
       }
+      scenes = await runSceneStep();
+    } else if (modelSelections?.['image.default']) {
+      // 显式图片渠道可能有严格 RPM；串行还可让场景复用已完成的角色锚。
+      send('status', { message: '角色与场景设计按图片渠道限流策略依次生成...' });
+      characters = await runCharacterStep();
       scenes = await runSceneStep();
     } else {
       // 普通模式: 并行跑, 创作时长省 30-60s
@@ -762,6 +780,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Storyboard Rendering failed:', e);
+      if (modelSelections?.['image.default']) throw e;
       send('status', { message: '分镜图渲染出错，使用文本分镜继续...' });
       storyboards = storyboardPlans;
       send('storyboards', storyboards);
@@ -806,6 +825,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       }
     } catch (e) {
       console.error('[Stream] Video Producer failed:', e);
+      if (modelSelections?.['video.default']) throw e;
       send('status', { message: '视频生成出错，继续下一步...' });
     } finally {
       clearInterval(heartbeatInterval);
@@ -960,7 +980,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
     if (review && !review.passed) {
       try {
-        send('status', { message: '导演审核未通过，正在自动优化...' });
+        send('status', { message: '制片人审核未通过，正在自动优化...' });
         const improved = await orchestrator.executeReviewFeedback(review, script, storyboards, videos);
         finalStoryboards = improved.storyboards;
         finalVideos = improved.videos;
@@ -970,7 +990,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
         for (const v of finalVideos as any[]) { await updateAssetMedia(projectId, 'video', `视频 ${v.shotNumber}`, [v.videoUrl], v.shotNumber); }
 
         // 二次审核
-        send('status', { message: 'AI 导演正在进行二次审核...' });
+        send('status', { message: 'AI 制片人正在进行二次审核...' });
         const review2 = await orchestrator.runDirectorReview(script, finalVideos, editResult);
         send('review', review2);
         try { await updateProjectById(projectId, { director_notes: JSON.stringify(review2) }); } catch {}
@@ -1002,6 +1022,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
   } catch (error) {
     console.error('[Stream] Fatal error:', error);
+    try { await updateProjectById(projectId, { status: 'failed' }); } catch {}
     const payload = toSsePayload(error);
     // 兼容旧客户端: 同时发 { message } 与结构化 {code,userMsg,retryable,stage}
     send('error', { ...payload, message: payload.userMsg });

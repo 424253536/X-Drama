@@ -101,7 +101,7 @@ export function stripThink(s: string): string {
  * 注意: 故意不含 'timeout' —— 超时重试同端点代价高, 直接切兜底更划算。
  */
 export function isTransientLLMError(msg: string): boolean {
-  return /too busy|rate.?limit|\b429\b|\b500\b|\b502\b|\b503\b|\b504\b|overload|temporarily|try again|service unavailable|繁忙|过载|稍后/i.test(msg || '');
+  return /too busy|rate.?limit|\b429\b|\b50[0234]\b|\b52[0-7]\b|overload|temporarily|try again|service unavailable|timeout occurred|繁忙|过载|稍后/i.test(msg || '');
 }
 
 function endpoint(baseURL: string, path: string): string {
@@ -117,6 +117,60 @@ export interface LLMAttemptExecution {
   status?: number;
   finishReason?: string;
   usage?: unknown;
+}
+
+function openAIProtocolOptions(options: LLMAttempt['options']): Record<string, unknown> {
+  const supported = ['reasoning_effort', 'verbosity', 'service_tier', 'top_p', 'seed'] as const;
+  return Object.fromEntries(supported
+    .filter((key) => options?.[key] !== undefined)
+    .map((key) => [key, options?.[key]]));
+}
+
+async function readOpenAIChatStream(response: Response): Promise<LLMAttemptExecution> {
+  if (!response.body) return { ok: false, status: response.status, error: 'LLM 流式响应没有响应体' };
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  let finishReason = '';
+  let usage: unknown;
+  let streamError = '';
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return;
+    const data = trimmed.slice(5).trim();
+    if (!data || data === '[DONE]') return;
+    try {
+      const chunk = JSON.parse(data);
+      if (chunk?.error) {
+        streamError = chunk.error.message || JSON.stringify(chunk.error);
+        return;
+      }
+      const delta = chunk?.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string') content += delta;
+      else if (Array.isArray(delta)) {
+        content += delta.map((part: any) => part?.text || part?.content || '').join('');
+      }
+      finishReason = chunk?.choices?.[0]?.finish_reason || finishReason;
+      usage = chunk?.usage || usage;
+    } catch {
+      // Ignore SSE keepalive and provider-specific metadata frames.
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = done ? '' : lines.pop() || '';
+    for (const line of lines) consumeLine(line);
+    if (done) break;
+  }
+  if (buffer) consumeLine(buffer);
+  if (streamError) return { ok: false, status: response.status, error: streamError };
+  if (!content) return { ok: false, status: response.status, error: 'LLM 流式响应为空' };
+  return { ok: true, content: stripThink(content), status: response.status, finishReason, usage };
 }
 
 export async function executeLLMAttempt(
@@ -179,10 +233,13 @@ export async function executeLLMAttempt(
   } else {
     url = endpoint(attempt.baseURL, '/v1/chat/completions');
     headers = { Authorization: `Bearer ${attempt.apiKey}`, 'Content-Type': 'application/json' };
+    const stream = attempt.options?.stream !== false;
     body = {
       model: attempt.model,
       messages: [{ role: 'system', content: input.system }, { role: 'user', content: input.user }],
       max_tokens: input.maxTokens,
+      stream,
+      ...openAIProtocolOptions(attempt.options),
       ...(input.temperature != null ? { temperature: input.temperature } : {}),
       ...(input.jsonMode ? { response_format: { type: 'json_object' } } : {}),
     };
@@ -191,7 +248,13 @@ export async function executeLLMAttempt(
   const response = await fetch(url, {
     method: 'POST', headers, body: JSON.stringify(body), signal: input.signal,
   });
-  const payload = await response.json().catch(() => null);
+  const contentType = response.headers.get('content-type') || '';
+  if (format === 'openai' && response.ok && /text\/event-stream/i.test(contentType)) {
+    return readOpenAIChatStream(response);
+  }
+  const raw = await response.text();
+  let payload: any = null;
+  try { payload = raw ? JSON.parse(raw) : null; } catch {}
   const content = format === 'gemini'
     ? (payload?.candidates?.[0]?.content?.parts || []).map((part: any) => part?.text || '').join('')
     : format === 'anthropic'
@@ -213,7 +276,7 @@ export async function executeLLMAttempt(
   return {
     ok: false,
     status: response.status,
-    error: payload?.error?.message || payload?.message || `LLM ${response.status}`,
+    error: payload?.error?.message || payload?.message || (raw ? `HTTP ${response.status}: ${raw.slice(0, 500)}` : `LLM ${response.status}`),
   };
 }
 
@@ -297,7 +360,7 @@ export async function callLLMWithFallback(opts: LLMCallOpts): Promise<LLMCallRes
       if (opts.modelKey) {
         const { classifyModelRouteError } = await import('@/lib/model-routing');
         const classified = classifyModelRouteError(lastErr);
-        if (!classified.safeToFailover) {
+        if (!classified.safeToFailover && classified.category !== 'transient') {
           return { ok: false, error: `${classified.category}: ${classified.message}`, attemptsTried: tried };
         }
       }

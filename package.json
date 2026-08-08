@@ -12,7 +12,7 @@
     "url": "https://github.com/ChrisChen667788/wind-comic/issues"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "dev:ws": "node scripts/ws-server.mjs",
     "build": "next build",
     "start": "next start",

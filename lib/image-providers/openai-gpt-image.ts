@@ -63,6 +63,80 @@ export function extractGptImageUrl(data: unknown): string {
   return '';
 }
 
+function imageSource(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const source = value.trim();
+  const dataUri = source.match(/data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+/i)?.[0];
+  if (dataUri) return dataUri.replace(/\s/g, '');
+  const markdownImage = source.match(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/i)?.[1];
+  if (markdownImage) return markdownImage;
+  const url = source.match(/https?:\/\/[^\s)"']+/i)?.[0];
+  return url || '';
+}
+
+function collectImageSources(value: unknown, key = ''): string[] {
+  if (typeof value === 'string') {
+    const source = value.trim();
+    if (['b64_json', 'base64', 'image_base64'].includes(key) && source) {
+      return [`data:image/png;base64,${source}`];
+    }
+    const image = imageSource(source);
+    return image ? [image] : [];
+  }
+  if (Array.isArray(value)) return value.flatMap((item) => collectImageSources(item, key));
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, unknown>)
+    .flatMap(([childKey, child]) => {
+      if (['url', 'image_url', 'b64_json', 'base64', 'image_base64', 'content', 'text'].includes(childKey)) {
+        return collectImageSources(child, childKey);
+      }
+      return collectImageSources(child, childKey);
+    });
+}
+
+/**
+ * 兼容部分 New API 将图片包在 chat.completions 的 message.content 中。
+ * 支持 Markdown、裸 URL、Data URI，以及 OpenRouter 风格的 message.images。
+ */
+export function extractOpenAIChatImageUrl(data: unknown): string {
+  const message = (data as {
+    choices?: Array<{
+      message?: {
+        content?: unknown;
+        images?: Array<{ image_url?: { url?: unknown } | unknown; url?: unknown }>;
+      };
+    }>;
+  })?.choices?.[0]?.message;
+  if (!message) {
+    return collectImageSources(data).find((source) => source.startsWith('data:image/') || /^https?:\/\//.test(source)) || '';
+  }
+
+  for (const image of message.images || []) {
+    const imageUrl = typeof image.image_url === 'object' && image.image_url
+      ? (image.image_url as { url?: unknown }).url
+      : image.image_url ?? image.url;
+    const result = imageSource(imageUrl);
+    if (result) return result;
+  }
+
+  if (typeof message.content === 'string') return imageSource(message.content);
+  if (Array.isArray(message.content)) {
+    for (const part of message.content) {
+      if (!part || typeof part !== 'object') continue;
+      const item = part as { text?: unknown; image_url?: { url?: unknown } | unknown; url?: unknown };
+      const candidate = typeof item.image_url === 'object' && item.image_url
+        ? (item.image_url as { url?: unknown }).url
+        : item.image_url ?? item.url ?? item.text;
+      const result = imageSource(candidate);
+      if (result) return result;
+    }
+  }
+  // Some NewAPI deployments return the image payload in a top-level `data` array
+  // even when the request uses /chat/completions. Mirror the tolerant extraction
+  // used by the standalone image client instead of requiring one exact envelope.
+  return collectImageSources(data).find((source) => source.startsWith('data:image/') || /^https?:\/\//.test(source)) || '';
+}
+
 export function hasGptImage(env: NodeJS.ProcessEnv = process.env): boolean {
   // 显式开关优先:很多用户的 OPENAI_BASE_URL 指向只做文本的聚合网关,贸然把图像请求打过去
   // 会白白 404/400 拖慢整条链。所以默认关,设 OPENAI_IMAGE_ENABLED=1 才入链。

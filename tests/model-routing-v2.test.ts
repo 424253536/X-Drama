@@ -123,6 +123,46 @@ describe('model routing v2', () => {
     expect(attempts.map((item) => item.state)).toEqual(['failed', 'completed']);
   });
 
+  it('fails over text generation after a definite transient 504 response', async () => {
+    const { modelKey } = await createFixture();
+    const routes = resolveModelRoutesSync(modelKey, 'video', 'video.default').map((route) => ({
+      ...route,
+      profile: { ...route.profile, mediaType: 'text' as const, taskKinds: ['text.default'] },
+    }));
+    const visited: number[] = [];
+    const result = await runModelRouteChain(routes, async (_route, sequence) => {
+      visited.push(sequence);
+      if (sequence === 1) throw new Error('HTTP 504: bad_response_status_code');
+      return 'ok';
+    }, { operation: 'text.generate', taskKind: 'text.default' });
+    expect(result).toBe('ok');
+    expect(visited).toEqual([1, 2]);
+  });
+
+  it('fails over text generation after an uncertain 524 response but keeps video submissions pinned', async () => {
+    const { modelKey } = await createFixture();
+    const videoRoutes = resolveModelRoutesSync(modelKey, 'video', 'video.default');
+    const textRoutes = videoRoutes.map((route) => ({
+      ...route,
+      profile: { ...route.profile, mediaType: 'text' as const, taskKinds: ['text.default'] },
+    }));
+    let textAttempts = 0;
+    const result = await runModelRouteChain(textRoutes, async (_route, sequence) => {
+      textAttempts++;
+      if (sequence === 1) throw new Error('HTTP 524: A timeout occurred');
+      return 'ok';
+    }, { operation: 'text.generate', taskKind: 'text.default' });
+    expect(result).toBe('ok');
+    expect(textAttempts).toBe(2);
+
+    let videoAttempts = 0;
+    await expect(runModelRouteChain(videoRoutes, async () => {
+      videoAttempts++;
+      throw new Error('HTTP 524: A timeout occurred');
+    }, { operation: 'video.generate', taskKind: 'video.default' })).rejects.toThrow(/uncertain_submit/);
+    expect(videoAttempts).toBe(1);
+  });
+
   it('persists per-mapping adapter options and preserves omitted profile policies', async () => {
     const { modelKey } = await createFixture();
     let state = await listModelRoutingAdmin();

@@ -47,6 +47,11 @@ export const API_CHANNEL_FORMATS: readonly ApiChannelFormatDefinition[] = [
     defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-image-1', modelRequired: true, extraFields: [],
   },
   {
+    type: 'image', format: 'openai-chat-image', label: 'OpenAI Chat Image',
+    description: '兼容通过 /v1/chat/completions 返回 Markdown、URL 或 Data URI 图片的 New API 中转模型。',
+    defaultBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-image-2', modelRequired: true, extraFields: [],
+  },
+  {
     type: 'image', format: 'gemini', label: 'Gemini Image',
     description: 'Gemini 原生 generateContent 图像格式，支持参考图。',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-3-pro-image', modelRequired: true, extraFields: [],

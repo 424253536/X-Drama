@@ -12,7 +12,7 @@ process.stdin.on('data', c => chunks.push(c));
 process.stdin.on('end', async () => {
   try {
     const input = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-    const { baseURL, apiKey, model, format = 'openai', options = {}, system, user, maxTokens = 4096, timeout = 150000 } = input;
+    const { baseURL, apiKey, model, format = 'openai', options = {}, system, user, maxTokens = 4096, timeout = 150000, jsonMode = false } = input;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
@@ -30,6 +30,12 @@ process.stdin.on('end', async () => {
       : format === 'anthropic'
         ? { 'Authorization': `Bearer ${apiKey}`, 'x-api-key': apiKey, 'anthropic-version': options.anthropicVersion || '2023-06-01', 'Content-Type': 'application/json' }
         : { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+    const stream = format === 'openai' && options.stream !== false;
+    const supportedOptions = Object.fromEntries(
+      ['reasoning_effort', 'verbosity', 'service_tier', 'top_p', 'seed']
+        .filter((key) => options[key] !== undefined)
+        .map((key) => [key, options[key]]),
+    );
     const body = format === 'gemini'
       ? {
           systemInstruction: { parts: [{ text: system }] },
@@ -47,6 +53,9 @@ process.stdin.on('end', async () => {
               { role: 'user', content: user },
             ],
             max_tokens: maxTokens,
+            stream,
+            ...supportedOptions,
+            ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
           };
     const resp = await fetch(url, {
       method: 'POST',
@@ -54,17 +63,66 @@ process.stdin.on('end', async () => {
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    clearTimeout(timer);
-
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     if (!resp.ok) {
       const errBody = await resp.text();
+      clearTimeout(timer);
       process.stdout.write(JSON.stringify({ ok: false, error: `HTTP ${resp.status}: ${errBody.slice(0, 500)}`, elapsed }));
       process.exit(0);
     }
 
+    if (stream && /text\/event-stream/i.test(resp.headers.get('content-type') || '')) {
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error('LLM 流式响应没有响应体');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let content = '';
+      let finishReason = '';
+      let usage = null;
+      let streamError = '';
+      const consumeLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) return;
+        const raw = trimmed.slice(5).trim();
+        if (!raw || raw === '[DONE]') return;
+        try {
+          const chunk = JSON.parse(raw);
+          if (chunk?.error) {
+            streamError = chunk.error.message || JSON.stringify(chunk.error);
+            return;
+          }
+          const delta = chunk?.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string') content += delta;
+          else if (Array.isArray(delta)) content += delta.map((part) => part?.text || part?.content || '').join('');
+          finishReason = chunk?.choices?.[0]?.finish_reason || finishReason;
+          usage = chunk?.usage || usage;
+        } catch {
+          // Ignore SSE keepalive and provider-specific metadata frames.
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split(/\r?\n/);
+        buffer = done ? '' : lines.pop() || '';
+        for (const line of lines) consumeLine(line);
+        if (done) break;
+      }
+      if (buffer) consumeLine(buffer);
+      clearTimeout(timer);
+      if (streamError) {
+        process.stdout.write(JSON.stringify({ ok: false, error: streamError, elapsed: ((Date.now() - startTime) / 1000).toFixed(1) }));
+      } else if (!content) {
+        process.stdout.write(JSON.stringify({ ok: false, error: 'LLM 流式响应为空', elapsed: ((Date.now() - startTime) / 1000).toFixed(1) }));
+      } else {
+        process.stdout.write(JSON.stringify({ ok: true, content, elapsed: ((Date.now() - startTime) / 1000).toFixed(1), finishReason, usage }));
+      }
+      process.exit(0);
+    }
+
     const data = await resp.json();
+    clearTimeout(timer);
     const content = format === 'gemini'
       ? (data?.candidates?.[0]?.content?.parts || []).map((part) => part?.text || '').join('')
       : format === 'anthropic'

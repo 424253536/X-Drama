@@ -931,7 +931,7 @@ export class HybridOrchestrator {
         const input = JSON.stringify({
           baseURL: a.baseURL, apiKey: a.apiKey, model: a.model,
           format: a.format || 'openai', options: a.options || {},
-          system: finalSystem, user: finalUser, maxTokens, timeout: LLM_TIMEOUT,
+          system: finalSystem, user: finalUser, maxTokens, timeout: LLM_TIMEOUT, jsonMode: json,
         });
         const child = execFile('node', [scriptPath], {
           timeout: LLM_TIMEOUT + 10_000,
@@ -961,7 +961,19 @@ export class HybridOrchestrator {
             if (!a) throw new Error('模型渠道当前处于冷却或不可用状态');
             const aStart = Date.now();
             console.log(`[LLM:${callId}] 尝试 ${sequence}/${routes.length} [${a.label}] model=${a.model} base=${a.baseURL}`);
-            const r = await runAttempt(a);
+            let r: any = null;
+            for (let retry = 0; retry < 2; retry++) {
+              r = await runAttempt(a);
+              if (r?.ok && (r.content || '').trim()) break;
+              const retryError = r?.error || 'empty';
+              const { isTransientLLMError } = await import('@/lib/llm-client');
+              if (retry === 0 && isTransientLLMError(retryError)) {
+                this.emit('status', { message: `文本渠道暂时异常，正在重试 ${a.label}...` });
+                await sleep(1_500);
+                continue;
+              }
+              break;
+            }
             elapsed = ((Date.now() - aStart) / 1000).toFixed(1);
             if (!r?.ok || !(r.content || '').trim()) {
               lastErr = r?.error || 'empty';
@@ -1036,6 +1048,7 @@ export class HybridOrchestrator {
         } else {
           this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 出错: ${errMsg.slice(0, 80)}` });
         }
+        if (textModelKey) throw new Error(`所选文本模型调用失败: ${errMsg}`);
         return '';
       }
 
@@ -1083,6 +1096,7 @@ export class HybridOrchestrator {
         console.error(`[LLM:${callId}] ❌ 调用失败:`, errMsg);
         this.emit('agentTalk', { role: AgentRole.DIRECTOR, text: `LLM 出错: ${errMsg.slice(0, 80)}` });
       }
+      if (textModelKey) throw new Error(errMsg);
       return '';
     } finally {
       clearInterval(heartbeat);
@@ -1999,6 +2013,9 @@ export class HybridOrchestrator {
           setTimeout(() => reject(new Error(`Char timeout: ${char.name}`)), CHAR_TIMEOUT)
         ),
       ]).catch(err => {
+        if (this.getModelSelection('image.default')) {
+          throw new Error(`角色「${char.name}」图片生成失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn(`[CharDesigner] ${char.name} 超时/失败: ${err.message}, 降级 mock`);
         return mockSvg(768, 768, '#4c1d95', '#7c3aed', char.name);
       });
@@ -2113,7 +2130,9 @@ export class HybridOrchestrator {
     // ★ Seedance 风格进化: 串行链 (1路) 允许"风格传递链" — 场景 N 引用场景 N-1
     //   但并发 2 路才能保证速度, 所以策略: 第 1 批 2 场景并发(无场景间 ref),
     //   后续批次可以拿到前批的产出做参考。暂保留 2 并发,通过 worker 内累积 refs。
-    const CONCURRENCY = resolveConcurrency('scene'); // v12.32.0 可调:GEN_CONCURRENCY_SCENE(默认 2)
+    const CONCURRENCY = this.getModelSelection('image.default')
+      ? 1
+      : resolveConcurrency('scene'); // 显式模型走渠道调度器，避免同渠道突发限流
     const SCENE_TIMEOUT = 180_000; // 单个场景 3 分钟超时
     const results: { sceneId: string; name: string; description: string; imageUrl: string }[] = [];
     let completed = 0;
@@ -2154,6 +2173,9 @@ export class HybridOrchestrator {
           setTimeout(() => reject(new Error(`Scene timeout: ${scene.location}`)), SCENE_TIMEOUT)
         ),
       ]).catch(err => {
+        if (this.getModelSelection('image.default')) {
+          throw new Error(`场景「${scene.location}」图片生成失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn(`[SceneDesigner] ${scene.location} failed: ${err.message}, using mock`);
         return mockSvg(1024, 576, '#1e1b4b', '#7c3aed', scene.location);
       });
@@ -2469,7 +2491,9 @@ ${shots.map((s, i) => {
     }
 
     // ═══ 并发渲染分镜图（可调并发 + 每张3分钟超时）═══
-    const CONCURRENCY = resolveConcurrency('storyboard'); // v12.32.0 可调:GEN_CONCURRENCY_STORYBOARD(默认 2)
+    const CONCURRENCY = this.getModelSelection('image.default')
+      ? 1
+      : resolveConcurrency('storyboard'); // 显式模型串行，渠道层仍按 limits/rate-limit 自适应节流
     const SB_TIMEOUT = 180_000; // 3 分钟
     const orderedResults: (Storyboard | null)[] = new Array(storyboards.length).fill(null);
     let completedCount = 0;
@@ -2653,6 +2677,9 @@ ${shots.map((s, i) => {
           setTimeout(() => reject(new Error(`Storyboard timeout: Shot ${sb.shotNumber}`)), SB_TIMEOUT)
         ),
       ]).catch(err => {
+        if (this.getModelSelection('image.default')) {
+          throw new Error(`分镜 ${sb.shotNumber} 图片生成失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn(`[Renderer] Shot ${sb.shotNumber} failed: ${err.message}, using mock`);
         return mockSvg(1344, 768, '#1e1b4b', '#7c3aed', `Shot ${sb.shotNumber}`);
       });
@@ -2878,7 +2905,15 @@ ${shots.map((s, i) => {
     script?: Script
   ): Promise<VideoClip[]> {
     // ★ 2026-04 priority flip: Veo primary, Minimax fallback (Veo vectorengine more stable)
-    const providerLabel = this.veoService ? 'Veo 3.1' : (this.minimaxService ? 'Minimax' : 'Kling');
+    const selectedVideoModelKey = this.getModelSelection('video.default');
+    let providerLabel = this.veoService ? 'Veo 3.1' : (this.minimaxService ? 'Minimax' : 'Kling');
+    if (selectedVideoModelKey) {
+      try {
+        const { resolveModelRoutesSync } = await import('@/lib/model-routing');
+        providerLabel = resolveModelRoutesSync(selectedVideoModelKey, 'video')[0]?.profile.displayName
+          || selectedVideoModelKey;
+      } catch { providerLabel = selectedVideoModelKey; }
+    }
     this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `制作 ${storyboards.length} 个视频`, progress: 0 });
 
     // v2.11 #1: 向前端报告总 shot 数,让 ConsistencyPanel 算 X/N 时分母准确
@@ -2939,7 +2974,9 @@ ${shots.map((s, i) => {
       `${storyboards.length}个镜头开始生成视频 🎥\n` +
       `• 角色参考图: ${charUrlMap.size > 0 ? `${charUrlMap.size}个角色锁定` : '无（纯文生成）'}\n` +
       `• 场景首帧: ${sceneUrlMap.size > 0 ? `${sceneUrlMap.size}个场景锚定` : '无'}\n` +
-      `• 引擎优先级: ${this.veoService ? 'Veo 3.1(主)' : ''}${this.veoService && this.minimaxService ? ' → ' : ''}${this.minimaxService ? 'Minimax S2V-01(兜底)' : ''}${this.klingService ? ' → 可灵' : ''}`
+      `• 引擎优先级: ${selectedVideoModelKey
+        ? `${providerLabel}（按 API 路由台优先级）`
+        : `${this.veoService ? 'Veo 3.1(主)' : ''}${this.veoService && this.minimaxService ? ' → ' : ''}${this.minimaxService ? 'Minimax S2V-01(兜底)' : ''}${this.klingService ? ' → 可灵' : ''}`}`
     });
 
     // v12.12.0(Phase 2):@元素注册表 —— 把角色/场景投影成统一命名的元素库(@人物{}/@场景{}),
@@ -2958,6 +2995,7 @@ ${shots.map((s, i) => {
 
     // ═══ 并发视频生成（可调并发，避免 API 限流；高并发会弱化关键帧链衔接）═══
     const CONCURRENCY = resolveConcurrency('video'); // v12.32.0 可调:GEN_CONCURRENCY_VIDEO(默认 2)
+    const generationErrors = new Map<number, string>();
     const generateSingleVideo = async (board: Storyboard, i: number): Promise<VideoClip> => {
       const shot = script?.shots?.find(s => s.shotNumber === board.shotNumber) || script?.shots?.[i];
       const planData = (board as any).planData || {};
@@ -3449,6 +3487,10 @@ ${shots.map((s, i) => {
           taskKind: 'video.default',
           ...this.getModelCallContext(),
           label: `shot-${board.shotNumber}`,
+          onProgress: (progress, status) => {
+            const pct = progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
+            this.emit('videoProgress', { shotNumber: board.shotNumber, progress: Math.max(0, Math.min(100, pct)), status });
+          },
         },
         legacyVideoGen,
         (p) => { if (p) ranVideoProvider = p; }, // plugin 路径真出片 provider
@@ -3556,6 +3598,10 @@ ${shots.map((s, i) => {
             videos[i] = await generateSingleVideo(board, i);
           } catch (e) {
             console.error(`[Video] Shot ${board.shotNumber} generation error:`, e);
+            generationErrors.set(
+              board.shotNumber || i + 1,
+              e instanceof Error ? e.message : String(e),
+            );
             videos[i] = { shotNumber: board.shotNumber, videoUrl: '', duration: 8, status: 'completed' as const };
           }
           completedCount++;
@@ -3714,6 +3760,21 @@ ${shots.map((s, i) => {
     // 把对应分镜图做成 Ken Burns 缓推/缓拉的 mp4，让用户至少能拿到一段可看的 animatic 成片，
     // 而不是看到 7/7 镜头全失败。这个降级**只在重试也失败之后**才会触发。
     const stillFailing = videos.filter(v => !isValidVideoUrl(v.videoUrl));
+    if (stillFailing.length > 0 && selectedVideoModelKey) {
+      const details = stillFailing.slice(0, 3).map((clip) => {
+        const message = generationErrors.get(clip.shotNumber || 0) || '未返回有效视频 URL';
+        return `镜头 ${clip.shotNumber}: ${message}`;
+      }).join('；');
+      this.update(AgentRole.VIDEO_PRODUCER, {
+        status: 'error', progress: Math.round(((videos.length - stillFailing.length) / Math.max(1, videos.length)) * 100),
+        currentTask: `${stillFailing.length} 个镜头生成失败`,
+      });
+      this.emit('agentTalk', {
+        role: AgentRole.VIDEO_PRODUCER,
+        text: `❌ 所选视频模型「${providerLabel}」有 ${stillFailing.length}/${videos.length} 个镜头生成失败：${details}`,
+      });
+      throw new Error(`所选视频模型「${providerLabel}」生成失败: ${details}`);
+    }
     if (stillFailing.length > 0) {
       this.emit('agentTalk', {
         role: AgentRole.VIDEO_PRODUCER,
@@ -3791,8 +3852,14 @@ ${shots.map((s, i) => {
       console.log('[VideoProducer] No valid video URLs for key frame extraction, skipping');
     }
 
+    const animaticCount = videos.filter((video) => (video as any).isAnimatic).length;
     this.update(AgentRole.VIDEO_PRODUCER, { status: 'completed', progress: 100, output: videos });
-    this.emit('agentTalk', { role: AgentRole.VIDEO_PRODUCER, text: `视频全部生成完毕（${providerLabel}），关键帧封面图已提取！🎬` });
+    this.emit('agentTalk', {
+      role: AgentRole.VIDEO_PRODUCER,
+      text: animaticCount > 0
+        ? `视频阶段完成：${videos.length - animaticCount} 个真实视频，${animaticCount} 个 animatic 降级片段。`
+        : `视频全部生成完毕（${providerLabel}），关键帧封面图已提取！🎬`,
+    });
     return videos;
   }
 
@@ -4018,8 +4085,16 @@ ${characterBibleBlock}${producerContext}
       if (item.shotNumber) videoShotsToRegen.add(item.shotNumber);
     }
 
+    let repairedVideos = 0;
     for (const shotNumber of videoShotsToRegen) {
-      this.update(AgentRole.VIDEO_PRODUCER, { status: 'working', currentTask: `重新生成第 ${shotNumber} 镜视频`, progress: 0 });
+      this.update(AgentRole.VIDEO_PRODUCER, {
+        status: 'working', currentTask: `重新生成第 ${shotNumber} 镜视频`,
+        progress: Math.round((repairedVideos / Math.max(1, videoShotsToRegen.size)) * 100),
+      });
+      this.emit('reviewRepair', {
+        stage: 'video', state: 'running', shotNumber,
+        completed: repairedVideos, total: videoShotsToRegen.size,
+      });
       const board = updated.storyboards.find(s => s.shotNumber === shotNumber);
       if (!board) continue;
 
@@ -4032,27 +4107,26 @@ ${characterBibleBlock}${producerContext}
       }
 
       try {
-        let videoUrl: string = '';
-        if (this.veoService) {
-          videoUrl = await this.veoService.generateVideo(board.imageUrl, board.prompt, { duration: 8, aspectRatio: this.videoAspect() });
-        } else if (this.minimaxService) {
-          // v2.14 P0.1: 把所有 lockedCharacters 转成 S2V multi-subject, 不再只用 primaryCharacterRef 单图
-          const subjectRefs = this.getLockedSubjectReferences();
-          videoUrl = await this.minimaxService.generateVideo(board.imageUrl, board.prompt, {
-            aspectRatio: this.videoAspect(), // v12.14.0 横竖屏
-            subjectReferenceUrl: this.primaryCharacterRef || undefined,
-            subjectReferences: subjectRefs.length > 0 ? subjectRefs : undefined,
-          });
-        } else {
-          videoUrl = board.imageUrl;
-        }
+        const regenerated = await this.regenerateShot(shotNumber, board, { duration: 8 });
         const idx = updated.videos.findIndex(v => v.shotNumber === shotNumber);
-        if (idx >= 0) updated.videos[idx] = { ...updated.videos[idx], videoUrl, status: 'completed' };
+        if (idx >= 0) updated.videos[idx] = { ...updated.videos[idx], ...regenerated, status: 'completed' };
+        repairedVideos++;
+        this.emit('videoClip', regenerated);
+        this.emit('reviewRepair', {
+          stage: 'video', state: 'completed', shotNumber,
+          completed: repairedVideos, total: videoShotsToRegen.size,
+        });
       } catch (e) {
         console.error(`[Review] Re-gen video ${shotNumber} failed:`, e);
+        this.emit('reviewRepair', {
+          stage: 'video', state: 'error', shotNumber,
+          completed: repairedVideos, total: videoShotsToRegen.size,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        if (this.getModelSelection('video.default')) throw e;
       }
-      this.update(AgentRole.VIDEO_PRODUCER, { status: 'completed', progress: 100 });
     }
+    this.update(AgentRole.VIDEO_PRODUCER, { status: 'completed', progress: 100 });
 
     const regenCount = videoShotsToRegen.size + storyboardItems.filter((i: any) => !videoShotsToRegen.has(i.shotNumber)).length;
     this.emit('agentTalk', {
@@ -4081,6 +4155,29 @@ ${characterBibleBlock}${producerContext}
     const { toEngineImage } = await import('@/lib/first-frame');
     const engineFrame = toEngineImage(storyboard.imageUrl) || storyboard.imageUrl;
     const duration = options?.duration || 8;
+
+    const selectedVideoModel = this.getModelSelection('video.default');
+    if (selectedVideoModel) {
+      const { withVideoPlugin } = await import('@/lib/plugin-chain-router');
+      const routedUrl = await withVideoPlugin({
+        prompt: storyboard.prompt,
+        firstFrameUrl: engineFrame || undefined,
+        aspectRatio: this.videoAspect(),
+        durationSec: duration,
+        preferredProvider: provider,
+        modelKey: selectedVideoModel,
+        taskKind: 'video.default',
+        ...this.getModelCallContext(),
+        label: `regenerate-shot-${shotNumber}`,
+        onProgress: (progress, status) => {
+          const pct = progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
+          this.emit('videoProgress', { shotNumber, progress: Math.max(0, Math.min(100, pct)), status });
+        },
+      }, async () => { throw new Error('所选视频模型不可用'); });
+      if (!isValidVideoUrl(routedUrl)) throw new Error('所选视频模型未返回有效视频 URL');
+      this.update(AgentRole.VIDEO_PRODUCER, { status: 'completed', progress: 100 });
+      return { shotNumber, videoUrl: routedUrl, duration, status: 'completed' };
+    }
 
     // v12.154:真引擎链(此前无 Kling;且末档把分镜图当视频谎报 completed)
     // v12.156:链序与主管线统一(显式 provider > env VIDEO_ENGINE_ORDER > Veo 默认)

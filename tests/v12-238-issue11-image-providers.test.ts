@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import {
-  gptImageSize, buildGptImageRequest, extractGptImageUrl, hasGptImage,
+  gptImageSize, buildGptImageRequest, extractGptImageUrl, extractOpenAIChatImageUrl, hasGptImage,
 } from '@/lib/image-providers/openai-gpt-image';
 import {
   geminiAspectHint, buildGeminiImageRequest, extractGeminiImage, hasGeminiImage,
@@ -50,6 +50,20 @@ describe('v12.238 GPT Image provider', () => {
     expect(extractGptImageUrl({})).toBe('');
     // 非 http 的 url 不当成有效图(防止把 file:// 之类塞进下游)
     expect(extractGptImageUrl({ data: [{ url: 'file:///etc/passwd' }] })).toBe('');
+  });
+
+  it('Chat 图像响应解析 Markdown、Data URI 与 message.images', () => {
+    expect(extractOpenAIChatImageUrl({
+      choices: [{ message: { content: '![image](data:image/png;base64,QUJD)' } }],
+    })).toBe('data:image/png;base64,QUJD');
+    expect(extractOpenAIChatImageUrl({
+      choices: [{ message: { content: '结果：https://cdn.example.com/image.png' } }],
+    })).toBe('https://cdn.example.com/image.png');
+    expect(extractOpenAIChatImageUrl({
+      choices: [{ message: { images: [{ image_url: { url: 'https://cdn.example.com/from-images.webp' } }] } }],
+    })).toBe('https://cdn.example.com/from-images.webp');
+    expect(extractOpenAIChatImageUrl({ data: [{ b64_json: 'TOP_LEVEL_BASE64' }] })).toBe('data:image/png;base64,TOP_LEVEL_BASE64');
+    expect(extractOpenAIChatImageUrl({ choices: [{ message: { content: '没有图片' } }] })).toBe('');
   });
 
   it('默认不启用 —— 必须显式 OPENAI_IMAGE_ENABLED=1(避免把图像请求打到只做文本的网关)', () => {

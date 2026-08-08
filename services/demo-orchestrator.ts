@@ -1,6 +1,8 @@
 import {
   Agent, AgentRole, DirectorPlan, Script, Storyboard, VideoClip, Character
 } from '@/types/agents';
+import { listRuntimeApiChannelsSync } from '@/lib/runtime-api-channels';
+import { listRuntimeModelRoutesSync } from '@/lib/model-routing';
 
 // Read on every request so dashboard changes take effect without restarting.
 const hasOpenAI = () => !!process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('your_');
@@ -242,5 +244,7 @@ export class DemoOrchestrator {
 }
 
 export function isDemoMode(): boolean {
-  return !hasOpenAI();
+  if (hasOpenAI()) return false;
+  return listRuntimeApiChannelsSync('text').length === 0
+    && listRuntimeModelRoutesSync('text').length === 0;
 }

@@ -25,6 +25,7 @@ export const MODEL_PROTOCOLS = {
   ],
   image: [
     { id: 'openai-images', label: 'OpenAI Images' },
+    { id: 'openai-chat-image', label: 'OpenAI Chat Image' },
     { id: 'gemini-image', label: 'Gemini Image' },
   ],
   video: [
@@ -866,7 +867,7 @@ export function classifyModelRouteError(error: unknown): {
   if (/\b402\b|quota|余额|insufficient/i.test(message)) {
     return { category: 'quota', safeToFailover: true, message };
   }
-  if (/\b429\b|rate.?limit|限流/i.test(message)) {
+  if (/\b429\b|rate.?limit|too many requests|限流|请求数限制|请求过多|频率限制|最多请求\s*\d+\s*次/i.test(message)) {
     return { category: 'rate_limit', safeToFailover: true, message };
   }
   if (/\b404\b|model.?not.?found|unknown model|模型不存在/i.test(message)) {
@@ -874,6 +875,9 @@ export function classifyModelRouteError(error: unknown): {
   }
   if (/\b400\b|invalid|参数|审核|policy|sensitive|content/i.test(message)) {
     return { category: 'upstream_rejected', safeToFailover: false, message };
+  }
+  if (/响应中没有|没有图像|没有视频|empty response|invalid response/i.test(message)) {
+    return { category: 'invalid_response', safeToFailover: true, message };
   }
   return { category: 'transient', safeToFailover: false, message };
 }
@@ -1037,7 +1041,11 @@ export async function runModelRouteChain<T>(
     } catch (error) {
       const classified = classifyModelRouteError(error);
       errors.push(`${route.gateway.name}: ${classified.message}`);
-      const canContinue = classified.safeToFailover
+      // Text generation has no durable remote task. A lost/timeout response is safe to
+      // retry on the next mapping, unlike image/video submissions which may still be running.
+      const textTransient = Boolean(context?.taskKind?.startsWith('text.'))
+        && (classified.category === 'transient' || classified.category === 'uncertain_submit');
+      const canContinue = (classified.safeToFailover || textTransient)
         && route.profile.routePolicy !== 'pinned'
         && index + 1 < routes.length;
       await failModelAttempt(callId, attemptId, classified, canContinue);

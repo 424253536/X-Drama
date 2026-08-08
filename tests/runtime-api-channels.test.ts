@@ -46,6 +46,25 @@ describe('runtime API channels', () => {
     }, { system: 'system', user: 'user', maxTokens: 20 });
     expect(result.content).toBe('openai-ok');
     expect(fetchMock.mock.calls[0][0]).toBe('https://openai.test/v1/chat/completions');
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))).toMatchObject({ stream: true });
+  });
+
+  it('aggregates OpenAI-compatible SSE so long generations keep the gateway connection alive', async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"pipeline-"},"finish_reason":null}]}',
+      '',
+      'data: {"choices":[{"delta":{"content":"ready"},"finish_reason":"stop"}]}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })));
+    const result = await executeLLMAttempt({
+      baseURL: 'https://openai.test/v1', apiKey: 'key', model: 'gpt-test', label: 'openai', format: 'openai',
+    }, { system: 'system', user: 'user', maxTokens: 20 });
+    expect(result).toMatchObject({ ok: true, content: 'pipeline-ready', finishReason: 'stop' });
   });
 
   it('executes Gemini generateContent format', async () => {
@@ -75,4 +94,3 @@ describe('runtime API channels', () => {
     expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'x-api-key': 'key' });
   });
 });
-

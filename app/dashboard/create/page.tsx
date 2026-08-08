@@ -466,6 +466,34 @@ export default function DashboardCreatePage() {
         break;
       }
 
+      case 'reviewRepair': {
+        if (data?.stage !== 'video') break;
+        const total = Math.max(1, Number(data.total) || 1);
+        const completed = Math.max(0, Number(data.completed) || 0);
+        const progress = Math.round((completed / total) * 100);
+        const status = data.state === 'error' ? 'error' : data.state === 'completed' && completed >= total ? 'completed' : 'running';
+        s.updateNodeData('node-video', {
+          status, progress,
+          currentShotProgress: data.state === 'completed' ? 100 : 0,
+          error: data.error || undefined,
+        } as any);
+        if (data.shotNumber) {
+          const asset = s.assets.find((item) => item.type === 'video' && item.shotNumber === data.shotNumber);
+          if (asset) {
+            s.updateAsset(asset.id, {
+              data: {
+                ...asset.data,
+                status: data.state === 'error' ? 'error' : data.state === 'completed' ? 'completed' : 'generating',
+                progress: data.state === 'completed' ? 100 : 0,
+                error: data.error || undefined,
+              },
+            });
+          }
+        }
+        s.setActiveAgent(AgentRole.VIDEO_PRODUCER);
+        break;
+      }
+
       case 'status': {
         const msg: string = data.message || '';
         if (msg.includes('导演') && msg.includes('分析')) {
@@ -621,7 +649,13 @@ export default function DashboardCreatePage() {
         });
         s.updateNodeData('node-video', { status: 'completed', progress: 100 });
         refreshNodeAssets();
-        s.addChatMessage(AgentRole.VIDEO_PRODUCER, { id: `msg-vid-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.VIDEO_PRODUCER, role: 'assistant', content: `${data?.length || 0}个视频片段全部生成完成！如需重新生成，请告诉我镜头编号和时长。`, createdAt: ts });
+        const clips = Array.isArray(data) ? data : [];
+        const animaticCount = clips.filter((clip: any) => clip?.isAnimatic).length;
+        const validCount = clips.filter((clip: any) => clip?.videoUrl).length;
+        const summary = animaticCount > 0
+          ? `视频阶段完成：${validCount - animaticCount} 个真实视频，${animaticCount} 个 animatic 降级片段。`
+          : `${validCount}个视频片段全部生成完成！如需重新生成，请告诉我镜头编号和时长。`;
+        s.addChatMessage(AgentRole.VIDEO_PRODUCER, { id: `msg-vid-${ts}-${Math.random()}`, projectId, agentRole: AgentRole.VIDEO_PRODUCER, role: 'assistant', content: summary, createdAt: ts });
         break;
       }
 
@@ -683,6 +717,13 @@ export default function DashboardCreatePage() {
       }
 
       case 'error': {
+        const runningNodes = s.nodes.filter((node) => (node.data as any)?.status === 'running');
+        for (const runningNode of runningNodes) {
+          s.updateNodeData(runningNode.id, {
+            status: 'error',
+            error: data.userMsg || data.message || '创作出错',
+          } as any);
+        }
         const title = data.userMsg || data.message || '创作出错';
         const desc = data.code ? `[${data.code}] ${data.stage || ''}` : undefined;
         showToast({

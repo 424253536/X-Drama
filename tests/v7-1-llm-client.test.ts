@@ -205,6 +205,7 @@ describe('isTransientLLMError', () => {
     expect(isTransientLLMError('rate limit exceeded')).toBe(true);
     expect(isTransientLLMError('LLM 429')).toBe(true);
     expect(isTransientLLMError('LLM 503')).toBe(true);
+    expect(isTransientLLMError('HTTP 524: A timeout occurred')).toBe(true);
     expect(isTransientLLMError('upstream overload')).toBe(true);
     expect(isTransientLLMError('请稍后再试')).toBe(true);
     expect(isTransientLLMError('服务繁忙')).toBe(true);

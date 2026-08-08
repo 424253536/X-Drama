@@ -1,5 +1,3 @@
-import OpenAI from 'openai';
-import { API_CONFIG } from '@/lib/config';
 import { AgentRole } from '@/types/agents';
 
 // 每个 Agent 的 system prompt
@@ -48,6 +46,46 @@ interface AgentAction {
   params: Record<string, any>;
 }
 
+export interface AgentProgressSnapshot {
+  projectStatus: string;
+  expectedVideos: number;
+  completedVideos: number;
+  animaticVideos: number;
+  failedVideos: number;
+  failedAttempts?: number;
+  activeRole?: string;
+  activeStatus?: string;
+  activeTask?: string;
+  activeProgress?: number;
+  lastError?: string;
+}
+
+function isProgressQuestion(content: string): boolean {
+  return /进度|生成到哪|做到哪|还要多久|几个视频|多少(?:个|条|段)?视频|视频.*(?:完成|好了|成功)|卡住|卡在/i.test(content);
+}
+
+export function formatProgressReply(progress?: AgentProgressSnapshot): string | null {
+  if (!progress) return null;
+  const expected = Math.max(0, progress.expectedVideos || 0);
+  const completed = Math.max(0, progress.completedVideos || 0);
+  const remaining = Math.max(0, expected - completed);
+  const lines = [
+    `当前项目状态：${progress.projectStatus || '处理中'}`,
+    `视频进度：已生成 ${completed}/${expected || '?'} 个${remaining > 0 ? `，剩余 ${remaining} 个` : ''}`,
+  ];
+  if (progress.animaticVideos > 0) lines.push(`其中 ${progress.animaticVideos} 个是 animatic 降级片段，不是所选视频模型的真实成片。`);
+  if (progress.failedVideos > 0) lines.push(`失败镜头：${progress.failedVideos} 个。`);
+  if (progress.failedAttempts && progress.failedAttempts > 0) lines.push(`视频渠道失败调用：${progress.failedAttempts} 次。`);
+  if (progress.activeTask) {
+    const pct = Number.isFinite(progress.activeProgress) ? `（${progress.activeProgress}%）` : '';
+    lines.push(`当前任务：${progress.activeTask}${pct}`);
+  }
+  if (progress.lastError) lines.push(`最近错误：${progress.lastError}`);
+  if (expected > 0 && completed >= expected && progress.failedVideos === 0) lines.push('视频镜头已经全部完成。');
+  else if (!progress.activeTask && remaining > 0) lines.push('当前没有正在执行的视频任务，需要从失败步骤重新发起。');
+  return lines.join('\n');
+}
+
 function parseAgentAction(agentRole: AgentRole, content: string): AgentAction {
   // 分镜师：检测重生成视频的意图
   if (agentRole === AgentRole.STORYBOARD || agentRole === AgentRole.VIDEO_PRODUCER) {
@@ -71,15 +109,6 @@ function parseAgentAction(agentRole: AgentRole, content: string): AgentAction {
 }
 
 export class AgentChatService {
-  private openai: OpenAI;
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: API_CONFIG.openai.apiKey,
-      baseURL: API_CONFIG.openai.baseURL,
-    });
-  }
-
   async *chat(
     agentRole: AgentRole,
     userMessage: string,
@@ -87,10 +116,22 @@ export class AgentChatService {
       projectId: string;
       scriptData?: any;
       characters?: any[];
+      scenes?: any[];
       storyboards?: any[];
+      videos?: any[];
       chatHistory?: { role: string; content: string }[];
+      modelKey?: string;
+      progressSnapshot?: AgentProgressSnapshot;
     }
   ): AsyncGenerator<{ type: string; content?: string; action?: AgentAction }> {
+    if (isProgressQuestion(userMessage)) {
+      const reply = formatProgressReply(context.progressSnapshot);
+      if (reply) {
+        yield { type: 'content', content: reply };
+        return;
+      }
+    }
+
     const systemPrompt = AGENT_PROMPTS[agentRole] || '你是一位AI助手。';
 
     // 构建上下文
@@ -104,6 +145,14 @@ export class AgentChatService {
     if (context.storyboards?.length) {
       contextStr += `\n\n当前分镜数量：${context.storyboards.length}个`;
     }
+    if (context.scenes?.length) {
+      contextStr += `\n\n当前场景：${context.scenes.map(s => s.name || s.location).filter(Boolean).join('、')}`;
+    }
+    if (context.videos?.length) {
+      contextStr += `\n\n当前视频资产：${context.videos.length}个`;
+    }
+    const progressReply = formatProgressReply(context.progressSnapshot);
+    if (progressReply) contextStr += `\n\n当前真实流水线状态：\n${progressReply}`;
 
     const messages: any[] = [
       { role: 'system', content: systemPrompt + contextStr },
@@ -120,21 +169,18 @@ export class AgentChatService {
     messages.push({ role: 'user', content: userMessage });
 
     try {
-      const stream = await this.openai.chat.completions.create({
-        model: API_CONFIG.openai.model,
-        messages,
-        stream: true,
+      const { callLLMWithFallback } = await import('@/lib/llm-client');
+      const result = await callLLMWithFallback({
+        system: messages[0].content,
+        user: messages.slice(1).map((message) => `${message.role}: ${message.content}`).join('\n'),
+        modelKey: context.modelKey,
+        maxTokens: 2048,
+        timeoutMs: 150_000,
+        retriesPerAttempt: 1,
       });
-
-      let fullContent = '';
-
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content || '';
-        if (delta) {
-          fullContent += delta;
-          yield { type: 'content', content: delta };
-        }
-      }
+      if (!result.ok || !result.content) throw new Error(result.error || '文本模型没有返回内容');
+      const fullContent = result.content;
+      yield { type: 'content', content: fullContent };
 
       // 解析操作意图
       const action = parseAgentAction(agentRole, fullContent);
@@ -176,6 +222,13 @@ export class DemoChatService {
     userMessage: string,
     _context: any
   ): AsyncGenerator<{ type: string; content?: string; action?: AgentAction }> {
+    if (isProgressQuestion(userMessage)) {
+      const reply = formatProgressReply(_context?.progressSnapshot);
+      if (reply) {
+        yield { type: 'content', content: reply };
+        return;
+      }
+    }
     const pool = this.responses[agentRole] || ['收到，正在处理...'];
     const response = pool[Math.floor(Math.random() * pool.length)];
 

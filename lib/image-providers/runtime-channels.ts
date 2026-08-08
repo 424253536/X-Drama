@@ -13,12 +13,18 @@ import {
   extractGeminiImage,
   toInlineDataPart,
 } from './gemini-image';
-import { buildGptImageRequest, extractGptImageUrl } from './openai-gpt-image';
+import { buildGptImageRequest, extractGptImageUrl, extractOpenAIChatImageUrl } from './openai-gpt-image';
+import { runScheduledModelRoute } from '@/lib/model-route-scheduler';
 
 function apiUrl(baseUrl: string, path: string): string {
   const base = baseUrl.replace(/\/+$/, '');
   return /\/v1$/i.test(base) && path.startsWith('/v1/') ? base + path.slice(3) : base + path;
 }
+
+// Image gateways often spend time rendering and then return a large base64 JSON
+// body. Keep the connection open beyond the normal chat timeout while still
+// respecting a longer user-configured gateway timeout.
+const imageRequestTimeout = (route: RuntimeModelRoute) => Math.max(route.gateway.timeoutMs, 300_000);
 
 async function generateOpenAI(channel: ReturnType<typeof listRuntimeApiChannelsSync>[number], input: ImageGenerateInput) {
   const response = await fetch(apiUrl(channel.baseUrl, '/v1/images/generations'), {
@@ -31,6 +37,21 @@ async function generateOpenAI(channel: ReturnType<typeof listRuntimeApiChannelsS
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
   const imageUrl = extractGptImageUrl(payload);
   if (!imageUrl) throw new Error('响应中没有图像');
+  return imageUrl;
+}
+
+async function generateOpenAIChat(channel: ReturnType<typeof listRuntimeApiChannelsSync>[number], input: ImageGenerateInput) {
+  const request = buildGptImageRequest(input, { ...process.env, OPENAI_IMAGE_MODEL: channel.model });
+  const response = await fetch(apiUrl(channel.baseUrl, '/v1/chat/completions'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${channel.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: request.model, messages: [{ role: 'user', content: request.prompt }], stream: false, size: request.size }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
+  const imageUrl = extractOpenAIChatImageUrl(payload);
+  if (!imageUrl) throw new Error(`Chat 响应中没有图像（响应结构: ${JSON.stringify(payload).slice(0, 240)}）`);
   return imageUrl;
 }
 
@@ -67,12 +88,35 @@ async function generateOpenAIRoute(route: RuntimeModelRoute, input: ImageGenerat
       ...parameters,
       model: route.upstreamModelId,
     }),
-    signal: AbortSignal.timeout(route.gateway.timeoutMs),
+    signal: AbortSignal.timeout(imageRequestTimeout(route)),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
   const imageUrl = extractGptImageUrl(payload);
   if (!imageUrl) throw new Error('响应中没有图像');
+  return imageUrl;
+}
+
+async function generateOpenAIChatRoute(route: RuntimeModelRoute, input: ImageGenerateInput) {
+  const path = route.endpointPathOverride || '/v1/chat/completions';
+  const request = buildGptImageRequest(input, { ...process.env, OPENAI_IMAGE_MODEL: route.upstreamModelId });
+  const parameters = mergeRouteParameters(route, {});
+  const response = await fetch(apiUrl(route.gateway.baseUrl, path), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${route.gateway.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: route.upstreamModelId,
+      messages: [{ role: 'user', content: request.prompt }],
+      stream: false,
+      size: request.size,
+      ...parameters,
+    }),
+    signal: AbortSignal.timeout(imageRequestTimeout(route)),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
+  const imageUrl = extractOpenAIChatImageUrl(payload);
+  if (!imageUrl) throw new Error(`Chat 响应中没有图像（响应结构: ${JSON.stringify(payload).slice(0, 240)}）`);
   return imageUrl;
 }
 
@@ -93,13 +137,20 @@ async function generateGeminiRoute(route: RuntimeModelRoute, input: ImageGenerat
       'x-goog-api-key': route.gateway.apiKey,
     },
     body: JSON.stringify(buildGeminiImageRequest(input, refParts)),
-    signal: AbortSignal.timeout(route.gateway.timeoutMs),
+    signal: AbortSignal.timeout(imageRequestTimeout(route)),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
   const imageUrl = extractGeminiImage(payload);
   if (!imageUrl) throw new Error('响应中没有图像');
   return imageUrl;
+}
+
+export async function generateImageWithRuntimeRoute(route: RuntimeModelRoute, input: ImageGenerateInput): Promise<string> {
+  if (route.protocol === 'gemini-image') return generateGeminiRoute(route, input);
+  if (route.protocol === 'openai-chat-image') return generateOpenAIChatRoute(route, input);
+  if (route.protocol === 'openai-images') return generateOpenAIRoute(route, input);
+  throw new Error(`不支持的图像协议: ${route.protocol}`);
 }
 
 registerImageProvider({
@@ -112,11 +163,9 @@ registerImageProvider({
   async generate(input) {
     if (input.modelKey) {
       const routes = resolveModelRoutesSync(input.modelKey, 'image', input.taskKind || 'image.default');
-      const imageUrl = await runModelRouteChain(routes, async (route) => {
-        if (route.protocol === 'gemini-image') return generateGeminiRoute(route, input);
-        if (route.protocol === 'openai-images') return generateOpenAIRoute(route, input);
-        throw new Error(`不支持的图像协议: ${route.protocol}`);
-      }, {
+      const imageUrl = await runModelRouteChain(routes, (route) => runScheduledModelRoute(route, async () => {
+        return generateImageWithRuntimeRoute(route, input);
+      }), {
         operation: 'image.generate', taskKind: input.taskKind || 'image.default',
         projectId: input.projectId, userId: input.userId,
         requestParameters: {
@@ -134,7 +183,9 @@ registerImageProvider({
       try {
         const imageUrl = channel.format === 'gemini'
           ? await generateGemini(channel, input)
-          : await generateOpenAI(channel, input);
+          : channel.format === 'openai-chat-image'
+            ? await generateOpenAIChat(channel, input)
+            : await generateOpenAI(channel, input);
         return { imageUrl, provider: `channel:${channel.id}` };
       } catch (error) {
         errors.push(`${channel.name}: ${error instanceof Error ? error.message : String(error)}`);
