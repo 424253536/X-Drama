@@ -3131,11 +3131,39 @@ ${shots.map((s, i) => {
       if (enhancedPrompt.length > 1500) {
         enhancedPrompt = enhancedPrompt.slice(0, 1500);
       }
+      // ── v12.281:把**结构化角色 DNA** 也注入视频 prompt ──────────────────────
+      // 病根:`injectDnaIntoPrompt` 全仓**只在 runStoryboardRenderer 里调用一次** ——
+      // 分镜图 prompt 拿的是 vision LLM 从**实际生成的三视图**里抽出的 8 维签名
+      // (眼型/颌型/鼻型/嘴型/发型/发色/肤色/标志服饰),而视频 prompt 只拿到剧本里的
+      // **自由文本外观**(如「青年男性,冷峻」)。同一部片,分镜按"实际长出来的样子"渲染,
+      // 视频却按"剧本写的"生成 —— 依赖文本 prompt 的引擎必然跨镜漂脸。
+      //
+      // ⚠️ 但不能无脑全加:v12.9.1 实测过 —— MiniMax S2V 已从 subject_reference 提取身份,
+      // prompt 再重复外观**反而与参考图冲突致漂移**。故 DNA 与 charDescSegment 同待遇:
+      // 一起进 enhancedPrompt,一起从 S2V 版里剥掉。
+      let dnaSegment = '';
+      try {
+        if (this.characterDnaMap && this.characterDnaMap.size > 0) {
+          const { injectDnaIntoPrompt } = await import('@/lib/character-dna');
+          const withDna = injectDnaIntoPrompt('', shot?.characters, this.characterDnaMap);
+          if (withDna) {
+            dnaSegment = withDna.startsWith('. ') ? withDna : `. ${withDna}`;
+            enhancedPrompt += dnaSegment;
+          }
+        }
+      } catch (e) {
+        console.warn('[DNA] 视频 prompt 注入失败(非阻塞):', e instanceof Error ? e.message.slice(0, 60) : e);
+      }
+
       // v12.9.1(#2):S2V 专用「去外观」prompt —— 移除「. Character: ...」片段(身份由参考图给,
       // 重复描述会与参考图冲突致漂移)。Hailuo 兜底无参考图仍用完整 enhancedPrompt。
-      const minimaxS2vPrompt = (charDescSegment && enhancedPrompt.includes(charDescSegment))
+      // v12.281:DNA 段同理一并剥离(它同样是"外观描述",对 S2V 是干扰而非帮助)。
+      let minimaxS2vPrompt = (charDescSegment && enhancedPrompt.includes(charDescSegment))
         ? enhancedPrompt.split(charDescSegment).join('')
         : enhancedPrompt;
+      if (dnaSegment && minimaxS2vPrompt.includes(dnaSegment)) {
+        minimaxS2vPrompt = minimaxS2vPrompt.split(dnaSegment).join('');
+      }
 
       // 远程视频 API 只能使用公网可达的 http(s) URL 作为参考图
       const hasCharRef = characterRefUrl && characterRefUrl.startsWith('http');
