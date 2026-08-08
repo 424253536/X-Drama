@@ -72,6 +72,7 @@ import os from 'os';
 import { extractLastFrame, extractMiddleFrame } from '@/lib/last-frame-extractor';
 import { deriveProsody } from '@/lib/tts-prosody';
 import { getLatestQualityScore, buildWriterFeedbackHint } from '@/lib/quality-scores';
+import { buildPacingFeedbackHint, getLatestPacingReport } from '@/lib/pacing-feedback'; // v12.284
 // v12.4.0(阶段二十三):主管线视频/图像成本落库 —— 此前从不记,cost-attribution 视频/图像类目永远 0。
 import { recordCostLog, estimateVideoCostCny, estimateImageCostCny, videoRateForProvider } from '@/lib/repos/cost-log-repo';
 // v12.6.1(#2):目标语种检测 —— 锁台词/旁白/TTS/口型语种,visualPrompt 仍英文。
@@ -283,6 +284,26 @@ export async function runWriter(ctx: WriterAgentCtx, plan: DirectorPlan): Promis
           text: `读到上一版评分(综合${prevScore?.overall}),针对性强化弱维度 📈`,
         });
         userContext += feedbackHint;
+      }
+
+      // v12.284:节奏审计反馈闭环 —— buildWriterFeedbackHint 只看 face/lighting/continuity
+      // 三个**画面**维度,节奏诊断(拖沓段/高开低走/开场弱/时长呆板)此前**从不回流**:
+      // 审计能指出「第 3~5 镜拖沓」,下一轮生成却完全不知道 —— 诊断出来了却没进闭环。
+      // 依赖 v12.278 起 pacingReport 已随 script 落库(在那之前的老项目自然拿不到,返回空串)。
+      try {
+        const prevPacing = ctx.projectId ? await getLatestPacingReport(ctx.projectId) : null;
+        const pacingHint = buildPacingFeedbackHint({ report: prevPacing, plannedShots: plan?.storyStructure?.totalShots });
+        if (pacingHint) {
+          const dragN = prevPacing?.v2?.dragSegments?.length ?? 0;
+          console.log(`[Writer] 注入上一版节奏诊断(拖沓段 ${dragN} 处,形状 ${prevPacing?.v2?.shape?.shape})`);
+          ctx.emit('agentTalk', {
+            role: AgentRole.WRITER,
+            text: `读到上一版节奏诊断${dragN > 0 ? `(${dragN} 段拖沓)` : ''},本版针对性改进 📉`,
+          });
+          userContext += pacingHint;
+        }
+      } catch (e) {
+        console.warn('[Writer] 节奏反馈注入失败(非阻塞):', e instanceof Error ? e.message.slice(0, 60) : e);
       }
 
       // ═══ Two-Pass Generation（业界最佳实践）═══
