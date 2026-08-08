@@ -48,12 +48,21 @@ interface VoiceProfile {
   pitch: number;
 }
 
-const VOICE_PROFILES: Record<string, VoiceProfile> = {
-  narrator_male_cn: { voiceId: 'narrator_male_cn', speed: 1.0, vol: 1.0, pitch: 0 },
-  narrator_female_cn: { voiceId: 'narrator_female_cn', speed: 1.0, vol: 1.0, pitch: 0 },
-  young_male_cn: { voiceId: 'young_male_cn', speed: 1.1, vol: 1.0, pitch: 2 },
-  young_female_cn: { voiceId: 'young_female_cn', speed: 1.05, vol: 1.0, pitch: 3 },
-};
+/**
+ * v12.274:**从 VOICE_CATALOG 派生**,不再手工维护平行表。
+ *
+ * 病根:v12.229 把目录从 4 扩到 22,这张表却仍是 4 条 —— 另外 18 档全部落进
+ * `VOICE_PROFILES[voiceId] || 默认旁白男声` 兜底,导致「俏皮少女」「奶音男孩」
+ * 的音色换了但**腔调没换**(speed 1.0 / pitch 0,与成熟男旁白逐字节相同)。
+ * 两份表各写各的必然漂移,故改为单一真源:目录带韵律,这里派生。
+ * 原 4 档的数值在目录里保持原样(1.0/0、1.0/0、1.1/2、1.05/3),**零回归**。
+ */
+const VOICE_PROFILES: Record<string, VoiceProfile> = Object.fromEntries(
+  VOICE_CATALOG.map((v) => [
+    v.id,
+    { voiceId: v.id, speed: v.speed ?? 1.0, vol: v.vol ?? 1.0, pitch: v.pitch ?? 0 },
+  ]),
+);
 
 /**
  * v12.229 —— **修一个一直没人发现的真 bug**:内部音色 id 解析成 MiniMax 真实音色 id。

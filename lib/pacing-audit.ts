@@ -15,6 +15,7 @@
  */
 
 import type { ScriptShot, Script } from '@/types/agents';
+import { auditPacingV2, type PacingV2Report } from '@/lib/pacing-audit-v2'; // v12.275
 import type { HookAuditResult } from './hook-audit';
 
 // ─── 词典 ────────────────────────────────────────────────────────────────────
@@ -125,6 +126,8 @@ export interface ShotReport {
 }
 
 export interface PacingAuditReport {
+  /** v12.275 节奏审计 v2(附加;老消费方可忽略)。 */
+  v2?: PacingV2Report;
   /** 短剧模式 (反转密度要求更严) */
   dramaMode: boolean;
   /** 平均冲突分 (0-10) */
@@ -238,6 +241,15 @@ export function auditScript(script: Script, opts?: AuditOptions): PacingAuditRep
     averageConflictScore >= avgThreshold &&
     (!dramaMode || shotReports[0]?.conflictScore >= 5);
 
+  // v12.275 节奏审计 v2:形状/拖沓段/开场密度/时长节奏 —— **附加字段,既有消费方零改动**,
+  // passed 判定与 warnings/suggestions 原文一律不动(v2 的建议单独放在 v2.actionable)。
+  const v2 = auditPacingV2(
+    shots as any,
+    shotReports.map((r) => r.conflictScore),
+    reversals,
+    { dramaMode },
+  );
+
   return {
     dramaMode,
     averageConflictScore,
@@ -247,5 +259,6 @@ export function auditScript(script: Script, opts?: AuditOptions): PacingAuditRep
     shots: shotReports,
     warnings,
     suggestions,
+    v2,
   };
 }

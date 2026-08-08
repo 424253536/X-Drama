@@ -1,6 +1,6 @@
 {
   "name": "wind-comic",
-  "version": "12.267.0",
+  "version": "12.286.0",
   "description": "Wind Comic — multi-agent AI pipeline that turns a one-line idea into a finished short-form drama: script → cinematic storyboards → video, with built-in character consistency, beat-aligned editing, and an open agent ensemble.",
   "main": "index.js",
   "homepage": "https://github.com/ChrisChen667788/wind-comic",
@@ -30,7 +30,10 @@
     "postversion": "node scripts/sync-readme-version.mjs",
     "sync-readme": "node scripts/sync-readme-version.mjs",
     "s3:smoke": "tsx scripts/s3-smoke.mjs",
-    "gate:consumer": "tsx scripts/consumer-gate.mjs"
+    "gate:consumer": "tsx scripts/consumer-gate.mjs",
+    "audit:api": "node scripts/api-health-audit.mjs",
+    "sync-doc-stats": "node scripts/sync-doc-stats.mjs",
+    "check:doc-stats": "node scripts/sync-doc-stats.mjs --check"
   },
   "keywords": [
     "ai",
@@ -62,14 +65,14 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.19",
     "@radix-ui/react-tooltip": "^1.2.14",
-    "@tailwindcss/postcss": "^4.2.2",
-    "@types/node": "^25.5.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^25.9.5",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.10.1",
     "autoprefixer": "^10.4.27",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ffmpeg-static": "^5.3.0",

@@ -2,7 +2,7 @@
   <img src="assets/banner.png" alt="Wind Comic — 一句话变完整短剧" width="100%" />
 </p>
 
-<h1 align="center">🌬️ Wind Comic 风之漫剧 <sub><sup>v12.267</sup></sub></h1>
+<h1 align="center">🌬️ Wind Comic 风之漫剧 <sub><sup>v12.286</sup></sub></h1>
 
 <p align="center">
   <b>一句话进,整片短剧出 —— 剧本 · 角色 · 分镜 · 配音 · 时间线 · mp4 一条龙.</b><br/>
@@ -210,14 +210,16 @@ Kling lip-sync API 做口播口型, 自动 fallback 到 Sync.so / Hailuo. 流水
 ### 9. **接你自己的 LLM** (v3.1.3)
 所有文本 LLM 调用 (导演 / 编剧 / vision / 审计) 走一个 OpenAI 兼容 `chat/completions` 端点. 想换 DeepSeek-r1 / GPT-4o / Claude (via OpenRouter) / 通义 Max / 本地 Ollama? **改 3 行 `.env` 完事, 0 改代码**. 完整矩阵见 [`docs/llm-providers.md`](docs/llm-providers.md).
 
-### 10. **3210 个单测全过, TypeScript 严格模式, 没有"敬请期待"**
+### 10. **3685 个单测全过, TypeScript 严格模式, 没有"敬请期待"**
 上面列的每个功能都已经在 `main` 分支, 类型检查零错误, 单测覆盖, 你 `npm install && npm run dev` 就能在 `/projects/[id]` 看到.
 
 ---
 
 ## 🥊 跟竞品比
 
-> 阵容核验 2026-07-06:Artificial Analysis 盲投竞技场(**带音频文生视频榜**,口径与上轮无音频榜不同)—— **Dreamina Seedance 2.0 720p 榜首(Elo 1223)**;**阿里双线爆发:Wan2.7-260612 次席(1161,新入榜)**、HappyHorse-1.1 第三(1154);**SkyReels V4(Skywork,1109)首次入榜**,与 Kling 3.0 1080p Pro(1109)并列;Wan 2.7 / Kling 3.0 Omni 紧随(1104/1100)。**Veo 3.1** 仍是画质/物理/原生 48kHz 音轨王者(4K,企业首选);**Kling 3.0** 被多家评为「性价比冠军」(多语对白+lip sync);**Runway Gen-4.5** 控制面最强;**Sora 2** 关停时间线再确认(App 2026-04-26 已下线、API 2026-09-24 关停,勿作依赖)。**广告垂直层新对标**:Creatify(商品 URL→批量变体+ROAS 分析,$33/mo 起)与 Arcads(拟真 AI 演员 UGC)双雄互补 —— Wind Comic 广告工厂对位:brief/URL→成片→Hook A/B 变体→发布包全链自托管+BYO,正是这两家闭源 SaaS 的开源合体路线。
+> 阵容核验 **2026-08-07**(Artificial Analysis 盲投竞技场,数值经独立二次检索复核):**两周内又出两个重量级新品** —— **MiniMax H3(Hailuo 3.0)** 7-31 发布、**8-03 开放权重**(排除美/欧/英/韩授权),33B 全模态、2K/24fps、原生立体声,空降 **T2V 带音频榜次席(Elo 1238)**、I2V 第三(1190),并拿下**视频编辑(带音频)榜首**;**字节 Seedance 2.5** 7-31 公开发布,**单次原生 30 秒**(当前最长)、原生 4K 10bit、最多 **50 个参考输入**、支持区域编辑。当前 T2V 带音频:Gemini Omni Flash(1244)→ MiniMax H3(1238)→ Seedance 2.0 720p(1224)→ Wan 2.7(1161)→ HappyHorse-1.1(1148);I2V 带音频:Seedance 2.0 720p(1198)→ Gemini Omni Flash(1191)→ MiniMax H3(1190)。**Kling 3.0** 是短剧综合首选(**原生 4K / 最高 60fps / 最长 15s / 最多 6 连贯镜头 / 自带多语对白+口型**,$0.084–0.112/s);**Veo 3.1** 企业安全牌(2025-10-15 预览,2026-01-13 加 4K 与竖版;4K $0.60/s);**Wan 2.7** 最便宜带音频 API($0.10/s)。**⚠️ Sora 2 API 距停服仅约 6 周(2026-09-24),须立即迁移。**
+> **🔴 首个同构开源竞品出现**:港大 **ViMax**(MIT,5.6k★,12 Agent 剧本→分镜→角色→视频)、**OpenMontage**(24k★,无独立 UI)。**「开源」本身不再是差异点** —— 但经逐项核对,ViMax 无配音/TTS、无节奏审计、无 EDL/AAF、无协作。**截至 2026-08,全部已查竞品中无一同时具备「节奏审计 + EDL/AAF 剪辑线导出 + 开源自托管」** —— 这是当下真实的护城河边界。
+> **⭐ BYO 架构再次接住这波**:榜上模型基本都开放 API,填 key 即为本管线可调度引擎 —— 竞品越强,本管线越强。
 > 结论不变:**生成层已是红海(竞品在出片/多镜/音频都第一梯队),Wind Comic 护城河收窄到「制作/平台层」**——节奏审计、智能剪辑、字幕烧入、协作、自托管、开源、BYO。
 
 | 能力 | Veo 3.1 | Kling 3.0 | Seedance 2.0 | Runway Gen-4.5 | Grok Imagine 1.5 | HappyHorse-1.1 | **Wind Comic** |
@@ -343,7 +345,7 @@ npm run dev:ws             # Yjs WebSocket server on :1234
 
 欢迎 PR. 两条规则:
 1. **不要破坏多 Agent 契约.** 每个 agent 输入输出 shape 在 `types/agents.ts`.
-2. **测试是底线.** Vitest 3210/3210 必须保持绿. 新加 lib/service 必须配测试.
+2. **测试是底线.** Vitest 3685/3685 必须保持绿. 新加 lib/service 必须配测试.
 
 详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) — 仓库贡献指南.
 

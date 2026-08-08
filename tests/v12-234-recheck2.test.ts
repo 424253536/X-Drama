@@ -195,10 +195,19 @@ describe('v12.234 字体合规 —— 这次锁「真正烧进片子」的那条
 });
 
 describe('v12.234 门面数字一致性(诚实性锁的补强)', () => {
+  // v12.276 修守卫本身:原清单写的是 `README.en.md` —— **仓库里根本没这个文件**,
+  // 而真正的中文门面 `README.zh-CN.md` 不在清单内,于是它一路漂到落后两代(3210 vs 真值 3586)
+  // 都没被拦下;`docs/modelscope-profile.md` 同样漏检(10 处过期)。
+  // 教训:守卫的文件清单本身也会腐坏 —— 故下面加一条「清单里的文件必须真实存在」的自检。
   const files = [
-    'README.md', 'README.en.md', 'docs/MARKETING-zh.md',
-    'docs/MARKETING-en.md', 'docs/modelscope-intro.md',
+    'README.md', 'README.zh-CN.md', 'docs/MARKETING-zh.md',
+    'docs/MARKETING-en.md', 'docs/modelscope-intro.md', 'docs/modelscope-profile.md',
   ];
+
+  it('守卫清单自检:列进来的文件必须真实存在(否则等于没检)', () => {
+    const missing = files.filter((f) => !fs.existsSync(f));
+    expect(missing, `守卫清单里有不存在的文件(检了个寂寞):${missing.join(', ')}`).toEqual([]);
+  });
 
   it('不得残留**已过期的当前测试数**(诚实性锁此前只盯 v3.1.3/1150 两个旧值)', () => {
     // 教训:MARKETING-zh 写着 3194 而真值 3210,因为不在黑名单里而一路绿灯。

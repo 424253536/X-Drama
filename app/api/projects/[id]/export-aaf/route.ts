@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listAssetsByType } from '@/lib/repos/asset-repo';
 import { buildAAF } from '@/lib/aaf-export';
-import { type EdlShot } from '@/lib/edl-export';
+import { type EdlShot, type EdlAudio } from '@/lib/edl-export';
 import { normalizeProjectFormat } from '@/lib/project-format';
 import { requireProjectAccess } from '@/lib/auth-guard';
 
@@ -50,14 +50,56 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try { fmt = JSON.parse(fmtRows[0]?.data || '{}'); } catch { fmt = {}; }
   const fps = normalizeProjectFormat(fmt).fps;
 
-  const shots: EdlShot[] = shotsData.map((s, i) => ({
-    name: `Shot ${String(s.shotNumber ?? i + 1).padStart(2, '0')}${s.emotion ? ` (${s.emotion})` : ''}`,
-    durationS: typeof s.duration === 'number' && s.duration > 0 ? s.duration : 5,
-    sourceUrl: urlFor(s.shotNumber ?? i + 1),
-  }));
+  // v12.277:与 export-edl 同修 —— 以 timeline 资产(成片终值)为准,script 仅兜底。
+  // 此前读 script 的设计时长,而成片时长会被卡点吸附与逐镜变速改写 → Avid 里对不上成片。
+  const timelineRows = await listAssetsByType(projectId, 'timeline');
+  let tl: any = {};
+  try { tl = JSON.parse(timelineRows[0]?.data || '{}'); } catch { tl = {}; }
+  const tlBySn = new Map<number, any>();
+  for (const t of (Array.isArray(tl?.timeline) ? tl.timeline : [])) {
+    if (typeof t?.shotNumber === 'number') tlBySn.set(t.shotNumber, t);
+  }
+  const shots: EdlShot[] = shotsData.map((s, i) => {
+    const sn = s.shotNumber ?? i + 1;
+    const t = tlBySn.get(sn);
+    return {
+      name: `Shot ${String(sn).padStart(2, '0')}${s.emotion ? ` (${s.emotion})` : ''}`,
+      durationS: (typeof t?.duration === 'number' && t.duration > 0)
+        ? t.duration
+        : (typeof s.duration === 'number' && s.duration > 0 ? s.duration : 5),
+      sourceUrl: t?.videoUrl || urlFor(sn),
+      transition: t?.transition,
+    };
+  });
+
+  // v12.279:补音轨 —— v12.277 给 EDL/FCPXML 加了配音与 BGM,**AAF 漏了同步**,
+  // 同一份成片导 EDL 有声、导 AAF 是哑的。这里与 export-edl 同源组装。
+  const audio: EdlAudio[] = [];
+  {
+    let cursor = 0;
+    const startBySn = new Map<number, number>();
+    shotsData.forEach((s: any, i: number) => {
+      const sn = s.shotNumber ?? i + 1;
+      startBySn.set(sn, cursor);
+      cursor += shots[i]?.durationS ?? 5;
+    });
+    for (const vo of (Array.isArray(tl?.voiceoverClips) ? tl.voiceoverClips : [])) {
+      const sn = Number(vo?.shotNumber);
+      if (!Number.isFinite(sn) || !vo?.audioUrl) continue;
+      const t = tlBySn.get(sn);
+      audio.push({
+        name: `VO Shot ${String(sn).padStart(2, '0')}${t?.speaker ? ` — ${t.speaker}` : ''}`,
+        sourceUrl: vo.audioUrl,
+        startS: startBySn.get(sn) ?? 0,
+        durationS: (typeof t?.duration === 'number' && t.duration > 0) ? t.duration : 5,
+        kind: 'vo',
+      });
+    }
+    if (tl?.musicUrl) audio.push({ name: 'BGM', sourceUrl: tl.musicUrl, startS: 0, durationS: cursor || 1, kind: 'bgm' });
+  }
 
   const title = (script.title || `Wind Comic ${projectId.slice(0, 8)}`).toString().slice(0, 64);
-  const aaf = buildAAF(shots, fps, title);
+  const aaf = buildAAF(shots, fps, title, audio);
 
   return new Response(new Uint8Array(aaf), {
     headers: {

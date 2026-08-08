@@ -19,16 +19,44 @@ export interface DouyinDeps {
   getCreds?: () => { token?: string; openId?: string };
 }
 
+/**
+ * v12.285:本地文件走 `fs.openAsBlob` —— **零拷贝**拿 Blob,不再整文件进内存。
+ *
+ * 病根实测(320 MB 成片,约一集竖屏长剧):
+ *   readFile → Uint8Array → Blob :RSS **+962 MB**、253 ms —— 因为**拷了三份**
+ *     (readFile 得 Buffer、`new Uint8Array(buf)` 复制一次、`new Blob([u8])` 再复制一次);
+ *   fs.openAsBlob               :RSS **+2 MB**、0 ms(装进 FormData 后共 +7 MB)。
+ * 即 320 MB 的片子原本要吃掉近 1 GB 内存,小容器上直接 OOM。
+ *
+ * 兼容:`readVideo` 依赖注入的形态不变(仍可返回 `{bytes, contentType}`),
+ * 只替换**默认实现**;调用方统一经 `toBlob()` 归一,故已有注入与测试零改动。
+ */
+async function localFileBlob(p: string, contentType = 'video/mp4'): Promise<Blob> {
+  const fs = await import('fs');
+  if (typeof (fs as any).openAsBlob === 'function') {
+    return await (fs as any).openAsBlob(p, { type: contentType });
+  }
+  // 老 Node 无 openAsBlob → 退回整读(行为与旧版一致,只是没有省内存)
+  const fsp = await import('fs/promises');
+  return new Blob([new Uint8Array(await fsp.readFile(p))], { type: contentType });
+}
+
+/** 把 readVideo 的两种返回形态(Blob 或 {bytes,contentType})归一成 Blob。 */
+function toBlob(v: any, fallbackType = 'video/mp4'): Blob {
+  if (v instanceof Blob) return v;
+  if (v?.blob instanceof Blob) return v.blob;
+  return new Blob([v.bytes as BlobPart], { type: v?.contentType || fallbackType });
+}
+
 async function defaultReadVideo(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (/^https?:\/\//.test(url)) {
     // v12.241(清门禁存量债):拉取的是**外部媒体 URL**,改走 safeFetch —— 字面量+DNS 双层判定并逐跳重验重定向。
   const res = await safeFetch(url, { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`读取成片失败 HTTP ${res.status}`);
-    return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') || 'video/mp4' };
+    return { blob: await res.blob(), contentType: res.headers.get('content-type') || 'video/mp4' } as any;
   }
   const fs = await import('fs/promises');
-  const buf = await fs.readFile(url.replace(/^file:\/\//, ''));
-  return { bytes: new Uint8Array(buf), contentType: 'video/mp4' };
+  return { blob: await localFileBlob(url.replace(/^file:\/\//, '')), contentType: 'video/mp4' } as any;
 }
 
 const MANUAL_GUIDE = [
@@ -59,9 +87,9 @@ export function createDouyinAdapter(deps: DouyinDeps = {}): PublishAdapter {
       if (!videoUrl) return manual('包内无成片 URL');
       try {
         // 步骤 1:上传视频字节
-        const { bytes, contentType } = await readVideo(videoUrl);
+        const read = await readVideo(videoUrl);
         const form = new FormData();
-        form.append('video', new Blob([bytes as BlobPart], { type: contentType }), 'final.mp4');
+        form.append('video', toBlob(read), 'final.mp4');
         const upRes = await fetchImpl(`${UPLOAD_URL}?open_id=${encodeURIComponent(openId)}`, {
           method: 'POST', headers: { 'access-token': token }, body: form,
         });

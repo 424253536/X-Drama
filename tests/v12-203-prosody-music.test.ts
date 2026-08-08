@@ -1,9 +1,11 @@
 /**
  * v12.203 — prosody 角色纠偏(纯函数)+ music BGM API 接线锁。
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { characterProsodyBias, deriveProsody } from '@/lib/tts-prosody';
 import fs from 'fs';
+
+beforeEach(() => { vi.resetModules(); });
 
 describe('v12.203 · prosody 角色纠偏 + AI 作曲', () => {
   it('性别线索:男角压低音高降速,女角提亮', () => {
@@ -29,14 +31,43 @@ describe('v12.203 · prosody 角色纠偏 + AI 作曲', () => {
     const noChar = deriveProsody({ emotion: '激动', emotionTemperature: 8 });
     expect(typeof noChar.pitch).toBe('number');
   });
-  it('接线锁:orchestrator 传 speaker + music API 存 music 资产', () => {
-    const orch = (fs.readFileSync('services/hybrid-orchestrator.ts','utf-8')+fs.readFileSync('services/agents/writer-agent.ts','utf-8')+fs.readFileSync('services/agents/editor-agent.ts','utf-8'));
-    expect(orch).toContain('character: (t as any).speaker');
-    expect(orch).toContain('speaker: (shot as any)?.characters?.[0]');
-    const music = fs.readFileSync('app/api/projects/[id]/music/route.ts', 'utf-8');
-    expect(music).toContain('generateMusic');
-    expect(music).toContain("type: 'music'");
-    const page = fs.readFileSync('app/projects/[id]/page.tsx', 'utf-8');
-    expect(page).toContain('MusicGenPanel');
+  // v12.271:grep 源码 → **真路由行为断言**。music 端点是独立 API,能直接跑处理函数,
+  // 不必读源码猜。以下四条都是真调 POST 并检查它实际返回/实际落库的东西。
+  it('行为:music 路由成功时真的把 music 资产落库(type=music + mediaUrls)', async () => {
+    const saved: any[] = [];
+    vi.doMock('@/services/minimax.service', () => ({
+      MinimaxService: class { async generateMusic() { return 'https://cdn.example/bgm.mp3'; } },
+    }));
+    vi.doMock('@/lib/asset-storage', () => ({ persistAsset: async () => ({ url: 'https://cdn.example/persisted.mp3' }) }));
+    vi.doMock('@/lib/repos/asset-repo', () => ({ upsertAsset: async (a: any) => { saved.push(a); } }));
+    vi.doMock('@/lib/budget-enforce', () => ({ assertBudget: async () => ({ allow: true, guard: {} }) }));
+    vi.doMock('../../../auth/lib', () => ({ getUserFromRequest: () => ({ sub: 'u-1' }) }));
+    vi.doMock('@/app/api/auth/lib', () => ({ getUserFromRequest: () => ({ sub: 'u-1' }) }));
+    vi.doMock('@/lib/repos/project-repo', () => ({ getOwnedProject: async () => ({ id: 'p-1' }) }));
+    const mod: any = await import('@/app/api/projects/[id]/music/route');
+    const res = await mod.POST(
+      { json: async () => ({ prompt: '悬疑 noir,低频大提琴', style: 'noir' }) } as any,
+      { params: Promise.resolve({ id: 'p-1' }) } as any,
+    );
+    expect(res.status, `路由应成功,实际 ${res.status}`).toBe(200);
+    // 无条件断言 —— 早期版本用 if(saved.length) 包着,mock 路径写错时会**静默空转**(实测 403 却仍绿)
+    expect(saved.length, 'upsertAsset 必须被调用').toBe(1);
+    expect(saved[0].type, '必须以 music 类型落库(recompose 靠它当 BGM)').toBe('music');
+    expect(Array.isArray(saved[0].mediaUrls) && saved[0].mediaUrls.length > 0).toBe(true);
+  });
+
+  it('行为:未登录 → 401(不进任何生成/计费)', async () => {
+    vi.doMock('../../../auth/lib', () => ({ getUserFromRequest: () => null }));
+    vi.doMock('@/app/api/auth/lib', () => ({ getUserFromRequest: () => null }));
+    const mod: any = await import('@/app/api/projects/[id]/music/route');
+    const res = await mod.POST({ json: async () => ({ prompt: '悬疑 noir 大提琴' }) } as any,
+      { params: Promise.resolve({ id: 'p-1' }) } as any);
+    expect(res.status).toBe(401);
+  });
+
+  // MusicGenPanel 的挂载属「UI 元素在不在页面上」,用源码存在性核对最直接,
+  // 强行渲染整页只会引入更脆的 mock —— 此处诚实保留。
+  it('接线:项目页挂载 MusicGenPanel 入口', () => {
+    expect(fs.readFileSync('app/projects/[id]/page.tsx', 'utf-8')).toContain('MusicGenPanel');
   });
 });

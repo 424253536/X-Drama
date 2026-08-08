@@ -9,7 +9,7 @@
  *   - DialogueCoverageReport (v2.24 C) — 缺反打 / 缺特写 列表
  */
 
-import { ArrowRight, Warning as AlertTriangle, CheckCircle as CheckCircle2, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, Lightbulb, Palette, ChatCircle as MessageCircle, ArrowsClockwise as RefreshCw } from '@phosphor-icons/react';
+import { ChartBar as BarChart3, ArrowRight, Warning as AlertTriangle, CheckCircle as CheckCircle2, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, Lightbulb, Palette, ChatCircle as MessageCircle, ArrowsClockwise as RefreshCw } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/cinema/primitives';
 
 type Polarity = -1 | 0 | 1;
@@ -52,6 +52,21 @@ interface PacingReport {
   warnings: string[];
   suggestions: string[];
   hooks?: HookAuditShape;
+  /**
+   * v12.279:节奏审计 v2 诊断。
+   * 病根:v12.275 做了 v2(曲线形状/拖沓段/开场密度/时长节奏),v12.278 让它落库并导进 NLE,
+   * **唯独本组件的本地接口没有 `v2` 字段** —— 算了、存了、导出去了,自家 UI 却一直不显示。
+   */
+  v2?: PacingV2Shape;
+}
+
+/** v12.279:与 lib/pacing-audit-v2 的产出对齐(只取渲染需要的字段)。 */
+export interface PacingV2Shape {
+  shape?: { shape: string; slope: number; peakIndex: number; peakProminence: number; warning: string | null };
+  dragSegments?: Array<{ fromShot: number; toShot: number; length: number; avgScore: number }>;
+  opening?: { sampled: number; avgScore: number; reversals: number; passed: boolean; warning: string | null };
+  durationRhythm?: { sampled: number; mean: number; cv: number; longestRun: number; warning: string | null };
+  actionable?: string[];
 }
 
 // v2.24 A — Style audit per-shot data (from Storyboard.styleAuditScore etc)
@@ -103,6 +118,7 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
   }
 
   const { shots, averageConflictScore, reversalCount, passed, dramaMode, warnings, suggestions } = report;
+  const v2 = report.v2;
 
   // 反转对 — 把相邻不同极性的 shot 标出来
   const reversalEdges = new Set<number>();
@@ -422,6 +438,80 @@ export function PacingChart({ report, styleAuditShots, dialogueCoverage }: Pacin
                 ))}
               </ul>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* v12.279 节奏审计 v2 诊断 —— 排在 warnings 之前:它指到具体镜号,比一串泛化告警更该先看到 */}
+      {v2 && (
+        <div className="cinema-card-hi p-4 space-y-3">
+          <div className="cinema-eyebrow flex items-center gap-1.5">
+            <BarChart3 className="w-3 h-3" />
+            节奏诊断 v2
+          </div>
+
+          {/* 曲线形状 */}
+          {v2.shape && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="cinema-mono text-[10px] opacity-60">曲线</span>
+              <span
+                className={`cinema-mono text-[11px] px-1.5 py-0.5 rounded ${
+                  v2.shape.shape === 'escalating'
+                    ? 'bg-[var(--cinema-green,#2ea44f)]/20 text-[var(--cinema-green,#2ea44f)]'
+                    : 'bg-[var(--cinema-amber)]/20 text-[var(--cinema-amber)]'
+                }`}
+              >
+                {v2.shape.shape === 'escalating' ? '层层递进' : v2.shape.shape === 'front-loaded' ? '高开低走' : v2.shape.shape === 'no-climax' ? '无明显高潮' : '平铺'}
+              </span>
+              <span className="cinema-mono text-[10px] opacity-60">
+                斜率 {v2.shape.slope.toFixed(2)} · 高潮在第 {v2.shape.peakIndex} 镜
+              </span>
+            </div>
+          )}
+
+          {/* 拖沓段 —— 最该被看到的:直接点名镜号区间 */}
+          {v2.dragSegments && v2.dragSegments.length > 0 && (
+            <div>
+              <div className="cinema-mono text-[10px] opacity-60 mb-1">拖沓段(观众最易划走)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {v2.dragSegments.map((d, i) => (
+                  <span key={i} className="cinema-mono text-[11px] px-1.5 py-0.5 rounded bg-[var(--cinema-amber)]/20 text-[var(--cinema-amber)]">
+                    S{d.fromShot}–{d.toShot}(均分 {d.avgScore.toFixed(1)})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 开场密度 —— 完播率由这里决定 */}
+          {v2.opening && (
+            <div className="cinema-mono text-[11px]">
+              <span className="opacity-60">开场 </span>
+              <span className={v2.opening.passed ? 'opacity-80' : 'text-[var(--cinema-amber)]'}>
+                前 {v2.opening.sampled} 镜均分 {v2.opening.avgScore.toFixed(1)}
+                {v2.opening.passed ? ' ✓' : ' — 完播率主要由开场决定'}
+              </span>
+            </div>
+          )}
+
+          {/* 时长节奏 */}
+          {v2.durationRhythm && v2.durationRhythm.sampled >= 3 && (
+            <div className="cinema-mono text-[11px]">
+              <span className="opacity-60">时长节奏 </span>
+              <span className={v2.durationRhythm.warning ? 'text-[var(--cinema-amber)]' : 'opacity-80'}>
+                变异系数 {v2.durationRhythm.cv.toFixed(2)}
+                {v2.durationRhythm.warning ? ` — ${v2.durationRhythm.warning.replace(/^[^—]*—\s*/, '')}` : ' ✓'}
+              </span>
+            </div>
+          )}
+
+          {/* 可执行建议 —— 每条都指到镜号 */}
+          {v2.actionable && v2.actionable.length > 0 && (
+            <ul className="space-y-1 pt-1 border-t border-white/10">
+              {v2.actionable.map((a, i) => (
+                <li key={i} className="cinema-mono text-[11px] leading-relaxed opacity-80">· {a}</li>
+              ))}
+            </ul>
           )}
         </div>
       )}

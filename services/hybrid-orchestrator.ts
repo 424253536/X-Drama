@@ -14,6 +14,7 @@ import { MinimaxService } from './minimax.service';
 import { VeoService, hasVeo } from './veo.service';
 import { MidjourneyService, hasMidjourney } from './midjourney.service';
 import { KlingService, hasKling } from './kling.service';
+import { HappyHorseService, getHappyHorseService } from '@/services/happyhorse.service'; // v12.272
 import { FalFluxService, hasFalFlux } from './fal-flux.service';
 import { ComfyUIService, hasComfyUI, hasComfyUIControlNet } from './comfyui.service';
 import { runWriter as runWriterAgent, type WriterAgentCtx } from './agents/writer-agent';
@@ -142,7 +143,9 @@ type ProgressCallback = (type: string, data: any) => void;
 // ═══════════════════════════════════════════
 // P2: 智能引擎路由 — 根据镜头类型自动选择最优引擎
 // ═══════════════════════════════════════════
-type VideoEngine = 'veo' | 'minimax' | 'kling';
+// v12.272:与 lib/engine-order.ts 的 VideoEngineName 保持同一集合 —— 两处此前各写各的,
+// 漏改任一处都会让新引擎「配置得上、永远派发不到」。
+type VideoEngine = 'veo' | 'minimax' | 'kling' | 'happyhorse';
 
 interface EngineRouteResult {
   primary: VideoEngine;
@@ -307,6 +310,7 @@ export class HybridOrchestrator {
   private veoService: VeoService | null;
   private mjService: MidjourneyService | null;
   private klingService: KlingService | null;
+  private happyhorseService: HappyHorseService | null; // v12.272
   private falFluxService: FalFluxService | null;
   private comfyuiService: ComfyUIService | null;
   private xverseService: XVerseService | null;
@@ -384,6 +388,8 @@ export class HybridOrchestrator {
   // vision API 抽 8 维 (eye/jaw/nose/mouth/hair style/hair color/skin/signature outfit),
   // 拼成短 prompt block, 在每个该角色出场的 shot 里追加. 与 cref/sref 双锁.
   private characterDnaMap: Map<string, import('@/lib/character-dna').CharacterDna> = new Map();
+  /** v12.286:最近一次视觉漂移检测结果(供质检报告/前端读取;未开启嵌入则恒为 null) */
+  public driftReport: import('@/lib/drift-detect').DriftResult | null = null;
 
   /**
    * v12.2.1 从 project_assets(type='character-dna')预载上次抽好的 DNA → 合并进 characterDnaMap。
@@ -727,6 +733,7 @@ export class HybridOrchestrator {
     this.veoService = hasVeo() ? new VeoService() : null;
     this.mjService = hasMidjourney() ? new MidjourneyService() : null;
     this.klingService = hasKling() ? new KlingService() : null;
+    this.happyhorseService = getHappyHorseService(); // v12.272:无 key 返回 null,链序自动跳过
     this.falFluxService = hasFalFlux() ? new FalFluxService() : null;
     this.comfyuiService = hasComfyUI() ? new ComfyUIService() : null;
     this.xverseService = hasXVerse() ? new XVerseService() : null;
@@ -738,7 +745,7 @@ export class HybridOrchestrator {
     const minimaxLabel = this.minimaxService
       ? (minimaxCaps.length > 0 ? minimaxCaps.join('+') : 'TTS-ONLY')
       : 'OFF';
-    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}, XVerse: ${this.xverseService ? (isXVersePrimary() ? 'PRIMARY' : 'FALLBACK') : 'OFF'}`);
+    console.log(`[Hybrid] LLM: ${this.openai ? 'Claude' : 'OFF'}, MJ: ${this.mjService ? 'ON' : 'OFF'}, Minimax: ${minimaxLabel}, Veo: ${this.veoService ? 'ON' : 'OFF'}, Kling: ${this.klingService ? 'ON' : 'OFF'}, HappyHorse: ${this.happyhorseService ? 'ON' : 'OFF'}, FalFlux: ${this.falFluxService ? 'ON' : 'OFF'}, ComfyUI: ${this.comfyuiService ? 'ON' : 'OFF'}, XVerse: ${this.xverseService ? (isXVersePrimary() ? 'PRIMARY' : 'FALLBACK') : 'OFF'}`);
 
     // v3.2 P1: 注册内置 image providers + 自动加载 IMAGE_PROVIDERS_DIR.
     // 异步 fire-and-forget — 不阻塞 orchestrator 创建.
@@ -2886,6 +2893,46 @@ ${shots.map((s, i) => {
 
     const rendered = orderedResults.filter((r): r is Storyboard => r !== null);
 
+    // ── v12.286:视觉漂移检测接进主管线 ──────────────────────────────────────
+    // 病根:`detectDriftOutliers` 全仓**只被手动端点 /drift-check 调用**,主管线一次都不跑 ——
+    // 用户必须自己想起来去点一下才知道哪镜跑偏了,等于这个能力对正常出片流程不存在。
+    //
+    // 默认零成本:`hasImageEmbeddingKey()` 要求**显式配 IMAGE_EMBED_MODEL**(多模态嵌入端点),
+    // 没配就整段跳过 —— 不给未开启的用户增加任何 API 调用或耗时。
+    // 本版只做**检测 + 落账 + 推送**,不自动重生:自动重生要按漂移分反复重跑镜头,
+    // 成本与失控风险都高,留给用户在看到结果后自行决定(诚实边界,不假装做了)。
+    try {
+      const { hasImageEmbeddingKey, embedImage } = await import('@/lib/asset-embedding');
+      if (hasImageEmbeddingKey() && rendered.length >= 2) {
+        const { detectDriftOutliers } = await import('@/lib/drift-detect');
+        const embeddings: Array<{ shotNumber: number; vector: number[] }> = [];
+        for (const sb of rendered) {
+          const url = (sb as any)?.imageUrl;
+          if (!url || !/^https?:\/\//.test(url)) continue;
+          const emb = await embedImage(url);
+          if (emb?.vector) embeddings.push({ shotNumber: (sb as any).shotNumber, vector: emb.vector });
+        }
+        const drift = detectDriftOutliers(embeddings);
+        if (drift.available) {
+          this.driftReport = drift;
+          this.emit('driftCheck', drift);
+          if (drift.outliers.length > 0) {
+            this.emit('agentTalk', {
+              role: AgentRole.STORYBOARD,
+              text: `⚠️ 视觉漂移检测:第 ${drift.outliers.join('、')} 镜与全片风格偏离较大(平均漂移 ${drift.meanDrift.toFixed(2)}),建议重生这几镜`,
+            });
+            this.qualityLedger.push({
+              shot: drift.outliers[0],
+              kind: 'visual-drift',
+              detail: `漂移镜 ${drift.outliers.join(',')};全片平均漂移 ${drift.meanDrift.toFixed(3)}`,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Drift] 漂移检测失败(非阻塞):', e instanceof Error ? e.message.slice(0, 80) : e);
+    }
+
     this.update(AgentRole.STORYBOARD, { status: 'completed', progress: 100, output: rendered });
     this.emit('agentTalk', {
       role: AgentRole.STORYBOARD,
@@ -3232,11 +3279,39 @@ ${shots.map((s, i) => {
       if (enhancedPrompt.length > 1500) {
         enhancedPrompt = enhancedPrompt.slice(0, 1500);
       }
+      // ── v12.281:把**结构化角色 DNA** 也注入视频 prompt ──────────────────────
+      // 病根:`injectDnaIntoPrompt` 全仓**只在 runStoryboardRenderer 里调用一次** ——
+      // 分镜图 prompt 拿的是 vision LLM 从**实际生成的三视图**里抽出的 8 维签名
+      // (眼型/颌型/鼻型/嘴型/发型/发色/肤色/标志服饰),而视频 prompt 只拿到剧本里的
+      // **自由文本外观**(如「青年男性,冷峻」)。同一部片,分镜按"实际长出来的样子"渲染,
+      // 视频却按"剧本写的"生成 —— 依赖文本 prompt 的引擎必然跨镜漂脸。
+      //
+      // ⚠️ 但不能无脑全加:v12.9.1 实测过 —— MiniMax S2V 已从 subject_reference 提取身份,
+      // prompt 再重复外观**反而与参考图冲突致漂移**。故 DNA 与 charDescSegment 同待遇:
+      // 一起进 enhancedPrompt,一起从 S2V 版里剥掉。
+      let dnaSegment = '';
+      try {
+        if (this.characterDnaMap && this.characterDnaMap.size > 0) {
+          const { injectDnaIntoPrompt } = await import('@/lib/character-dna');
+          const withDna = injectDnaIntoPrompt('', shot?.characters, this.characterDnaMap);
+          if (withDna) {
+            dnaSegment = withDna.startsWith('. ') ? withDna : `. ${withDna}`;
+            enhancedPrompt += dnaSegment;
+          }
+        }
+      } catch (e) {
+        console.warn('[DNA] 视频 prompt 注入失败(非阻塞):', e instanceof Error ? e.message.slice(0, 60) : e);
+      }
+
       // v12.9.1(#2):S2V 专用「去外观」prompt —— 移除「. Character: ...」片段(身份由参考图给,
       // 重复描述会与参考图冲突致漂移)。Hailuo 兜底无参考图仍用完整 enhancedPrompt。
-      const minimaxS2vPrompt = (charDescSegment && enhancedPrompt.includes(charDescSegment))
+      // v12.281:DNA 段同理一并剥离(它同样是"外观描述",对 S2V 是干扰而非帮助)。
+      let minimaxS2vPrompt = (charDescSegment && enhancedPrompt.includes(charDescSegment))
         ? enhancedPrompt.split(charDescSegment).join('')
         : enhancedPrompt;
+      if (dnaSegment && minimaxS2vPrompt.includes(dnaSegment)) {
+        minimaxS2vPrompt = minimaxS2vPrompt.split(dnaSegment).join('');
+      }
 
       // 远程视频 API 只能使用公网可达的 http(s) URL 作为参考图
       const hasCharRef = characterRefUrl && characterRefUrl.startsWith('http');
@@ -3268,6 +3343,9 @@ ${shots.map((s, i) => {
       if (this.veoService) availableEngines.push('veo');
       if (this.minimaxService?.isVideoAvailable()) availableEngines.push('minimax');
       if (this.klingService) availableEngines.push('kling');
+      // v12.272:HappyHorse(阿里)—— 有 key 即登记;默认链序不含它,
+      // 需 VIDEO_ENGINE_ORDER 显式列出或用户显式选择才会打头(不改变既有用户的出片结果)。
+      if (this.happyhorseService) availableEngines.push('happyhorse');
 
       if (availableEngines.length > 0) {
         const route = routeVideoEngine(
@@ -3292,7 +3370,7 @@ ${shots.map((s, i) => {
 
         // v12.8.1: 引擎兜底链(含软熔断)走抽出来的纯控制流 runVideoEngineChain —— 可单测坐实「跳过冷却引擎」。
         //   每个引擎的具体调用(minimax/veo/kling 各自参数)留在 attempt 回调;控制流(跳过/试/校验/熔断/下一个)在 helper。
-        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
+        const _engineLabel = (engine: string) => engine === 'veo' ? 'Veo 3.1' : engine === 'kling' ? '可灵 AI' : engine === 'happyhorse' ? 'HappyHorse 1.1(阿里)' : (hasCharRef ? 'Minimax(I2V+角色)' : hasFirstFrame ? 'Minimax I2V-01' : 'Minimax Hailuo-2.3');
         const _chain = await runVideoEngineChain(
           engineOrder,
           async (engine) => {
@@ -3315,6 +3393,15 @@ ${shots.map((s, i) => {
                 duration: 8,
                 aspectRatio: this.videoAspect(), // v12.14.0 横竖屏(竖屏 720x1280,不再默认 16:9)
                 referenceImages: veoRefs.length > 0 ? veoRefs : undefined,
+                onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
+              });
+            } else if (engine === 'happyhorse' && this.happyhorseService) {
+              // v12.272:百炼专属异步端点(建任务→轮询),单次联合生成视频+音频。
+              // 首帧存在走 i2v,否则 t2v;时长按镜头 3~15s 夹取。
+              return await this.happyhorseService.generateVideo(enhancedPrompt, {
+                imageUrl: firstFrameUrl && firstFrameUrl.startsWith('http') ? firstFrameUrl : undefined,
+                aspectRatio: this.videoAspect() as any,
+                duration: shot?.duration,
                 onProgress: (progress, status) => { this.emit('videoProgress', { shotNumber: board.shotNumber, progress, status }); },
               });
             } else if (engine === 'kling' && this.klingService) {

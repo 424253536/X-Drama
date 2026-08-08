@@ -512,7 +512,11 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
       send('step', { step: 'writer' });
       send('status', { message: '拉片复刻:按原片结构构建脚本(跳过创意编剧)...' });
       send('script', script);
-      await saveAsset(projectId, 'script', '剧本', { synopsis: script.synopsis, title: script.title, shots: script.shots, theme: (script as any).theme });
+      // v12.278:必须带上 pacingReport —— 此前只存 {synopsis,title,shots,theme},
+      // 节奏审计结果**从不落库**:它只经 SSE 推给前端、再被 store.updateAsset 写进
+      // Zustand 客户端状态(纯 set,不打服务端)。于是项目页「节奏分析」tab 在**刷新后空白**,
+      // 而这恰是本项目最核心的差异化能力(全部竞品都没有的一项)。
+      await saveAsset(projectId, 'script', '剧本', { synopsis: script.synopsis, title: script.title, shots: script.shots, theme: (script as any).theme, pacingReport: (script as any).pacingReport ?? null });
       orchestrator.setWriterScript(script);
     } else try {
       send('step', { step: 'writer' });
@@ -543,7 +547,7 @@ export async function runCreatePipeline(input: CreatePipelineInput, emit: Pipeli
 
       send('agents', orchestrator.getAllAgents());
       send('script', script);
-      await saveAsset(projectId, 'script', '剧本', { synopsis: script.synopsis, title: script.title, shots: script.shots, theme: (script as any).theme });
+      await saveAsset(projectId, 'script', '剧本', { synopsis: script.synopsis, title: script.title, shots: script.shots, theme: (script as any).theme, pacingReport: (script as any).pacingReport ?? null });
       // v2.13.5 修复"角色/场景设计与剧本无关"的核心一步:
       // 把 Writer 产出的真实剧本注入 orchestrator,后续 Character/Scene 设计器
       // 在 idea-input 路径下也能拿到"真剧情",而不是只有 Director plan 的占位描述。

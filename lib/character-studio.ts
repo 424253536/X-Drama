@@ -107,6 +107,18 @@ export interface VoiceMeta {
   /** 音色气质关键词. */
   tone: string;
   /**
+   * v12.274:该档的**韵律**(语速/音高/音量)。
+   *
+   * 病根:v12.229 把音色目录从 4 扩到 22,但 tts.service 的 VOICE_PROFILES **仍只有 4 条** ——
+   * 另外 18 档全部落进 `VOICE_PROFILES[voiceId] || 默认旁白男声` 的兜底,于是
+   * 「俏皮少女」「奶音男孩」的**音色换了、腔调没换**:语速 1.0、音高 0,与成熟男旁白逐字节相同。
+   * 根因是两份表各写各的必然漂移 —— 故本版把韵律**并进目录**,由 tts.service 派生,
+   * 结构上不可能再出现「目录有、profile 没有」。缺省时按 narrator 档兜底(与旧行为一致)。
+   */
+  speed?: number;
+  pitch?: number;
+  vol?: number;
+  /**
    * v12.229:该档在 **MiniMax** 上的真实系统音色 id。
    *
    * 为什么必须显式给:此前 catalog 的 id(`narrator_male_cn` 等)被**原样**发给 MiniMax,
@@ -143,32 +155,32 @@ export interface VoiceMeta {
  */
 export const VOICE_CATALOG: VoiceMeta[] = [
   // ── 兼容档:id 保持 v9.7.4 以来不变,避免既有覆盖配置失效 ──
-  { id: 'young_female_cn', label: '青年女声', gender: 'female', ageGroups: ['童年', '少年', '青年'], tone: '清亮 灵动', minimax: 'female-shaonv', openai: 'nova' },
-  { id: 'narrator_female_cn', label: '成熟女声', gender: 'female', ageGroups: ['中年', '老年'], tone: '温润 沉静', minimax: 'female-yujie', openai: 'shimmer' },
-  { id: 'young_male_cn', label: '青年男声', gender: 'male', ageGroups: ['童年', '少年', '青年'], tone: '明朗 干净', minimax: 'male-qn-qingse', openai: 'echo' },
-  { id: 'narrator_male_cn', label: '成熟男声', gender: 'male', ageGroups: ['中年', '老年'], tone: '沉稳 醇厚', minimax: 'presenter_male', openai: 'onyx' },
+  { id: 'young_female_cn', label: '青年女声', gender: 'female', ageGroups: ['童年', '少年', '青年'], tone: '清亮 灵动', speed: 1.05, pitch: 3, minimax: 'female-shaonv', openai: 'nova' },
+  { id: 'narrator_female_cn', label: '成熟女声', gender: 'female', ageGroups: ['中年', '老年'], tone: '温润 沉静', speed: 1.0, pitch: 0, minimax: 'female-yujie', openai: 'shimmer' },
+  { id: 'young_male_cn', label: '青年男声', gender: 'male', ageGroups: ['童年', '少年', '青年'], tone: '明朗 干净', speed: 1.1, pitch: 2, minimax: 'male-qn-qingse', openai: 'echo' },
+  { id: 'narrator_male_cn', label: '成熟男声', gender: 'male', ageGroups: ['中年', '老年'], tone: '沉稳 醇厚', speed: 1.0, pitch: 0, minimax: 'presenter_male', openai: 'onyx' },
 
   // ── 女声扩容 ──
-  { id: 'mature_female_cn', label: '知性女声', gender: 'female', ageGroups: ['青年', '中年'], tone: '知性 从容', minimax: 'female-chengshu', openai: 'nova' },
-  { id: 'sweet_female_cn', label: '甜美女声', gender: 'female', ageGroups: ['少年', '青年'], tone: '甜软 亲和', minimax: 'female-tianmei', openai: 'shimmer' },
-  { id: 'presenter_female_cn', label: '女主播', gender: 'female', ageGroups: ['青年', '中年'], tone: '播音 清晰', minimax: 'presenter_female', openai: 'fable' },
-  { id: 'audiobook_female1_cn', label: '女有声书①', gender: 'female', ageGroups: ['青年', '中年'], tone: '叙述 平稳', minimax: 'audiobook_female_1', openai: 'nova' },
-  { id: 'audiobook_female2_cn', label: '女有声书②', gender: 'female', ageGroups: ['中年', '老年'], tone: '娓娓 醇和', minimax: 'audiobook_female_2', openai: 'shimmer' },
-  { id: 'lovely_girl_cn', label: '俏皮少女', gender: 'female', ageGroups: ['童年', '少年'], tone: '俏皮 跳脱', minimax: 'lovely_girl', openai: 'fable' },
-  { id: 'tianxin_girl_cn', label: '甜心小铃', gender: 'female', ageGroups: ['童年', '少年'], tone: '娇憨 明快', minimax: 'tianxin_xiaoling', openai: 'nova' },
+  { id: 'mature_female_cn', label: '知性女声', gender: 'female', ageGroups: ['青年', '中年'], tone: '知性 从容', speed: 0.98, pitch: 0, minimax: 'female-chengshu', openai: 'nova' },
+  { id: 'sweet_female_cn', label: '甜美女声', gender: 'female', ageGroups: ['少年', '青年'], tone: '甜软 亲和', speed: 1.05, pitch: 2, minimax: 'female-tianmei', openai: 'shimmer' },
+  { id: 'presenter_female_cn', label: '女主播', gender: 'female', ageGroups: ['青年', '中年'], tone: '播音 清晰', speed: 1.0, pitch: 0, minimax: 'presenter_female', openai: 'fable' },
+  { id: 'audiobook_female1_cn', label: '女有声书①', gender: 'female', ageGroups: ['青年', '中年'], tone: '叙述 平稳', speed: 0.95, pitch: 0, minimax: 'audiobook_female_1', openai: 'nova' },
+  { id: 'audiobook_female2_cn', label: '女有声书②', gender: 'female', ageGroups: ['中年', '老年'], tone: '娓娓 醇和', speed: 0.92, pitch: -1, minimax: 'audiobook_female_2', openai: 'shimmer' },
+  { id: 'lovely_girl_cn', label: '俏皮少女', gender: 'female', ageGroups: ['童年', '少年'], tone: '俏皮 跳脱', speed: 1.12, pitch: 4, minimax: 'lovely_girl', openai: 'fable' },
+  { id: 'tianxin_girl_cn', label: '甜心小铃', gender: 'female', ageGroups: ['童年', '少年'], tone: '娇憨 明快', speed: 1.1, pitch: 4, minimax: 'tianxin_xiaoling', openai: 'nova' },
 
   // ── 男声扩容 ──
-  { id: 'elite_male_cn', label: '精英男声', gender: 'male', ageGroups: ['青年', '中年'], tone: '干练 利落', minimax: 'male-qn-jingying', openai: 'onyx' },
-  { id: 'domineering_male_cn', label: '霸道男声', gender: 'male', ageGroups: ['青年', '中年'], tone: '强势 压场', minimax: 'male-qn-badao', openai: 'echo' },
-  { id: 'student_male_cn', label: '学生男声', gender: 'male', ageGroups: ['少年', '青年'], tone: '青涩 朝气', minimax: 'male-qn-daxuesheng', openai: 'alloy' },
-  { id: 'audiobook_male1_cn', label: '男有声书①', gender: 'male', ageGroups: ['青年', '中年'], tone: '叙述 稳重', minimax: 'audiobook_male_1', openai: 'onyx' },
-  { id: 'audiobook_male2_cn', label: '男有声书②', gender: 'male', ageGroups: ['中年', '老年'], tone: '低沉 厚重', minimax: 'audiobook_male_2', openai: 'echo' },
-  { id: 'clever_boy_cn', label: '机灵男孩', gender: 'male', ageGroups: ['童年', '少年'], tone: '机灵 脆亮', minimax: 'clever_boy', openai: 'alloy' },
-  { id: 'cute_boy_cn', label: '奶音男孩', gender: 'male', ageGroups: ['童年'], tone: '奶声 软糯', minimax: 'cute_boy', openai: 'fable' },
-  { id: 'junlang_male_cn', label: '俊朗男友', gender: 'male', ageGroups: ['青年'], tone: '温柔 清朗', minimax: 'junlang_nanyou', openai: 'echo' },
-  { id: 'chunzhen_male_cn', label: '纯真学弟', gender: 'male', ageGroups: ['少年', '青年'], tone: '纯真 腼腆', minimax: 'chunzhen_xuedi', openai: 'alloy' },
-  { id: 'lengdan_male_cn', label: '冷淡兄长', gender: 'male', ageGroups: ['青年', '中年'], tone: '清冷 疏离', minimax: 'lengdan_xiongzhang', openai: 'onyx' },
-  { id: 'badao_shaoye_cn', label: '霸道少爷', gender: 'male', ageGroups: ['少年', '青年'], tone: '骄矜 张扬', minimax: 'badao_shaoye', openai: 'fable' },
+  { id: 'elite_male_cn', label: '精英男声', gender: 'male', ageGroups: ['青年', '中年'], tone: '干练 利落', speed: 1.05, pitch: 0, minimax: 'male-qn-jingying', openai: 'onyx' },
+  { id: 'domineering_male_cn', label: '霸道男声', gender: 'male', ageGroups: ['青年', '中年'], tone: '强势 压场', speed: 0.95, pitch: -2, minimax: 'male-qn-badao', openai: 'echo' },
+  { id: 'student_male_cn', label: '学生男声', gender: 'male', ageGroups: ['少年', '青年'], tone: '青涩 朝气', speed: 1.08, pitch: 1, minimax: 'male-qn-daxuesheng', openai: 'alloy' },
+  { id: 'audiobook_male1_cn', label: '男有声书①', gender: 'male', ageGroups: ['青年', '中年'], tone: '叙述 稳重', speed: 0.95, pitch: 0, minimax: 'audiobook_male_1', openai: 'onyx' },
+  { id: 'audiobook_male2_cn', label: '男有声书②', gender: 'male', ageGroups: ['中年', '老年'], tone: '低沉 厚重', speed: 0.92, pitch: -2, minimax: 'audiobook_male_2', openai: 'echo' },
+  { id: 'clever_boy_cn', label: '机灵男孩', gender: 'male', ageGroups: ['童年', '少年'], tone: '机灵 脆亮', speed: 1.12, pitch: 4, minimax: 'clever_boy', openai: 'alloy' },
+  { id: 'cute_boy_cn', label: '奶音男孩', gender: 'male', ageGroups: ['童年'], tone: '奶声 软糯', speed: 1.08, pitch: 4, minimax: 'cute_boy', openai: 'fable' },
+  { id: 'junlang_male_cn', label: '俊朗男友', gender: 'male', ageGroups: ['青年'], tone: '温柔 清朗', speed: 1.02, pitch: 0, minimax: 'junlang_nanyou', openai: 'echo' },
+  { id: 'chunzhen_male_cn', label: '纯真学弟', gender: 'male', ageGroups: ['少年', '青年'], tone: '纯真 腼腆', speed: 1.05, pitch: 1, minimax: 'chunzhen_xuedi', openai: 'alloy' },
+  { id: 'lengdan_male_cn', label: '冷淡兄长', gender: 'male', ageGroups: ['青年', '中年'], tone: '清冷 疏离', speed: 0.95, pitch: -1, minimax: 'lengdan_xiongzhang', openai: 'onyx' },
+  { id: 'badao_shaoye_cn', label: '霸道少爷', gender: 'male', ageGroups: ['少年', '青年'], tone: '骄矜 张扬', speed: 1.0, pitch: -1, minimax: 'badao_shaoye', openai: 'fable' },
 ];
 
 const DEFAULT_VOICE_ID = 'narrator_male_cn';

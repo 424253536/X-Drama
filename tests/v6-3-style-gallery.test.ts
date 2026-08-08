@@ -37,8 +37,17 @@ describe('v6.3 · searchStyles', () => {
     expect(searchStyles('CINEMATIC').some((s) => s.id === 'cinematic')).toBe(true);
   });
   it('按分类 / 分类中文标签匹配', () => {
-    expect(searchStyles('realistic').every((s) => s.category === 'realistic')).toBe(true);
-    expect(searchStyles('写实').every((s) => s.category === 'realistic')).toBe(true);
+    // v12.273 订正:searchStyles **设计上也搜 promptFragment**(见实现),所以「分类词只返回该分类」
+    // 这个断言原本只是**碰巧成立** —— 一旦有别类模板的 prompt 里出现该词就会破
+    // (扩容后 material-swap/experimental 含 "photo-realistic" 即触发)。
+    // 正确语义:分类查询应**涵盖该分类全部**,额外的正文命中属预期。
+    const all = STYLE_PRESETS.filter((s) => s.category === 'realistic').map((s) => s.id);
+    const hitEn = searchStyles('realistic').map((s) => s.id);
+    const hitZh = searchStyles('写实').map((s) => s.id);
+    for (const id of all) {
+      expect(hitEn, `英文分类查询应含 ${id}`).toContain(id);
+      expect(hitZh, `中文标签查询应含 ${id}`).toContain(id);
+    }
   });
   it('按 promptFragment 关键词匹配', () => {
     expect(searchStyles('anamorphic').some((s) => s.id === 'cinematic')).toBe(true);
